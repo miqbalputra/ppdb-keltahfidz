@@ -54,7 +54,11 @@ jobs:
         run: bun run test:js
       - name: Validate Drizzle migrations
         run: bunx drizzle-kit check
-      - name: Check legacy SQLite import source
-        run: bun run db:import-sqlite -- --dry-run
+      - name: Check legacy SQLite importer
+        run: |
+          sqlite_fixture="$(mktemp --suffix=.sqlite3)"
+          trap 'rm -f "$sqlite_fixture"' EXIT
+          SQLITE_IMPORT_PATH="$sqlite_fixture" bun -e 'import { Database } from "bun:sqlite"; const db = new Database(process.env.SQLITE_IMPORT_PATH!); db.exec("CREATE TABLE calon_santri_waitinglist (id TEXT, created_at TEXT)"); db.query("INSERT INTO calon_santri_waitinglist VALUES (?, ?)").run("test-id", "2026-01-01T00:00:00.000Z"); db.close();'
+          SQLITE_IMPORT_PATH="$sqlite_fixture" bun run db:import-sqlite -- --dry-run
       - name: Build production image
         run: docker build --tag spsb-waitinglist:ci .
