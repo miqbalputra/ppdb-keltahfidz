@@ -71,6 +71,8 @@ export function assertProductionSecurityConfig(): void {
     encryptionKeyConfigured: DATA_ENCRYPTION_KEY_CONFIGURED,
     databaseUrl: DATABASE_URL,
     webhookUrl: N8N_WEBHOOK_URL,
+    turnstileSiteKey: TURNSTILE_SITE_KEY,
+    turnstileSecretKey: TURNSTILE_SECRET_KEY,
   });
   if (problems.length) {
     throw new Error(`Konfigurasi production tidak aman: ${problems.join("; ")}.`);

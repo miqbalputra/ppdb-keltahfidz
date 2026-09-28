@@ -129,7 +129,7 @@ async function triggerN8n(recordId: string, values: WaitinglistRecordInput, grou
   try {
     const response = await fetch(N8N_WEBHOOK_URL, {
       method: "POST",
-      headers: { "content-type": "application/json", "user-agent": "SPSB-Waitinglist/1.0" },
+      headers: { "content-type": "application/json", "user-agent": "SPSB/1.0" },
       body: JSON.stringify(payload),
       signal: AbortSignal.timeout(5000),
     });
@@ -483,7 +483,7 @@ async function main(): Promise<void> {
   await encryptLegacyWaitinglistRows();
   await seedSystemSettings();
   app.listen({ hostname: HOST, port: PORT, maxRequestBodySize: MAX_REQUEST_BYTES });
-  console.info(`SPSB Waitinglist listening on http://${app.server?.hostname ?? HOST}:${app.server?.port ?? PORT}`);
+  console.info(`SPSB application listening on http://${app.server?.hostname ?? HOST}:${app.server?.port ?? PORT}`);
   console.info(`Environment: ${NODE_ENV}`);
   if (!ADMIN_PASSWORD_CONFIGURED) {
     console.warn("Admin login uses a temporary password that is not printed; set ADMIN_PASSWORD to make the login usable.");

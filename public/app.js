@@ -16,6 +16,7 @@
   let config = null;
   let turnstileToken = "";
   let turnstileWidgetId = null;
+  let turnstileState = "not_required";
   let submitting = false;
   let validationAttempted = false;
   let cutoffDateLabel = "tanggal acuan";
@@ -195,10 +196,10 @@
     const message = document.querySelector("#inline-success-message");
     const groupLink = document.querySelector("#inline-group-link");
     message.textContent = result.emailStatus === "sent"
-      ? "Informasi bergabung juga telah diteruskan ke email yang didaftarkan."
+      ? "Pendaftaran diterima panitia. Informasi selanjutnya juga telah dikirim ke email yang didaftarkan."
       : result.emailStatus === "failed"
-        ? "Data sudah diterima, tetapi email belum berhasil dikirim. Silakan gunakan tautan grup di bawah ini."
-        : "Data sudah diterima. Informasi grup akan dikirim melalui email setelah notifikasi diaktifkan.";
+        ? "Pendaftaran diterima panitia, tetapi email belum terkirim. Gunakan tautan grup di bawah atau pantau kontak yang didaftarkan."
+        : "Pendaftaran diterima panitia. Pemberitahuan email belum tersedia; gunakan tautan grup di bawah atau pantau kontak yang didaftarkan.";
     if (result.whatsappGroupUrl) {
       groupLink.href = result.whatsappGroupUrl;
       groupLink.hidden = false;
@@ -289,23 +290,55 @@
   async function initTurnstile() {
     if (!config?.turnstileSiteKey) return;
     const container = document.querySelector("#turnstile-container");
+    const status = document.querySelector("#turnstile-status");
     container.hidden = false;
-    await new Promise((resolve, reject) => {
-      const script = document.createElement("script");
-      script.src = "https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit";
-      script.async = true;
-      script.defer = true;
-      script.onload = resolve;
-      script.onerror = reject;
-      document.head.append(script);
-    }).catch(() => setAlert("Verifikasi anti-spam tidak dapat dimuat. Muat ulang halaman."));
-    if (!window.turnstile) return;
-    turnstileWidgetId = window.turnstile.render(container, {
-      sitekey: config.turnstileSiteKey,
-      callback: (token) => { turnstileToken = token; updateSubmitState(); },
-      "expired-callback": () => { turnstileToken = ""; updateSubmitState(); },
-      "error-callback": () => { turnstileToken = ""; updateSubmitState(); },
-    });
+    status.hidden = false;
+    status.textContent = "Memuat verifikasi keamanan…";
+    turnstileState = "loading";
+    try {
+      await new Promise((resolve, reject) => {
+        const script = document.createElement("script");
+        script.src = "https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit";
+        script.async = true;
+        script.defer = true;
+        const timeout = setTimeout(() => reject(new Error("Verifikasi keamanan melewati batas waktu.")), 12000);
+        script.onload = () => { clearTimeout(timeout); resolve(); };
+        script.onerror = () => { clearTimeout(timeout); reject(new Error("Verifikasi keamanan gagal dimuat.")); };
+        document.head.append(script);
+      });
+      if (!window.turnstile) throw new Error("Widget verifikasi tidak tersedia.");
+      turnstileWidgetId = window.turnstile.render(container, {
+        sitekey: config.turnstileSiteKey,
+        callback: (token) => {
+          turnstileToken = token;
+          turnstileState = "verified";
+          status.hidden = true;
+          updateSubmitState();
+        },
+        "expired-callback": () => {
+          turnstileToken = "";
+          turnstileState = "ready";
+          status.textContent = "Verifikasi kedaluwarsa. Selesaikan kembali sebelum mengirim.";
+          status.hidden = false;
+          updateSubmitState();
+        },
+        "error-callback": () => {
+          turnstileToken = "";
+          turnstileState = "error";
+          status.textContent = "Verifikasi keamanan bermasalah. Periksa koneksi, lalu muat ulang halaman.";
+          status.hidden = false;
+          updateSubmitState();
+        },
+      });
+      turnstileState = "ready";
+      status.textContent = "Selesaikan verifikasi keamanan sebelum mengirim pendaftaran.";
+      updateSubmitState();
+    } catch {
+      turnstileState = "error";
+      status.textContent = "Verifikasi keamanan gagal dimuat. Periksa koneksi dan muat ulang halaman untuk mencoba kembali.";
+      status.hidden = false;
+      setAlert("Verifikasi keamanan belum tersedia. Formulir tidak dapat dikirim sampai verifikasi berhasil.");
+    }
   }
 
   async function initialize() {
@@ -361,7 +394,11 @@
       return;
     }
     if (config.turnstileSiteKey && !turnstileToken) {
-      setAlert("Selesaikan verifikasi anti-spam sebelum mengirim formulir.");
+      setAlert(turnstileState === "error"
+        ? "Verifikasi keamanan belum berhasil dimuat. Periksa koneksi dan muat ulang halaman untuk mencoba kembali."
+        : turnstileState === "loading"
+          ? "Verifikasi keamanan masih dimuat. Tunggu sebentar sebelum mengirim formulir."
+          : "Selesaikan verifikasi keamanan sebelum mengirim formulir.");
       alertBox.focus();
       document.querySelector("#turnstile-container").focus();
       return;
@@ -405,7 +442,7 @@
       alertBox.focus();
       submitting = false;
       form.removeAttribute("aria-busy");
-      submitButton.querySelector("span:first-child").textContent = "Kirim pendaftaran minat";
+      submitButton.querySelector("span:first-child").textContent = "Kirim pendaftaran";
       updateSubmitState();
       if (turnstileWidgetId !== null && window.turnstile) {
         window.turnstile.reset(turnstileWidgetId);

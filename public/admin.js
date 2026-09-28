@@ -194,7 +194,7 @@
     rowsRequestController = controller;
     showAlert(dashboardAlert, "");
     document.querySelector(".table-scroll").setAttribute("aria-busy", "true");
-    renderTableMessage("Memuat data waitinglist…");
+    renderTableMessage("Memuat data pendaftar…");
     try {
       const result = await api(`/api/admin/waitinglist?${filtersQuery()}`, { signal: controller.signal });
       if (controller.signal.aborted) return;

@@ -550,6 +550,45 @@ td { color: #514f49; border-top-color: #efefed; }
 .success-icon-info { color: #5e6870; border-color: #d4dadd; background: #f4f6f7; }
 .validation-summary, .form-alert { border-radius: 5px; }
 
+/* Focused registration layout: clear hierarchy, restrained decoration, and comfortable mobile form controls. */
+.hero {
+  min-height: auto;
+  grid-template-columns: minmax(0, 1fr);
+  padding-top: clamp(52px, 9vw, 100px);
+  padding-bottom: clamp(52px, 9vw, 100px);
+}
+.hero-art, .hero-footnote { display: none; }
+.hero-copy { max-width: 760px; }
+.hero h1 { margin-top: 20px; font-size: clamp(42px, 8vw, 68px); }
+.hero-lede { max-width: 620px; }
+.steps-band { border-block: 1px solid var(--border); }
+.steps-grid { padding-block: 32px; }
+.form-section { gap: clamp(30px, 6vw, 72px); }
+.form-aside h2 { font-size: clamp(34px, 4.5vw, 48px); }
+.form-card { padding: clamp(22px, 4vw, 36px); }
+.turnstile-status { margin-top: 10px; }
+.turnstile-container { min-height: 0; }
+.submit-button { width: 100%; min-height: 52px; }
+
+@media (max-width: 700px) {
+  .shell { width: min(100% - 36px, 560px); }
+  .topbar { height: 68px; padding-inline: 18px; }
+  .hero { padding-block: 48px; }
+  .hero h1 { font-size: clamp(39px, 11vw, 54px); }
+  .steps-grid { grid-template-columns: 1fr; gap: 18px; padding-block: 28px; }
+  .steps-intro h2 br { display: none; }
+  .step-card { padding-block: 13px; }
+  .form-section { padding-block: 48px 60px; }
+  .form-aside h2 br { display: none; }
+  .form-card { padding: 22px 18px; }
+  .form-heading { align-items: flex-start; gap: 12px; }
+  .form-heading h2 { font-size: 23px; }
+  .required-hint { white-space: nowrap; }
+  .field-grid { grid-template-columns: 1fr; }
+  .confirm-row { align-items: flex-start; }
+  .footer-inner { flex-wrap: wrap; gap: 14px 20px; padding-block: 20px; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }
 }

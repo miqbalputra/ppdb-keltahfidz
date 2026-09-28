@@ -15,6 +15,8 @@ const secureProductionSettings: ProductionSecuritySettings = {
   encryptionKeyConfigured: true,
   databaseUrl: "mysql://waitinglist:database-password-long-enough@mariadb:3306/waitinglist",
   webhookUrl: "https://n8n.example.com/webhook/spsb",
+  turnstileSiteKey: "site-key",
+  turnstileSecretKey: "secret-key",
 };
 
 describe("runtime configuration safeguards", () => {
@@ -36,6 +38,18 @@ describe("runtime configuration safeguards", () => {
 
   test("accepts valid production secrets and internal MariaDB credentials", () => {
     expect(productionSecurityProblems(secureProductionSettings)).toEqual([]);
+  });
+
+  test("requires both Turnstile keys in production", () => {
+    expect(productionSecurityProblems({
+      ...secureProductionSettings,
+      turnstileSiteKey: "",
+      turnstileSecretKey: "",
+    })).toContain("TURNSTILE_SITE_KEY dan TURNSTILE_SECRET_KEY wajib dikonfigurasi di production");
+    expect(productionSecurityProblems({
+      ...secureProductionSettings,
+      turnstileSecretKey: "",
+    })).toContain("TURNSTILE_SITE_KEY dan TURNSTILE_SECRET_KEY wajib dikonfigurasi di production");
   });
 
   test("reports weak secrets, insecure cookies, local/root database, and HTTP webhook", () => {

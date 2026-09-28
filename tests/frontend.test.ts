@@ -60,6 +60,17 @@ describe("frontend accessibility contracts", () => {
     expect(html).toContain('id="validation-summary"');
     expect(html).toContain('aria-live="polite"');
     expect(html).toContain('id="waitinglist-form"');
+    expect(html).toContain("Formulir pendaftaran santri baru");
+    expect(html).toContain("Kirim pendaftaran");
+    expect(html).not.toContain("pendaftaran minat, bukan pendaftaran resmi");
+    expect(html).toContain('id="turnstile-status"');
+  });
+
+  test("success confirmation states that registration was received, not selected", async () => {
+    const html = await pageSource("success.html");
+    expect(html).toContain("PENDAFTARAN SPSB 2027 TERKIRIM");
+    expect(html).toContain("bukan pengumuman hasil seleksi");
+    expect(html).not.toContain("Data waitinglist");
   });
 
   test("admin table has a caption and scoped column headers", async () => {

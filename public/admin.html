@@ -15,7 +15,7 @@
     <section class="login-card" id="login-card">
       <span class="section-kicker">AREA PANITIA · SPSB 2027</span>
       <h1 tabindex="-1">Selamat datang<br><em>kembali.</em></h1>
-      <p>Masuk untuk mengelola data waitinglist calon santri.</p>
+      <p>Masuk untuk mengelola data pendaftaran calon santri SPSB 2027.</p>
       <div id="login-alert" class="form-alert" role="alert" aria-live="assertive" aria-atomic="true" hidden></div>
       <form id="login-form" class="login-form">
         <label class="field"><span>Username</span><input type="text" name="username" autocomplete="username" required></label>
@@ -26,9 +26,9 @@
     </section>
 
     <section class="dashboard" id="dashboard" hidden>
-      <div class="dashboard-heading"><div><span class="section-kicker">RUANG KERJA PANITIA</span><h1 tabindex="-1">Dashboard <em>SPSB.</em></h1><p>Pantau sistem, kelola pengaturan, dan lihat data waitinglist.</p></div><button class="button button-outline" id="logout-button" type="button">Keluar <span aria-hidden="true">↗</span></button></div>
+      <div class="dashboard-heading"><div><span class="section-kicker">RUANG KERJA PANITIA</span><h1 tabindex="-1">Dashboard <em>SPSB.</em></h1><p>Pantau sistem, kelola pengaturan, dan data pendaftaran SPSB.</p></div><button class="button button-outline" id="logout-button" type="button">Keluar <span aria-hidden="true">↗</span></button></div>
       <div class="dashboard-alert form-alert" id="dashboard-alert" role="alert" aria-live="assertive" aria-atomic="true" hidden></div>
-      <nav class="dashboard-nav" aria-label="Navigasi dashboard"><a href="#system-panel">Status sistem</a><a href="#settings-panel">Pengaturan</a><a href="#waitinglist-panel">Waitinglist</a></nav>
+      <nav class="dashboard-nav" aria-label="Navigasi dashboard"><a href="#system-panel">Status sistem</a><a href="#settings-panel">Pengaturan</a><a href="#waitinglist-panel">Pendaftar</a></nav>
       <section class="system-panel" id="system-panel">
         <div class="table-heading"><div><span class="section-kicker">MONITORING</span><h2>Status sistem</h2></div><button class="button button-outline" id="refresh-system" type="button">Muat ulang</button></div>
         <div class="system-status-grid">
@@ -38,7 +38,7 @@
           <article class="system-status-card"><span>Anti-spam</span><strong id="system-turnstile-status" class="system-state" aria-live="polite">Memuat…</strong><small>Cloudflare Turnstile</small></article>
         </div>
       </section>
-      <div class="stats-grid"><article class="stat-card"><span>Total pendaftar</span><strong id="stat-total">—</strong><small>data waitinglist masuk</small></article><article class="stat-card stat-accent"><span>Memenuhi kriteria</span><strong id="stat-eligible">—</strong><small>berdasarkan aturan usia aktif</small></article><article class="stat-card"><span>Masuk 24 jam</span><strong id="stat-recent">—</strong><small>pendaftar terbaru</small></article></div>
+      <div class="stats-grid"><article class="stat-card"><span>Total pendaftar</span><strong id="stat-total">—</strong><small>data pendaftaran masuk</small></article><article class="stat-card stat-accent"><span>Memenuhi kriteria</span><strong id="stat-eligible">—</strong><small>berdasarkan aturan usia aktif</small></article><article class="stat-card"><span>Masuk 24 jam</span><strong id="stat-recent">—</strong><small>pendaftar terbaru</small></article></div>
       <section class="settings-card" id="settings-panel">
         <div class="table-heading"><div><span class="section-kicker">KONFIGURASI APLIKASI</span><h2>Pengaturan sistem</h2></div><span class="settings-updated" id="settings-updated">Memuat pengaturan…</span></div>
           <div class="dashboard-alert form-alert" id="settings-alert" role="status" aria-live="polite" aria-atomic="true" hidden></div>
@@ -51,10 +51,10 @@
         </form>
       </section>
       <section class="table-card" id="waitinglist-panel">
-        <div class="table-heading"><div><span class="section-kicker">DAFTAR CALON SANTRI</span><h2>Waitinglist</h2></div><button class="button button-export" id="export-button" type="button" aria-label="Ekspor data waitinglist yang berisi data pribadi ke file CSV"><span aria-hidden="true">↓</span> Ekspor CSV</button></div>
-        <form id="filter-form" class="filters" aria-label="Filter data waitinglist"><label class="search-field"><span class="sr-only">Cari pendaftar berdasarkan nama, email, atau WhatsApp</span><span aria-hidden="true">⌕</span><input name="q" type="search" placeholder="Cari nama, email, WhatsApp…"></label><label class="filter-select"><span class="sr-only">Filter status kelayakan</span><select name="status"><option value="all">Semua status</option><option value="eligible">Memenuhi kriteria</option><option value="not_eligible">Belum memenuhi</option></select></label><label class="filter-input"><span class="sr-only">Filter kecamatan</span><input type="text" name="kecamatan" placeholder="Kecamatan"></label><button class="button button-filter" type="submit">Cari</button></form>
+        <div class="table-heading"><div><span class="section-kicker">DAFTAR CALON SANTRI</span><h2>Data pendaftar</h2></div><button class="button button-export" id="export-button" type="button" aria-label="Ekspor data pendaftar yang berisi data pribadi ke file CSV"><span aria-hidden="true">↓</span> Ekspor CSV</button></div>
+        <form id="filter-form" class="filters" aria-label="Filter data pendaftar"><label class="search-field"><span class="sr-only">Cari pendaftar berdasarkan nama, email, atau WhatsApp</span><span aria-hidden="true">⌕</span><input name="q" type="search" placeholder="Cari nama, email, WhatsApp…"></label><label class="filter-select"><span class="sr-only">Filter status kelayakan</span><select name="status"><option value="all">Semua status</option><option value="eligible">Memenuhi kriteria</option><option value="not_eligible">Belum memenuhi</option></select></label><label class="filter-input"><span class="sr-only">Filter kecamatan</span><input type="text" name="kecamatan" placeholder="Kecamatan"></label><button class="button button-filter" type="submit">Cari</button></form>
         <p class="table-scroll-hint">Di layar kecil, geser tabel ke samping untuk melihat seluruh kolom.</p>
-        <section class="table-scroll" aria-label="Tabel waitinglist. Geser secara horizontal untuk melihat kolom lainnya." tabindex="0"><table><caption class="sr-only">Daftar calon santri SPSB 2027</caption><thead><tr><th scope="col">CALON SANTRI</th><th scope="col">ORANG TUA</th><th scope="col">TANGGAL LAHIR</th><th scope="col">DOMISILI</th><th scope="col">KONTAK</th><th scope="col">STATUS</th><th scope="col">TANGGAL DAFTAR</th></tr></thead><tbody id="waitinglist-rows"><tr><td colspan="7" class="table-empty">Memuat data…</td></tr></tbody></table></section>
+        <section class="table-scroll" aria-label="Tabel pendaftar. Geser secara horizontal untuk melihat kolom lainnya." tabindex="0"><table><caption class="sr-only">Daftar calon santri SPSB 2027</caption><thead><tr><th scope="col">CALON SANTRI</th><th scope="col">ORANG TUA</th><th scope="col">TANGGAL LAHIR</th><th scope="col">DOMISILI</th><th scope="col">KONTAK</th><th scope="col">STATUS</th><th scope="col">TANGGAL DAFTAR</th></tr></thead><tbody id="waitinglist-rows"><tr><td colspan="7" class="table-empty">Memuat data…</td></tr></tbody></table></section>
         <div class="table-footer"><span id="table-summary" aria-live="polite">—</span><nav class="pagination" aria-label="Navigasi halaman"><button id="previous-page" type="button" aria-label="Halaman sebelumnya">←</button><span id="page-indicator" aria-live="polite">1 / 1</span><button id="next-page" type="button" aria-label="Halaman selanjutnya">→</button></nav></div>
       </section>
       <p class="dashboard-note">Data pribadi hanya untuk kebutuhan panitia SPSB. Jaga kerahasiaan dan akses dashboard.</p>

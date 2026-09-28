@@ -4,8 +4,8 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#ffffff">
-  <meta name="description" content="Waitinglist informasi SPSB 2027 Kelompok Tahfidz Griya Qur'an Tunas Ilmu.">
-  <title>Waitinglist SPSB 2027 — Griya Qur'an Tunas Ilmu</title>
+  <meta name="description" content="Formulir pendaftaran santri baru SPSB 2027 Kelompok Tahfidz Griya Qur'an Tunas Ilmu.">
+  <title>Pendaftaran SPSB 2027 — Griya Qur'an Tunas Ilmu</title>
   <link rel="stylesheet" href="/app.css">
   <script src="/app.js" defer></script>
 </head>
@@ -16,16 +16,16 @@
       <span class="brand-mark" aria-hidden="true">ق</span>
       <span class="brand-copy"><strong>Griya Qur’an</strong><small>Tunas Ilmu</small></span>
     </a>
-    <a class="topbar-link" href="#form">Isi waitinglist <span aria-hidden="true">↗</span></a>
+    <a class="topbar-link" href="#form">Mulai pendaftaran <span aria-hidden="true">↗</span></a>
   </header>
 
   <main id="main-content" tabindex="-1">
     <section class="hero shell">
       <div class="hero-copy">
         <div class="eyebrow"><span class="eyebrow-dot"></span> SPSB 2027 · KELOMPOK TAHFIDZ</div>
-        <h1>Awali perjalanan<br>Qur’ani <em>Ananda.</em></h1>
-        <p class="hero-lede">Daftarkan minat untuk menerima informasi pembukaan Sistem Penerimaan Santri Baru Griya Qur’an Tunas Ilmu.</p>
-        <a class="text-link" href="#form">Daftarkan minat <span aria-hidden="true">↓</span></a>
+        <h1>Pendaftaran<br>Santri Baru <em>2027.</em></h1>
+        <p class="hero-lede">Sistem Pendaftaran Santri Baru (SPSB) Kelompok Tahfidz Griya Qur’an Tunas Ilmu. Isi data dengan benar untuk mengajukan pendaftaran Ananda.</p>
+        <a class="text-link" href="#form">Isi formulir pendaftaran <span aria-hidden="true">↓</span></a>
       </div>
       <div class="hero-art" aria-hidden="true">
         <div class="art-orbit orbit-one"></div><div class="art-orbit orbit-two"></div>
@@ -43,15 +43,15 @@
         <div class="steps-intro"><span class="section-kicker">MUDAH &amp; TERARAH</span><h2>Tiga langkah<br>untuk memulai.</h2></div>
         <article class="step-card"><span class="step-number">01</span><div><h3>Isi data Ananda</h3><p>Lengkapi informasi orang tua, calon santri, dan alamat.</p></div></article>
         <article class="step-card"><span class="step-number">02</span><div><h3>Periksa kelayakan</h3><p>Sistem membantu memeriksa batas usia SPSB 2027.</p></div></article>
-        <article class="step-card"><span class="step-number">03</span><div><h3>Dapatkan informasi</h3><p>Ikuti grup WhatsApp dan cek email untuk kabar terbaru.</p></div></article>
+        <article class="step-card"><span class="step-number">03</span><div><h3>Kirim pendaftaran</h3><p>Periksa kembali data, lakukan verifikasi keamanan, lalu kirim formulir.</p></div></article>
       </div>
     </section>
 
     <section class="form-section shell" id="form">
       <div class="form-aside">
-        <span class="section-kicker">WAITINGLIST SPSB 2027</span>
-        <h2>Kenalkan<br><em>Ananda</em> kepada kami.</h2>
-        <p>Formulir ini adalah pendaftaran minat, bukan pendaftaran resmi. Data digunakan panitia untuk menyampaikan informasi SPSB.</p>
+        <span class="section-kicker">PENDAFTARAN SPSB 2027</span>
+        <h2>Data<br><em>Ananda.</em></h2>
+        <p>Lengkapi formulir pendaftaran santri baru. Pastikan semua informasi benar sebelum dikirim kepada panitia.</p>
         <div class="eligibility-note">
           <span class="note-icon" aria-hidden="true">✳</span>
           <div><strong>Kriteria usia</strong><p>Minimal <b id="minimum-age-label">6 tahun 6 bulan</b> pada <span id="cutoff-date-label">1 Juli 2027</span>. Tanggal lahir paling lambat <b id="deadline-label">1 Januari 2021</b>.</p></div>
@@ -60,7 +60,7 @@
       </div>
 
       <div class="form-card">
-        <div class="form-heading"><div><span class="section-kicker">FORMULIR MINAT</span><h2>Data calon santri</h2></div><span class="required-hint"><i>*</i> wajib diisi</span></div>
+        <div class="form-heading"><div><span class="section-kicker">FORMULIR PENDAFTARAN · TAHUN AJARAN 2027</span><h2>Data calon santri</h2></div><span class="required-hint"><i>*</i> wajib diisi</span></div>
         <div id="form-alert" class="form-alert" role="alert" aria-live="assertive" aria-atomic="true" tabindex="-1" hidden></div>
         <div id="validation-summary" class="validation-summary" role="alert" aria-live="assertive" tabindex="-1" hidden>
           <strong id="validation-summary-title">Periksa kembali bagian berikut:</strong>
@@ -102,15 +102,16 @@
 
           <label class="honeypot" aria-hidden="true">Website<input type="text" name="website" tabindex="-1" autocomplete="off"></label>
           <div id="turnstile-container" class="turnstile-container" tabindex="-1" hidden></div>
+          <p id="turnstile-status" class="field-hint turnstile-status" role="status" aria-live="polite" hidden></p>
           <label class="confirm-row"><input id="konfirmasi-data" name="konfirmasi_data" type="checkbox" aria-describedby="error-konfirmasi" required><span class="custom-check" aria-hidden="true"></span><span>Saya memastikan data yang diisi sudah benar dan lengkap. Data digunakan untuk keperluan informasi SPSB 2027.</span></label>
           <small class="field-error consent-error" id="error-konfirmasi" data-error-for="konfirmasi_data" hidden></small>
-          <button class="button button-primary submit-button" id="submit-button" type="submit"><span>Kirim pendaftaran minat</span><span aria-hidden="true">↗</span></button>
-          <p class="form-footnote">Dengan mengirim formulir ini, data Ananda akan diterima oleh panitia SPSB Griya Qur’an Tunas Ilmu.</p>
+          <button class="button button-primary submit-button" id="submit-button" type="submit"><span>Kirim pendaftaran</span><span aria-hidden="true">↗</span></button>
+          <p class="form-footnote">Data pendaftaran akan diterima panitia SPSB Griya Qur’an Tunas Ilmu. Usia minimum 6 tahun 6 bulan pada 1 Juli 2027 (lahir paling lambat 1 Januari 2021). Pengiriman formulir bukan pengumuman hasil seleksi.</p>
         </form>
       </div>
     </section>
   </main>
 
-  <footer class="site-footer"><div class="shell footer-inner"><a class="brand footer-brand" href="/"><span class="brand-mark" aria-hidden="true">ق</span><span class="brand-copy"><strong>Griya Qur’an</strong><small>Tunas Ilmu</small></span></a><span>Menumbuhkan generasi Qur’ani.</span><a href="/admin" class="admin-link">Admin</a><span class="footer-year">© SPSB 2027</span></div></footer>
+  <footer class="site-footer"><div class="shell footer-inner"><a class="brand footer-brand" href="/"><span class="brand-mark" aria-hidden="true">ق</span><span class="brand-copy"><strong>Griya Qur’an</strong><small>Tunas Ilmu</small></span></a><span>Kelompok Tahfidz · Sistem Pendaftaran Santri Baru</span><a href="/admin" class="admin-link">Panitia</a><span class="footer-year">© SPSB 2027</span></div></footer>
 </body>
 </html>

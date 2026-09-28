@@ -40,11 +40,11 @@
 
   const emailStatus = result?.emailStatus;
   if (emailStatus === "sent") {
-    showEmailStatus("✉", "Informasi bergabung telah diteruskan ke email yang didaftarkan.");
+    showEmailStatus("✉", "Pendaftaran diterima panitia. Informasi selanjutnya juga telah dikirim ke email yang didaftarkan.");
   } else if (emailStatus === "failed") {
-    showEmailStatus("!", "Data sudah diterima, tetapi email belum berhasil dikirim. Silakan gunakan tautan grup di bawah ini.", true);
+    showEmailStatus("!", "Pendaftaran diterima panitia, tetapi email belum terkirim. Gunakan tautan grup di bawah atau pantau kontak yang didaftarkan.", true);
   } else {
-    showEmailStatus("✉", "Data sudah diterima. Informasi grup akan dikirim ke email setelah notifikasi diaktifkan.", true);
+    showEmailStatus("✉", "Pendaftaran diterima panitia. Pemberitahuan email belum tersedia; gunakan tautan grup di bawah atau pantau kontak yang didaftarkan.", true);
   }
 
   fetch("/api/config")

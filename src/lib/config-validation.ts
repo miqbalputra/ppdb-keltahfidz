@@ -7,6 +7,8 @@ export interface ProductionSecuritySettings {
   encryptionKeyConfigured: boolean;
   databaseUrl: string;
   webhookUrl: string;
+  turnstileSiteKey: string;
+  turnstileSecretKey: string;
 }
 
 export function parseDbPoolSize(value: string): number {
@@ -33,6 +35,9 @@ export function productionSecurityProblems(settings: ProductionSecuritySettings)
   }
   if (!settings.cookieSecure) problems.push("COOKIE_SECURE harus true di production HTTPS");
   if (!settings.encryptionKeyConfigured) problems.push("DATA_ENCRYPTION_KEY wajib dikonfigurasi");
+  if (!settings.turnstileSiteKey || !settings.turnstileSecretKey) {
+    problems.push("TURNSTILE_SITE_KEY dan TURNSTILE_SECRET_KEY wajib dikonfigurasi di production");
+  }
 
   try {
     const databaseUrl = new URL(settings.databaseUrl);
