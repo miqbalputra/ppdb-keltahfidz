@@ -33,6 +33,38 @@ Buka `http://127.0.0.1:8000`; dashboard admin berada di `/admin`. Migrasi Drizzl
 
 Jika mengubah skema Drizzle, buat migrasi dengan `bun run db:generate`, tinjau hasil SQL di `drizzle/`, lalu sertakan migrasi tersebut dalam deployment.
 
+## Audit UI/UX
+
+Audit otomatis halaman pendaftaran dijalankan secara lokal dengan Lighthouse CLI 13.5.0 dan Chrome for Testing 153.0.8010.12. Empat kategori Lighthouse standar dipakai sebagai skor audit yang dapat diulang (bukan skor UX resmi Google):
+
+| Halaman / mode | Performance | Accessibility | Best Practices | SEO | Rata-rata kategori yang dinilai |
+|---|---:|---:|---:|---:|---:|
+| Pendaftaran / mobile | 100 | 100 | 100 | 100 | **100 (4 kategori)** |
+| Pendaftaran / desktop | 100 | 100 | 100 | 100 | **100 (4 kategori)** |
+| Admin / mobile | 100 | 100 | 100 | 60¹ | **100 (3 kategori UX)** |
+| Konfirmasi / mobile | 100 | 100 | 100 | 60¹ | **100 (3 kategori UX)** |
+
+¹ Skor SEO 60 muncul karena halaman admin dan konfirmasi sengaja diberi `noindex,nofollow`; Lighthouse menilai halaman tidak dapat diindeks. SEO bukan sasaran audit halaman ini dan skornya tidak dihitung ke rata-rata UX.
+
+Audit visual mobile menemukan teks judul yang menyatu setelah line break disembunyikan dan nama aksesibel logo yang tidak cocok dengan teks terlihat; keduanya dirapikan. Favicon lokal juga ditambahkan agar halaman tidak meminta aset yang hilang.
+
+Fixture audit menyajikan file UI aktual dari `public/` dan memalsukan hanya respons konfigurasi serta daftar provinsi, sehingga pemeriksaan tidak memerlukan MariaDB atau key Turnstile. Jalankan server fixture:
+
+```bash
+bun run audit:ui:server
+```
+
+Di terminal lain, set `CHROME_PATH` ke executable Chrome/Chromium lokal dan jalankan Lighthouse:
+
+```bash
+CHROME_PATH=/path/to/chrome npx --yes lighthouse http://127.0.0.1:8766/ \
+  --chrome-flags="--headless --no-sandbox" \
+  --only-categories=performance,accessibility,best-practices,seo \
+  --output=html --output-path=/tmp/spsb-lighthouse-mobile.html
+```
+
+Ulangi dengan `--preset=desktop` untuk profil desktop. Untuk audit admin/konfirmasi, ganti URL menjadi `/admin` atau `/success`; evaluasi tiga kategori UX (performance, accessibility, best practices) dan jangan masukkan SEO halaman noindex. Hasil mengukur tampilan awal sebelum interaksi; pengiriman formulir, validasi, dan verifikasi Turnstile tetap diuji terpisah. Fixture memakai API tiruan lokal, sehingga hasilnya mengukur frontend, bukan performa server/database production. Skor Lighthouse dapat berbeda menurut versi browser dan mesin audit.
+
 ## Dashboard admin
 
 Dashboard di `/admin` mencakup:

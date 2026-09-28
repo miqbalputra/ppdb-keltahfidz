@@ -39,6 +39,8 @@ describe("frontend accessibility contracts", () => {
   for (const page of pages) {
     test(`${page} has unique IDs and valid in-page/ARIA references`, async () => {
       const html = await pageSource(page);
+      expect(html).toContain('href="/favicon.svg"');
+      expect(html).toContain('name="description"');
       const ids = attributes(html, "id");
       const idSet = new Set(ids);
       expect(idSet.size).toBe(ids.length);

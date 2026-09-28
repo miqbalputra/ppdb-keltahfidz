@@ -9,6 +9,7 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "db:import-sqlite": "bun scripts/import-sqlite.ts",
+    "audit:ui:server": "node scripts/ui-audit-server.mjs",
     "test": "bun test --isolate",
     "test:html": "html-validate public/*.html",
     "test:js": "bun build --target browser --no-bundle --outdir /tmp/spsb-frontend-check public/app.js public/admin.js public/success.js",
