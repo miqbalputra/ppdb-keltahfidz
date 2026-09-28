@@ -15,14 +15,52 @@ describe("Elysia application", () => {
     expect(response.headers.get("X-Content-Type-Options")).toBe("nosniff");
   });
 
-  test("serves existing static frontend from the application root", async () => {
+  test("serves every static page and frontend asset", async () => {
     const { app } = await import("../src/index");
-    const response = await app.handle(new Request("http://localhost/admin"));
-    const html = await response.text();
+    const assets = ["/", "/admin", "/success", "/app.css", "/app.js", "/admin.js", "/success.js"];
+    const responses = await Promise.all(assets.map((path) => app.handle(new Request(`http://localhost${path}`))));
 
-    expect(response.status).toBe(200);
-    expect(html).toContain("Pengaturan sistem");
-    expect(html).toContain("Status sistem");
+    const bodies = await Promise.all(responses.map((response) => response.text()));
+    for (const [index, response] of responses.entries()) {
+      expect(response.status).toBe(200);
+      expect(bodies[index]!.length).toBeGreaterThan(0);
+    }
+    expect(bodies[1]).toContain("Pengaturan sistem");
+  });
+
+  test("rejects unknown routes, oversized requests, and invalid region queries safely", async () => {
+    const { app } = await import("../src/index");
+    expect((await app.handle(new Request("http://localhost/not-found"))).status).toBe(404);
+
+    const largeBody = JSON.stringify({ value: "x".repeat(33_000) });
+    const oversized = await app.handle(new Request("http://localhost/api/waitinglist", {
+      method: "POST",
+      headers: { "content-type": "application/json", "content-length": String(largeBody.length) },
+      body: largeBody,
+    }));
+    expect(oversized.status).toBe(413);
+
+    const invalidLevel = await app.handle(new Request("http://localhost/api/regions/unknown"));
+    expect(invalidLevel.status).toBe(400);
+    const invalidParent = await app.handle(new Request("http://localhost/api/regions/villages?parent_id=32.73"));
+    expect(invalidParent.status).toBe(400);
+  });
+
+  test("rejects cross-origin and incorrect admin credentials", async () => {
+    const { app } = await import("../src/index");
+    const crossOrigin = await app.handle(new Request("http://localhost/api/admin/login", {
+      method: "POST",
+      headers: { host: "localhost", origin: "https://attacker.example", "content-type": "application/json" },
+      body: JSON.stringify({ username: "test-admin", password: "test-admin-password" }),
+    }));
+    expect(crossOrigin.status).toBe(403);
+
+    const incorrectCredentials = await app.handle(new Request("http://localhost/api/admin/login", {
+      method: "POST",
+      headers: { host: "localhost", origin: "http://localhost", "content-type": "application/json" },
+      body: JSON.stringify({ username: "test-admin", password: "wrong-password" }),
+    }));
+    expect(incorrectCredentials.status).toBe(401);
   });
 
   test("admin login issues a signed HttpOnly session and logout requires CSRF", async () => {

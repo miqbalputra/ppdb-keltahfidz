@@ -9,8 +9,11 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "db:import-sqlite": "bun scripts/import-sqlite.ts",
-    "test": "bun test",
-    "typecheck": "tsc --noEmit"
+    "test": "bun test --isolate",
+    "test:html": "html-validate public/*.html",
+    "test:js": "bun build --target browser --no-bundle --outdir /tmp/spsb-frontend-check public/app.js public/admin.js public/success.js",
+    "typecheck": "tsc --noEmit",
+    "verify": "bun run typecheck && bun run test && bun run test:html && bun run test:js && bun audit && bunx drizzle-kit check"
   },
   "dependencies": {
     "drizzle-orm": "^0.45.3",
@@ -20,6 +23,12 @@
   "devDependencies": {
     "@types/bun": "^1.4.2",
     "drizzle-kit": "^0.31.11",
+    "html-validate": "9.7.1",
     "typescript": "^5.9.3"
+  },
+  "overrides": {
+    "@esbuild-kit/core-utils": {
+      "esbuild": "^0.25.12"
+    }
   }
 }

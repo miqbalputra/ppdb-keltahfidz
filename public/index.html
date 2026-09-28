@@ -1,4 +1,4 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="id">
 <head>
   <meta charset="utf-8">
@@ -75,13 +75,13 @@
         <form id="waitinglist-form" novalidate>
           <div class="form-subheading"><span class="form-index">01</span><h3>Informasi orang tua</h3><span class="subheading-rule"></span></div>
           <div class="field-grid parent-grid">
-            <label class="field"><span>Nama orang tua <i>*</i></span><input id="nama-ortu" name="nama_ortu" autocomplete="name" maxlength="120" placeholder="Nama lengkap" aria-describedby="error-nama-ortu" required><small class="field-error" id="error-nama-ortu" data-error-for="nama_ortu" hidden></small></label>
+            <label class="field"><span>Nama orang tua <i>*</i></span><input type="text" id="nama-ortu" name="nama_ortu" autocomplete="name" maxlength="120" placeholder="Nama lengkap" aria-describedby="error-nama-ortu" required><small class="field-error" id="error-nama-ortu" data-error-for="nama_ortu" hidden></small></label>
             <fieldset class="field status-field" aria-describedby="error-status-ortu"><legend>Status sebagai orang tua <i>*</i></legend><div class="radio-row"><label class="radio-option"><input id="status-bapak" type="radio" name="status_ortu" value="bapak" required><span>Bapak</span></label><label class="radio-option"><input id="status-ibu" type="radio" name="status_ortu" value="ibu"><span>Ibu</span></label></div><small class="field-error" id="error-status-ortu" data-error-for="status_ortu" hidden></small></fieldset>
           </div>
 
           <div class="form-subheading"><span class="form-index">02</span><h3>Informasi calon santri</h3><span class="subheading-rule"></span></div>
           <div class="field-grid child-grid">
-            <label class="field"><span>Nama lengkap Ananda <i>*</i></span><input id="nama-anak" name="nama_anak" autocomplete="off" maxlength="120" placeholder="Nama sesuai identitas" aria-describedby="error-nama-anak" required><small class="field-error" id="error-nama-anak" data-error-for="nama_anak" hidden></small></label>
+            <label class="field"><span>Nama lengkap Ananda <i>*</i></span><input type="text" id="nama-anak" name="nama_anak" autocomplete="off" maxlength="120" placeholder="Nama sesuai identitas" aria-describedby="error-nama-anak" required><small class="field-error" id="error-nama-anak" data-error-for="nama_anak" hidden></small></label>
             <label class="field"><span>Tanggal lahir Ananda <i>*</i></span><input id="tanggal-lahir" name="tanggal_lahir_anak" type="date" aria-describedby="age-hint eligibility-message error-tanggal-lahir" required><small class="field-hint" id="age-hint" aria-live="polite">Umur akan dihitung sesuai tanggal acuan.</small><small class="field-error" id="error-tanggal-lahir" data-error-for="tanggal_lahir_anak" hidden></small></label>
           </div>
           <div id="eligibility-message" class="eligibility-message" role="status" aria-live="polite" hidden></div>
@@ -100,7 +100,7 @@
             <label class="field"><span>Email orang tua <i>*</i></span><input id="email-orang-tua" name="email" type="email" autocomplete="email" maxlength="254" placeholder="nama@email.com" aria-describedby="hint-email error-email" required><small class="field-hint" id="hint-email">Informasi grup WhatsApp juga dikirim ke email ini.</small><small class="field-error" id="error-email" data-error-for="email" hidden></small></label>
           </div>
 
-          <label class="honeypot" aria-hidden="true">Website<input name="website" tabindex="-1" autocomplete="off"></label>
+          <label class="honeypot" aria-hidden="true">Website<input type="text" name="website" tabindex="-1" autocomplete="off"></label>
           <div id="turnstile-container" class="turnstile-container" tabindex="-1" hidden></div>
           <label class="confirm-row"><input id="konfirmasi-data" name="konfirmasi_data" type="checkbox" aria-describedby="error-konfirmasi" required><span class="custom-check" aria-hidden="true"></span><span>Saya memastikan data yang diisi sudah benar dan lengkap. Data digunakan untuk keperluan informasi SPSB 2027.</span></label>
           <small class="field-error consent-error" id="error-konfirmasi" data-error-for="konfirmasi_data" hidden></small>

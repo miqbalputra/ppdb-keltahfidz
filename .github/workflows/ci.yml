@@ -1,0 +1,60 @@
+name: Verify application
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      NODE_ENV: test
+      TEST_DATABASE_URL: mysql://waitinglist:integration-db-password-strong@127.0.0.1:3306/waitinglist_test
+      DATABASE_URL: mysql://waitinglist:integration-db-password-strong@127.0.0.1:3306/waitinglist_test
+      ADMIN_USERNAME: integration-admin
+      ADMIN_PASSWORD: integration-test-password
+      APP_SECRET: integration-test-session-secret-with-32-chars
+      DATA_ENCRYPTION_KEY: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+      COOKIE_SECURE: "false"
+      DB_SSL: "false"
+    services:
+      mariadb:
+        image: mariadb:11.4
+        env:
+          MARIADB_DATABASE: waitinglist_test
+          MARIADB_USER: waitinglist
+          MARIADB_PASSWORD: integration-db-password-strong
+          MARIADB_ROOT_PASSWORD: integration-root-password-strong
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="healthcheck.sh --connect --innodb_initialized"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=12
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Install Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.2
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+      - name: Typecheck
+        run: bun run typecheck
+      - name: Unit and database integration tests
+        run: bun run test
+      - name: Audit dependencies
+        run: bun audit
+      - name: Validate HTML
+        run: bun run test:html
+      - name: Parse frontend JavaScript
+        run: bun run test:js
+      - name: Validate Drizzle migrations
+        run: bunx drizzle-kit check
+      - name: Check legacy SQLite import source
+        run: bun run db:import-sqlite -- --dry-run
+      - name: Build production image
+        run: docker build --tag spsb-waitinglist:ci .
