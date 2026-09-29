@@ -15,6 +15,34 @@
       "when": 1790305617229,
       "tag": "0001_futuristic_rafael_vega",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "5",
+      "when": 1790644456926,
+      "tag": "0002_gigantic_overlord",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "5",
+      "when": 1790645133909,
+      "tag": "0003_lethal_gladiator",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "5",
+      "when": 1790646136849,
+      "tag": "0004_worried_network",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "5",
+      "when": 1790647943688,
+      "tag": "0005_mighty_mordo",
+      "breakpoints": true
     }
   ]
 }

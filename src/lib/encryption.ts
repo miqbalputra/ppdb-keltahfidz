@@ -2,10 +2,14 @@ import { createCipheriv, createDecipheriv, randomBytes } from "node:crypto";
 import { DATA_ENCRYPTION_KEY } from "../config";
 
 const ENCRYPTION_PREFIX = "enc:v2:";
+const PAYMENT_PROOF_MAGIC = Buffer.from("SPSBPF01", "ascii");
+const PAYMENT_PROOF_AAD_PREFIX = "spsb.payment-proof:v1:";
 const ENCRYPTED_FIELDS = [
   "nama_ortu",
   "status_ortu",
   "nama_anak",
+  "jenis_kelamin",
+  "sekolah_asal",
   "tanggal_lahir_anak",
   "umur_terhitung_bulan",
   "status_eligibility",
@@ -61,6 +65,32 @@ export function decryptField(value: string, field: string, recordId = ""): strin
     ]).toString("utf8");
   } catch {
     throw new Error("Data terenkripsi tidak dapat dibuka; periksa DATA_ENCRYPTION_KEY.");
+  }
+}
+
+export function encryptPaymentProof(data: Uint8Array, recordId: string): Buffer {
+  const iv = randomBytes(12);
+  const cipher = createCipheriv("aes-256-gcm", DATA_ENCRYPTION_KEY, iv);
+  cipher.setAAD(Buffer.from(`${PAYMENT_PROOF_AAD_PREFIX}${recordId}`, "utf8"));
+  const ciphertext = Buffer.concat([cipher.update(data), cipher.final()]);
+  return Buffer.concat([PAYMENT_PROOF_MAGIC, iv, cipher.getAuthTag(), ciphertext]);
+}
+
+export function decryptPaymentProof(data: Uint8Array, recordId: string): Buffer {
+  const encrypted = Buffer.from(data);
+  const headerLength = PAYMENT_PROOF_MAGIC.length + 12 + 16;
+  if (encrypted.length < headerLength || !encrypted.subarray(0, PAYMENT_PROOF_MAGIC.length).equals(PAYMENT_PROOF_MAGIC)) {
+    throw new Error("Format bukti transfer terenkripsi tidak valid.");
+  }
+  const ivStart = PAYMENT_PROOF_MAGIC.length;
+  const tagStart = ivStart + 12;
+  try {
+    const decipher = createDecipheriv("aes-256-gcm", DATA_ENCRYPTION_KEY, encrypted.subarray(ivStart, tagStart));
+    decipher.setAAD(Buffer.from(`${PAYMENT_PROOF_AAD_PREFIX}${recordId}`, "utf8"));
+    decipher.setAuthTag(encrypted.subarray(tagStart, headerLength));
+    return Buffer.concat([decipher.update(encrypted.subarray(headerLength)), decipher.final()]);
+  } catch {
+    throw new Error("Bukti transfer terenkripsi tidak dapat dibuka; periksa DATA_ENCRYPTION_KEY.");
   }
 }
 

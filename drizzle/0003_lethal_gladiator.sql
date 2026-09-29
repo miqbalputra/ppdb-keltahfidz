@@ -1,0 +1,1 @@
+ALTER TABLE `calon_santri_waitinglist` ADD `sekolah_asal` text;

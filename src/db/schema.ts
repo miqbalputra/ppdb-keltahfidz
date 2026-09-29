@@ -13,6 +13,9 @@ export const calonSantriWaitinglist = mysqlTable(
     nama_ortu: text("nama_ortu").notNull(),
     status_ortu: text("status_ortu").notNull(),
     nama_anak: text("nama_anak").notNull(),
+    jenis_kelamin: text("jenis_kelamin"),
+    sekolah_asal: text("sekolah_asal"),
+    bukti_transfer_mime: text("bukti_transfer_mime"),
     tanggal_lahir_anak: text("tanggal_lahir_anak").notNull(),
     umur_terhitung_bulan: text("umur_terhitung_bulan").notNull(),
     status_eligibility: text("status_eligibility").notNull(),
@@ -27,6 +30,8 @@ export const calonSantriWaitinglist = mysqlTable(
     no_hp_wa: text("no_hp_wa").notNull(),
     email: text("email").notNull(),
     konfirmasi_data: tinyint("konfirmasi_data", { unsigned: true }).notNull(),
+    konfirmasi_bukti_transfer: tinyint("konfirmasi_bukti_transfer", { unsigned: true }),
+    konfirmasi_ketentuan_biaya: tinyint("konfirmasi_ketentuan_biaya", { unsigned: true }),
     created_at: varchar("created_at", { length: 32 }).notNull(),
   },
   (table) => [

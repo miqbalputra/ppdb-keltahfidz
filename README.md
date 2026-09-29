@@ -80,8 +80,9 @@ Kredensial admin, `APP_SECRET`, URL webhook n8n, dan secret Turnstile tetap dike
 ## Perlindungan data dan operasional keamanan
 
 - Field identitas pendaftar dienkripsi di aplikasi memakai AES-256-GCM sebelum masuk MariaDB. Ciphertext terikat pada nama field dan ID record; ID serta waktu pendaftaran tetap terlihat untuk kebutuhan operasional.
+- Bukti transfer JPG/PNG/PDF (maksimal 5 MB) diverifikasi berdasarkan signature file, dienkripsi AES-256-GCM, lalu disimpan di `DATA_DIR/payment-proofs` dengan nama acak dan permission terbatas. File tidak disajikan sebagai aset publik; panitia harus login untuk mengunduhnya sebagai attachment.
 - Saat startup, aplikasi mengenkripsi record plaintext dari versi lama dan memperbarui format ciphertext lama. Buat backup database sebelum upgrade pertama; bila proses terputus, startup berikutnya akan melanjutkan record yang belum diperbarui.
-- `DATA_ENCRYPTION_KEY` harus tepat 32 byte (64 karakter hex). Buat sekali dengan `openssl rand -hex 32`, simpan sebagai secret di Coolify, dan simpan salinan pemulihan terenkripsi terpisah dari backup database. Jangan mengganti key secara langsung: rencanakan proses decrypt/re-encrypt dan pemulihan backup terlebih dahulu. Kehilangan key berarti data terenkripsi tidak dapat dibaca.
+- `DATA_ENCRYPTION_KEY` harus tepat 32 byte (64 karakter hex). Buat sekali dengan `openssl rand -hex 32`, simpan sebagai secret di Coolify, dan simpan salinan pemulihan terenkripsi terpisah dari backup database serta volume bukti transfer. Jangan mengganti key secara langsung: rencanakan proses decrypt/re-encrypt dan pemulihan backup terlebih dahulu. Kehilangan key berarti data terenkripsi tidak dapat dibaca.
 - Enkripsi database tidak melindungi data saat aplikasi sedang berjalan, dari host/aplikasi yang telah diambil alih, atau dari ekspor yang diunduh admin. Batasi akses Coolify/host, gunakan user MariaDB khusus dengan hak minimum, jangan publikasikan port database, aktifkan TLS MariaDB (`DB_SSL=true`) jika koneksi melewati jaringan yang tidak sepenuhnya tepercaya, dan batasi akses ke file CSV hasil ekspor.
 - Webhook n8n di production wajib memakai HTTPS. Jangan kirim data pendaftar ke endpoint yang tidak dipercaya.
 - Aplikasi menggunakan header IP dari reverse proxy untuk pembatasan percobaan. Pastikan port aplikasi hanya dapat dijangkau lewat proxy Coolify dan proxy menimpa (bukan meneruskan nilai kiriman pengguna untuk) header `CF-Connecting-IP`, `X-Real-IP`, atau `X-Forwarded-For`.
@@ -104,7 +105,7 @@ Salin `.env.example` sebagai titik awal. Variabel penting:
 | `WHATSAPP_GROUP_URL` | Nilai awal link grup; dapat diubah dari dashboard. |
 | `N8N_WEBHOOK_URL` | Webhook notifikasi email n8n. Secret ini dikelola melalui environment. |
 | `TURNSTILE_SITE_KEY`, `TURNSTILE_SECRET_KEY` | Wajib di production: isi pasangan site key dan secret key Cloudflare Turnstile. Startup production ditolak jika salah satu atau keduanya tidak ada; pasangan parsial selalu ditolak. Development lokal dapat berjalan tanpa keduanya. |
-| `HOST`, `PORT`, `DATA_DIR` | Alamat listener, port aplikasi, dan cache data wilayah. Dockerfile menetapkan host `0.0.0.0` dan port `8000`. |
+| `HOST`, `PORT`, `DATA_DIR` | Alamat listener, port aplikasi, serta cache wilayah dan penyimpanan bukti transfer terenkripsi. Di Docker, pasang volume persisten pada `/app/data`; Dockerfile menetapkan host `0.0.0.0` dan port `8000`. |
 
 Pengaturan tanggal acuan dan WhatsApp disalin dari environment ke tabel `system_settings` saat pertama kali database kosong. Setelah itu, nilai di dashboard menjadi sumber aktifnya.
 
@@ -123,21 +124,22 @@ Dropdown wilayah menggunakan proxy backend ke [EMSIFA API Wilayah Indonesia v2](
 - `POST /api/admin/login`, `POST /api/admin/logout`
 - `GET /api/admin/system`, `GET /api/admin/settings`, `PUT /api/admin/settings`
 - `GET /api/admin/waitinglist`, `GET /api/admin/export.csv`
+- `GET /api/admin/waitinglist/:id/proof` — unduh bukti transfer, khusus admin terautentikasi.
 - `GET /healthz` — liveness aplikasi; `GET /readyz` — kesiapan koneksi database.
 
-Pendaftaran disimpan sebelum webhook n8n dipanggil. Jika webhook gagal atau belum diatur, record tetap tersimpan dan halaman konfirmasi menampilkan status notifikasi. Perbarui template email pada workflow n8n agar menyebut pendaftaran SPSB 2027, bukan waitinglist/pendaftaran minat. Penerimaan data bukan pengumuman hasil seleksi.
+`POST /api/waitinglist` menerima `multipart/form-data`, termasuk bukti transfer JPG/PNG/PDF wajib maksimal 5 MB dan konfirmasi pembayaran. Pendaftaran disimpan sebelum webhook n8n dipanggil. Jika webhook gagal atau belum diatur, record tetap tersimpan dan halaman konfirmasi menampilkan status notifikasi. Perbarui template email pada workflow n8n agar menyebut pendaftaran SPSB 2027, bukan waitinglist/pendaftaran minat. Penerimaan data bukan pengumuman hasil seleksi.
 
 ## Deployment di Coolify
 
 Repository ini menyediakan `Dockerfile` berbasis image resmi Bun. Di Coolify:
 
-1. Buat resource MariaDB, database, dan user khusus aplikasi. Aktifkan persistent storage serta backup database.
-2. Deploy repository sebagai aplikasi berbasis Dockerfile, gunakan port container `8000`, dan pasang domain HTTPS. Jangan publikasikan port aplikasi langsung ke internet; akses harus melalui reverse proxy Coolify.
+1. Buat resource MariaDB, database, dan user khusus aplikasi. Aktifkan backup database serta volume persisten aplikasi pada `/app/data` untuk menyimpan bukti transfer terenkripsi. Pastikan volume dapat ditulis oleh UID `10001`.
+2. Deploy repository sebagai aplikasi berbasis Dockerfile, gunakan port container `8000`, dan pasang domain HTTPS. Izinkan request upload minimal 5,2 MB di reverse proxy. Jangan publikasikan port aplikasi langsung ke internet; akses harus melalui reverse proxy Coolify.
 3. Isi environment aplikasi dari `.env.example`. Gunakan hostname/internal connection details MariaDB dari Coolify—jangan gunakan `localhost` antar-container. Pastikan app dan database terhubung ke network internal yang sama.
 4. Set `COOKIE_SECURE=true`. Isi `ADMIN_PASSWORD` unik (minimal 16 karakter), `APP_SECRET` acak (minimal 32 karakter), `DATA_ENCRYPTION_KEY` hasil `openssl rand -hex 32`, serta pasangan `TURNSTILE_SITE_KEY` dan `TURNSTILE_SECRET_KEY` dari Cloudflare. Kredensial MariaDB harus unik dengan password minimal 20 karakter; production menolak konfigurasi database `localhost`, webhook n8n non-HTTPS, atau key Turnstile yang tidak tersedia.
 5. Pastikan `/readyz` merespons status `ready`. Pemeriksaan kesehatan container juga menunggu kesiapan koneksi database. Jangan membuka port MariaDB ke internet publik.
 
-Data pendaftar berada di MariaDB. `DATA_DIR` hanya menyimpan cache wilayah yang dapat dibuat ulang, sehingga volume aplikasi terpisah tidak wajib. Database SQLite lama (`data/waitinglist.sqlite3`) tetap dipertahankan, tetapi tidak diimpor otomatis; lakukan migrasi terencana bila file tersebut berisi data yang harus dibawa ke MariaDB.
+Data pendaftar berada di MariaDB, sedangkan bukti transfer terenkripsi berada di volume persisten `/app/data/payment-proofs`; backup dan pemulihan perlu mencakup keduanya serta `DATA_ENCRYPTION_KEY`. Cache wilayah di direktori yang sama dapat dibuat ulang. Database SQLite lama (`data/waitinglist.sqlite3`) tetap dipertahankan, tetapi tidak diimpor otomatis; lakukan migrasi terencana bila file tersebut berisi data yang harus dibawa ke MariaDB.
 
 Untuk memeriksa dan mengimpor record dari file SQLite lama, atur `SQLITE_IMPORT_PATH` bila lokasinya berbeda, lalu jalankan `bun run db:import-sqlite -- --dry-run` untuk hitung saja atau `bun run db:import-sqlite` untuk mengimpor. Importer mempertahankan ID record dan melewati ID yang sudah ada di MariaDB; tetap buat backup sebelum migrasi.
 

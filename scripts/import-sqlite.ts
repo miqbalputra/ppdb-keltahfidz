@@ -36,11 +36,14 @@ try {
       const batch = rows.slice(offset, offset + batchSize).map((row) => {
         const rawCreatedAt = String(row.created_at);
         const parsedCreatedAt = new Date(rawCreatedAt);
+        const rawGender = String(row.jenis_kelamin ?? "").trim().toLowerCase();
         return {
           id: String(row.id),
           nama_ortu: String(row.nama_ortu),
           status_ortu: String(row.status_ortu) as "bapak" | "ibu",
           nama_anak: String(row.nama_anak),
+          jenis_kelamin: rawGender === "putra" || rawGender === "putri" ? rawGender : null,
+          sekolah_asal: String(row.sekolah_asal ?? "").trim() || null,
           tanggal_lahir_anak: String(row.tanggal_lahir_anak),
           umur_terhitung_bulan: Number(row.umur_terhitung_bulan),
           status_eligibility: String(row.status_eligibility) as "eligible" | "not_eligible",

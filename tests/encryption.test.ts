@@ -3,8 +3,15 @@ import { createCipheriv } from "node:crypto";
 
 process.env.DATA_ENCRYPTION_KEY = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
 
-const { decryptField, decryptSensitiveRecord, encryptField, encryptLegacyFields, encryptSensitiveRecord } =
-  await import("../src/lib/encryption");
+const {
+  decryptField,
+  decryptPaymentProof,
+  decryptSensitiveRecord,
+  encryptField,
+  encryptLegacyFields,
+  encryptPaymentProof,
+  encryptSensitiveRecord,
+} = await import("../src/lib/encryption");
 
 describe("sensitive data encryption", () => {
   test("encrypts with randomized AES-GCM ciphertext and field binding", () => {
@@ -22,6 +29,8 @@ describe("sensitive data encryption", () => {
       nama_ortu: "Aminah",
       status_ortu: "ibu",
       nama_anak: "Ahmad",
+      jenis_kelamin: "putri",
+      sekolah_asal: "TAUD Griya Qur'an",
       tanggal_lahir_anak: "2021-01-01",
       umur_terhitung_bulan: "78",
       status_eligibility: "eligible",
@@ -34,12 +43,24 @@ describe("sensitive data encryption", () => {
     const encrypted = encryptSensitiveRecord(clear);
     expect(encrypted.nama_ortu).not.toBe(clear.nama_ortu);
     expect(encrypted.no_hp_wa).not.toBe(clear.no_hp_wa);
+    expect(encrypted.jenis_kelamin).not.toBe(clear.jenis_kelamin);
+    expect(encrypted.sekolah_asal).not.toBe(clear.sekolah_asal);
     expect(decryptSensitiveRecord(encrypted)).toMatchObject({
       nama_ortu: "Aminah",
       no_hp_wa: "6281234567890",
+      jenis_kelamin: "putri",
+      sekolah_asal: "TAUD Griya Qur'an",
       umur_terhitung_bulan: 78,
     });
     expect(() => decryptSensitiveRecord({ ...encrypted, id: "fedcba9876543210fedcba9876543210" })).toThrow("DATA_ENCRYPTION_KEY");
+  });
+
+  test("encrypts payment proof bytes and binds the ciphertext to the registration ID", () => {
+    const clear = Buffer.from("%PDF-1.7\ntransfer receipt");
+    const encrypted = encryptPaymentProof(clear, "0123456789abcdef0123456789abcdef");
+    expect(encrypted.includes(clear)).toBe(false);
+    expect(decryptPaymentProof(encrypted, "0123456789abcdef0123456789abcdef")).toEqual(clear);
+    expect(() => decryptPaymentProof(encrypted, "fedcba9876543210fedcba9876543210")).toThrow("DATA_ENCRYPTION_KEY");
   });
 
   test("legacy rows can be upgraded once and the key is verified on later boots", () => {

@@ -28,6 +28,8 @@ assertTurnstilePair(TURNSTILE_SITE_KEY, TURNSTILE_SECRET_KEY);
 export const TURNSTILE_ENABLED = Boolean(TURNSTILE_SITE_KEY && TURNSTILE_SECRET_KEY);
 export const DB_POOL_SIZE = parseDbPoolSize(env("DB_POOL_SIZE", "10"));
 export const MAX_REQUEST_BYTES = 32 * 1024;
+export const MAX_PAYMENT_PROOF_BYTES = 5 * 1024 * 1024;
+export const MAX_UPLOAD_REQUEST_BYTES = MAX_PAYMENT_PROOF_BYTES + 128 * 1024;
 export const SESSION_COOKIE = COOKIE_SECURE ? "__Host-psb_admin_session" : "psb_admin_session";
 
 const encryptionKeyValue = env("DATA_ENCRYPTION_KEY");

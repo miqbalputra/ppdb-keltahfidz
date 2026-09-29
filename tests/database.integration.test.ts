@@ -1,5 +1,6 @@
 import { afterAll, expect, test } from "bun:test";
-import { resolve } from "node:path";
+import { unlink } from "node:fs/promises";
+import { join, resolve } from "node:path";
 
 const testDatabaseUrl = process.env.TEST_DATABASE_URL;
 let closeDb: (() => Promise<void>) | undefined;
@@ -120,10 +121,17 @@ test.skipIf(!testDatabaseUrl)("MariaDB-backed public, admin, security, and notif
       "content-type": "application/json",
       "cf-connecting-ip": "203.0.113.44",
     };
+    const uploadHeaders = {
+      host: "localhost",
+      origin: "http://localhost",
+      "cf-connecting-ip": "203.0.113.44",
+    };
     const basePayload = {
       nama_ortu: `Integration Parent ${nonce}`,
       status_ortu: "ibu",
       nama_anak: `Integration Child ${nonce}`,
+      jenis_kelamin: "putra",
+      sekolah_asal: "TAUD Griya Qur'an",
       tanggal_lahir_anak: "2021-01-01",
       provinsi_id: "32",
       provinsi_nama: "Jawa Barat",
@@ -136,7 +144,15 @@ test.skipIf(!testDatabaseUrl)("MariaDB-backed public, admin, security, and notif
       no_hp_wa: "0812-3456-7890",
       email: `integration-${nonce}@example.com`,
       konfirmasi_data: true,
+      konfirmasi_bukti_transfer: true,
+      konfirmasi_ketentuan_biaya: true,
       website: "",
+    };
+    const submissionForm = (payload: Record<string, unknown>) => {
+      const form = new FormData();
+      for (const [key, value] of Object.entries(payload)) form.append(key, String(value));
+      form.append("bukti_transfer", new Blob([`%PDF-1.7\n${String(payload.nama_anak)}\n%%EOF`], { type: "application/pdf" }), "receipt.pdf");
+      return form;
     };
 
     const readiness = await app.handle(new Request("http://localhost/readyz"));
@@ -153,16 +169,16 @@ test.skipIf(!testDatabaseUrl)("MariaDB-backed public, admin, security, and notif
 
     const unverified = await app.handle(new Request("http://localhost/api/waitinglist", {
       method: "POST",
-      headers: requestHeaders,
-      body: JSON.stringify(basePayload),
+      headers: uploadHeaders,
+      body: submissionForm(basePayload),
     }));
     expect(unverified.status).toBe(400);
     expect(turnstileRequests).toBe(0);
 
     const submit = async (name: string) => app.handle(new Request("http://localhost/api/waitinglist", {
       method: "POST",
-      headers: requestHeaders,
-      body: JSON.stringify({ ...basePayload, nama_anak: name, turnstile_token: "valid-integration-token" }),
+      headers: uploadHeaders,
+      body: submissionForm({ ...basePayload, nama_anak: name, turnstile_token: "valid-integration-token" }),
     }));
 
     const successResponse = await submit(basePayload.nama_anak);
@@ -195,6 +211,9 @@ test.skipIf(!testDatabaseUrl)("MariaDB-backed public, admin, security, and notif
       .where(eq(calonSantriWaitinglist.id, successResult.id));
     expect(storedRows).toHaveLength(1);
     expect(storedRows[0]!.nama_anak).not.toContain("Integration Child");
+    expect(storedRows[0]!.bukti_transfer_mime).toBe("application/pdf");
+    expect(storedRows[0]!.konfirmasi_bukti_transfer).toBe(1);
+    expect(storedRows[0]!.konfirmasi_ketentuan_biaya).toBe(1);
     expect(decryptSensitiveRecord(storedRows[0]!).nama_anak).toBe(basePayload.nama_anak);
 
     const login = await app.handle(new Request("http://localhost/api/admin/login", {
@@ -208,6 +227,14 @@ test.skipIf(!testDatabaseUrl)("MariaDB-backed public, admin, security, and notif
     expect(cookie).toContain("psb_admin_session=");
 
     const adminHeaders = { ...requestHeaders, cookie };
+    const proofUrl = `http://localhost/api/admin/waitinglist/${successResult.id}/proof`;
+    expect((await app.handle(new Request(proofUrl))).status).toBe(401);
+    const proofResponse = await app.handle(new Request(proofUrl, { headers: adminHeaders }));
+    expect(proofResponse.status).toBe(200);
+    expect(proofResponse.headers.get("content-type")).toBe("application/pdf");
+    expect(proofResponse.headers.get("content-disposition")).toContain("attachment");
+    expect(await proofResponse.text()).toContain(basePayload.nama_anak);
+
     const me = await app.handle(new Request("http://localhost/api/admin/me", { headers: adminHeaders }));
     expect(await me.json()).toMatchObject({ authenticated: true, username: "integration-admin" });
 
@@ -228,7 +255,11 @@ test.skipIf(!testDatabaseUrl)("MariaDB-backed public, admin, security, and notif
     const exportResponse = await app.handle(new Request(`http://localhost/api/admin/export.csv?${query}`, { headers: adminHeaders }));
     expect(exportResponse.status).toBe(200);
     expect(exportResponse.headers.get("content-type")).toContain("text/csv");
-    expect(await exportResponse.text()).toContain(basePayload.nama_anak);
+    const csv = await exportResponse.text();
+    expect(csv).toContain(basePayload.nama_anak);
+    expect(csv).toContain("Putra");
+    expect(csv).toContain("TAUD Griya Qur'an");
+    expect(csv).toContain("Setuju");
 
     const newGroupUrl = `https://chat.whatsapp.com/integration-${nonce}`;
     const updateSettings = await app.handle(new Request("http://localhost/api/admin/settings", {
@@ -266,6 +297,8 @@ test.skipIf(!testDatabaseUrl)("MariaDB-backed public, admin, security, and notif
       await db.delete(calonSantriWaitinglist)
         .where(inArray(calonSantriWaitinglist.id, insertedIds))
         .catch(() => undefined);
+      const proofDir = resolve(process.env.DATA_DIR ?? "./data", "payment-proofs");
+      await Promise.all(insertedIds.map((id) => unlink(join(proofDir, `${id}.enc`)).catch(() => undefined)));
     }
     webhookServer?.stop(true);
     webhookServer = undefined;

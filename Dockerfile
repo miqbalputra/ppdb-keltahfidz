@@ -14,6 +14,7 @@ COPY --chown=10001:10001 src ./src
 COPY --chown=10001:10001 public ./public
 COPY --chown=10001:10001 drizzle ./drizzle
 RUN mkdir -p /app/data && chown -R 10001:10001 /app/data
+VOLUME ["/app/data"]
 
 USER 10001:10001
 EXPOSE 8000

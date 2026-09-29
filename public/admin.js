@@ -139,8 +139,23 @@
       childName.textContent = item.nama_anak;
       childName.title = item.nama_anak;
       const childDetail = document.createElement("small");
-      childDetail.textContent = `${item.umur_terhitung_bulan} bulan · snapshot saat daftar`;
+      const genderLabel = item.jenis_kelamin === "putra"
+        ? "Putra"
+        : item.jenis_kelamin === "putri" ? "Putri" : "Jenis kelamin belum dicatat";
+      childDetail.textContent = [
+        genderLabel,
+        item.sekolah_asal ? `Sekolah: ${item.sekolah_asal}` : "",
+        `${item.umur_terhitung_bulan} bulan · snapshot saat daftar`,
+      ].filter(Boolean).join(" · ");
       child.append(childName, childDetail);
+      if (item.bukti_transfer_mime) {
+        const proofLink = document.createElement("a");
+        proofLink.href = `/api/admin/waitinglist/${encodeURIComponent(item.id)}/proof`;
+        proofLink.textContent = "Unduh bukti transfer";
+        proofLink.className = "proof-download-link";
+        proofLink.setAttribute("aria-label", `Unduh bukti transfer ${item.nama_anak}`);
+        child.append(proofLink);
+      }
       tr.append(child);
 
       const parent = document.createElement("td");

@@ -1,8 +1,8 @@
 import { randomBytes } from "node:crypto";
-import { mkdir } from "node:fs/promises";
+import { chmod, mkdir, readFile, unlink, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { Elysia, t } from "elysia";
-import { count, desc, gt, sql } from "drizzle-orm";
+import { count, desc, eq, gt, sql } from "drizzle-orm";
 import { migrate } from "drizzle-orm/mysql2/migrator";
 import {
   ADMIN_PASSWORD_CONFIGURED,
@@ -11,7 +11,9 @@ import {
   COOKIE_SECURE,
   DATA_DIR,
   HOST,
+  MAX_PAYMENT_PROOF_BYTES,
   MAX_REQUEST_BYTES,
+  MAX_UPLOAD_REQUEST_BYTES,
   N8N_WEBHOOK_URL,
   NODE_ENV,
   PORT,
@@ -34,7 +36,15 @@ import {
   type AdminSession,
 } from "./lib/auth";
 import { getRegions } from "./lib/regions";
-import { decryptField, decryptSensitiveRecord, encryptSensitiveRecord, type DecryptedRow } from "./lib/encryption";
+import {
+  decryptField,
+  decryptPaymentProof,
+  decryptSensitiveRecord,
+  encryptPaymentProof,
+  encryptSensitiveRecord,
+  type DecryptedRow,
+} from "./lib/encryption";
+import { detectPaymentProofMime } from "./lib/payment-proof";
 import { getSettingUpdatedAt, getSystemSettings, saveSystemSettings, seedSystemSettings } from "./lib/settings";
 import { encryptLegacyWaitinglistRows } from "./lib/security-migration";
 import {
@@ -47,6 +57,7 @@ import {
 } from "./lib/validation";
 
 const PUBLIC_DIR = resolve(import.meta.dir, "../public");
+const PAYMENT_PROOF_DIR = resolve(DATA_DIR, "payment-proofs");
 const SESSION_HOURS = 4;
 type WaitinglistView = DecryptedRow<typeof calonSantriWaitinglist.$inferSelect>;
 type StoredWaitinglistRow = typeof calonSantriWaitinglist.$inferSelect;
@@ -56,6 +67,8 @@ const waitinglistBody = t.Object({
   nama_ortu: t.String({ minLength: 1, maxLength: 120 }),
   status_ortu: t.Union([t.Literal("bapak"), t.Literal("ibu")]),
   nama_anak: t.String({ minLength: 1, maxLength: 120 }),
+  jenis_kelamin: t.Union([t.Literal("putra"), t.Literal("putri")]),
+  sekolah_asal: t.Optional(t.String({ maxLength: 120 })),
   tanggal_lahir_anak: t.String({ minLength: 10, maxLength: 10 }),
   provinsi_id: t.String({ minLength: 1, maxLength: 20 }),
   provinsi_nama: t.String({ minLength: 1, maxLength: 120 }),
@@ -67,7 +80,10 @@ const waitinglistBody = t.Object({
   desa_nama: t.String({ minLength: 1, maxLength: 120 }),
   no_hp_wa: t.String({ minLength: 1, maxLength: 64 }),
   email: t.String({ minLength: 3, maxLength: 254 }),
-  konfirmasi_data: t.Boolean(),
+  konfirmasi_data: t.Union([t.Boolean(), t.Literal("true")]),
+  konfirmasi_bukti_transfer: t.Union([t.Boolean(), t.Literal("true")]),
+  konfirmasi_ketentuan_biaya: t.Union([t.Boolean(), t.Literal("true")]),
+  bukti_transfer: t.File({ maxSize: MAX_PAYMENT_PROOF_BYTES }),
   website: t.Optional(t.String({ maxLength: 255 })),
   turnstile_token: t.Optional(t.String({ maxLength: 4096 })),
 });
@@ -172,8 +188,12 @@ function matchesEncryptedWaitinglist(row: StoredWaitinglistRow, query: Waitingli
 
 export const app = new Elysia({ name: "spsb-waitinglist" })
   .onRequest(({ request, set }) => {
+    const isProofUpload = request.method === "POST"
+      && new URL(request.url).pathname === "/api/waitinglist"
+      && request.headers.get("content-type")?.toLowerCase().startsWith("multipart/form-data");
+    const maxBytes = isProofUpload ? MAX_UPLOAD_REQUEST_BYTES : MAX_REQUEST_BYTES;
     const contentLength = Number(request.headers.get("content-length") ?? 0);
-    if (contentLength > MAX_REQUEST_BYTES) {
+    if (contentLength > maxBytes) {
       set.status = 413;
       return { error: "Ukuran data terlalu besar." };
     }
@@ -285,15 +305,34 @@ export const app = new Elysia({ name: "spsb-waitinglist" })
       return { error: error instanceof Error ? error.message : "Data pendaftaran tidak valid." };
     }
 
+    const proofBytes = Buffer.from(await body.bukti_transfer.arrayBuffer());
+    const proofMime = detectPaymentProofMime(proofBytes);
+    if (!proofMime) {
+      set.status = 400;
+      return { error: "Bukti transfer harus berupa file JPG, PNG, atau PDF yang valid." };
+    }
+    if (!proofBytes.length || proofBytes.length > MAX_PAYMENT_PROOF_BYTES) {
+      set.status = 400;
+      return { error: "Ukuran bukti transfer maksimal 5 MB." };
+    }
+
     const id = randomBytes(16).toString("hex");
+    const proofPath = join(PAYMENT_PROOF_DIR, `${id}.enc`);
+    let proofWritten = false;
     try {
+      await mkdir(PAYMENT_PROOF_DIR, { recursive: true, mode: 0o700 });
+      await chmod(PAYMENT_PROOF_DIR, 0o700);
+      await writeFile(proofPath, encryptPaymentProof(proofBytes, id), { flag: "wx", mode: 0o600 });
+      proofWritten = true;
       const encryptedValues = encryptSensitiveRecord({
         id,
         ...values,
+        bukti_transfer_mime: proofMime,
         umur_terhitung_bulan: String(values.umur_terhitung_bulan),
       });
       await db.insert(calonSantriWaitinglist).values(encryptedValues);
     } catch {
+      if (proofWritten) await unlink(proofPath).catch(() => undefined);
       console.error("Failed to persist encrypted waitinglist submission");
       set.status = 500;
       return { error: "Data belum dapat disimpan. Silakan coba kembali." };
@@ -403,6 +442,36 @@ export const app = new Elysia({ name: "spsb-waitinglist" })
       return { error: "Pengaturan belum dapat disimpan. Silakan coba kembali." };
     }
   }, { body: adminSettingsBody })
+  .get("/api/admin/waitinglist/:id/proof", async ({ params, request, set }) => {
+    if (!requireAdmin(request, set)) return { error: "Silakan login sebagai admin." };
+    const [row] = await db.select({ mime: calonSantriWaitinglist.bukti_transfer_mime })
+      .from(calonSantriWaitinglist)
+      .where(eq(calonSantriWaitinglist.id, params.id))
+      .limit(1);
+    const mime = row?.mime;
+    if (!mime || !["image/jpeg", "image/png", "application/pdf"].includes(mime)) {
+      set.status = 404;
+      return { error: "Bukti transfer tidak ditemukan." };
+    }
+    const extension = mime === "image/jpeg" ? "jpg" : mime === "image/png" ? "png" : "pdf";
+    try {
+      const encrypted = await readFile(join(PAYMENT_PROOF_DIR, `${params.id}.enc`));
+      const proof = decryptPaymentProof(encrypted, params.id);
+      const responseBody = new Uint8Array(proof.byteLength);
+      responseBody.set(proof);
+      return new Response(responseBody, {
+        headers: {
+          "Content-Type": mime,
+          "Content-Disposition": `attachment; filename="bukti-transfer.${extension}"`,
+          "Cache-Control": "no-store, max-age=0",
+          "X-Content-Type-Options": "nosniff",
+        },
+      });
+    } catch {
+      set.status = 404;
+      return { error: "Bukti transfer tidak ditemukan atau tidak dapat dibuka." };
+    }
+  }, { params: t.Object({ id: t.String({ pattern: "^[a-f0-9]{32}$" }) }) })
   .get("/api/admin/waitinglist", async ({ query, request, set }) => {
     if (!requireAdmin(request, set)) return { error: "Silakan login sebagai admin." };
     const pageSize = 25;
@@ -450,14 +519,16 @@ export const app = new Elysia({ name: "spsb-waitinglist" })
       .filter((row) => matchesEncryptedWaitinglist(row, query))
       .map((row) => decryptSensitiveRecord(row));
     const output: string[][] = [[
-      "ID", "Nama Anak", "Tanggal Lahir", "Umur Tercatat Saat Daftar (bulan)",
-      "Status Kelayakan", "Nama Orang Tua", "Status Orang Tua", "Provinsi", "Kabupaten/Kota",
+      "ID", "Nama Anak", "Jenis Kelamin", "Sekolah Asal", "Tanggal Lahir", "Umur Tercatat Saat Daftar (bulan)",
+      "Status Kelayakan", "Persetujuan Ketentuan Biaya", "Nama Orang Tua", "Status Orang Tua", "Provinsi", "Kabupaten/Kota",
       "Kecamatan", "Desa/Kelurahan", "WhatsApp", "Email", "Tanggal Submit",
     ]];
     for (const row of rows) {
       output.push([
-        csvSafe(row.id), csvSafe(row.nama_anak), csvSafe(row.tanggal_lahir_anak),
-        String(row.umur_terhitung_bulan), csvSafe(row.status_eligibility), csvSafe(row.nama_ortu),
+        csvSafe(row.id), csvSafe(row.nama_anak),
+        csvSafe(row.jenis_kelamin === "putra" ? "Putra" : row.jenis_kelamin === "putri" ? "Putri" : "Belum dicatat"),
+        csvSafe(row.sekolah_asal || ""), csvSafe(row.tanggal_lahir_anak), String(row.umur_terhitung_bulan), csvSafe(row.status_eligibility),
+        csvSafe(row.konfirmasi_ketentuan_biaya === 1 ? "Setuju" : "Belum dicatat"), csvSafe(row.nama_ortu),
         csvSafe(row.status_ortu), csvSafe(row.provinsi_nama), csvSafe(row.kabupaten_nama),
         csvSafe(row.kecamatan_nama), csvSafe(row.desa_nama), csvSafe(row.no_hp_wa),
         csvSafe(row.email), csvSafe(row.created_at),
@@ -480,10 +551,12 @@ export const app = new Elysia({ name: "spsb-waitinglist" })
 async function main(): Promise<void> {
   assertProductionSecurityConfig();
   await mkdir(DATA_DIR, { recursive: true });
+  await mkdir(PAYMENT_PROOF_DIR, { recursive: true, mode: 0o700 });
+  await chmod(PAYMENT_PROOF_DIR, 0o700);
   await migrate(db, { migrationsFolder: resolve(import.meta.dir, "../drizzle") });
   await encryptLegacyWaitinglistRows();
   await seedSystemSettings();
-  app.listen({ hostname: HOST, port: PORT, maxRequestBodySize: MAX_REQUEST_BYTES });
+  app.listen({ hostname: HOST, port: PORT, maxRequestBodySize: MAX_UPLOAD_REQUEST_BYTES });
   console.info(`SPSB application listening on http://${app.server?.hostname ?? HOST}:${app.server?.port ?? PORT}`);
   console.info(`Environment: ${NODE_ENV}`);
   if (!ADMIN_PASSWORD_CONFIGURED) {

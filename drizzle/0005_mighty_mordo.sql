@@ -1,0 +1,1 @@
+ALTER TABLE `calon_santri_waitinglist` ADD `konfirmasi_ketentuan_biaya` tinyint unsigned;

@@ -46,6 +46,51 @@ describe("Elysia application", () => {
     expect(invalidParent.status).toBe(400);
   });
 
+  test("parses valid multipart registration data before enforcing same-origin submission", async () => {
+    const { app } = await import("../src/index");
+    const form = new FormData();
+    const fields = {
+      nama_ortu: "Aminah",
+      status_ortu: "ibu",
+      nama_anak: "Ahmad",
+      jenis_kelamin: "putra",
+      tanggal_lahir_anak: "2021-01-01",
+      provinsi_id: "32",
+      provinsi_nama: "Jawa Barat",
+      kabupaten_id: "32.73",
+      kabupaten_nama: "Kota Bandung",
+      kecamatan_id: "32.73.01",
+      kecamatan_nama: "Sukasari",
+      desa_id: "32.73.01.1001",
+      desa_nama: "Sukarasa",
+      no_hp_wa: "081234567890",
+      email: "aminah@example.com",
+      konfirmasi_data: "true",
+      konfirmasi_bukti_transfer: "true",
+      konfirmasi_ketentuan_biaya: "true",
+    };
+    for (const [key, value] of Object.entries(fields)) form.append(key, value);
+    form.append("bukti_transfer", new Blob(["%PDF-1.7\\nproof"], { type: "application/pdf" }), "proof.pdf");
+    const response = await app.handle(new Request("http://localhost/api/waitinglist", {
+      method: "POST",
+      headers: { host: "localhost", origin: "https://attacker.example" },
+      body: form,
+    }));
+    expect(response.status).toBe(403);
+  });
+
+  test("rejects payment proof uploads larger than 5 MB", async () => {
+    const { app } = await import("../src/index");
+    const form = new FormData();
+    form.append("bukti_transfer", new Blob([new Uint8Array(5 * 1024 * 1024 + 1)], { type: "application/pdf" }), "large.pdf");
+    const response = await app.handle(new Request("http://localhost/api/waitinglist", {
+      method: "POST",
+      headers: { host: "localhost", origin: "http://localhost" },
+      body: form,
+    }));
+    expect(response.status).toBe(400);
+  });
+
   test("rejects cross-origin and incorrect admin credentials", async () => {
     const { app } = await import("../src/index");
     const crossOrigin = await app.handle(new Request("http://localhost/api/admin/login", {

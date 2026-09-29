@@ -11,6 +11,8 @@ export interface WaitinglistRecordInput {
   nama_ortu: string;
   status_ortu: "bapak" | "ibu";
   nama_anak: string;
+  jenis_kelamin: "putra" | "putri";
+  sekolah_asal: string | null;
   tanggal_lahir_anak: string;
   umur_terhitung_bulan: number;
   status_eligibility: "eligible";
@@ -25,6 +27,8 @@ export interface WaitinglistRecordInput {
   no_hp_wa: string;
   email: string;
   konfirmasi_data: number;
+  konfirmasi_bukti_transfer: number;
+  konfirmasi_ketentuan_biaya: number;
   created_at: string;
 }
 
@@ -98,6 +102,12 @@ export function validateWaitinglist(
   }
 
   const nama_anak = requiredText(payload, "nama_anak", "Nama anak", 120);
+  const jenis_kelamin = String(payload.jenis_kelamin ?? "").trim().toLowerCase();
+  if (jenis_kelamin !== "putra" && jenis_kelamin !== "putri") {
+    throw new Error("Pilih jenis kelamin Putra atau Putri.");
+  }
+  const sekolah_asal = String(payload.sekolah_asal ?? "").trim();
+  if (sekolah_asal.length > 120) throw new Error("Sekolah asal terlalu panjang.");
   const tanggal_lahir_anak = String(payload.tanggal_lahir_anak ?? "").trim();
   if (!isValidIsoDate(tanggal_lahir_anak)) throw new Error("Tanggal lahir tidak valid.");
   if (tanggal_lahir_anak > now.toISOString().slice(0, 10)) {
@@ -129,11 +139,19 @@ export function validateWaitinglist(
   if (![true, "true", "on", 1].includes(payload.konfirmasi_data as true | "true" | "on" | 1)) {
     throw new Error("Centang konfirmasi bahwa data sudah benar dan lengkap.");
   }
+  if (![true, "true", "on", 1].includes(payload.konfirmasi_bukti_transfer as true | "true" | "on" | 1)) {
+    throw new Error("Centang konfirmasi bahwa bukti transfer biaya pendaftaran sudah dikirim.");
+  }
+  if (![true, "true", "on", 1].includes(payload.konfirmasi_ketentuan_biaya as true | "true" | "on" | 1)) {
+    throw new Error("Setujui ketentuan biaya pendaftaran sebelum melanjutkan.");
+  }
 
   return {
     nama_ortu,
     status_ortu,
     nama_anak,
+    jenis_kelamin,
+    sekolah_asal: sekolah_asal || null,
     tanggal_lahir_anak,
     umur_terhitung_bulan: completedAgeMonths(tanggal_lahir_anak, settings.cutoffDate),
     status_eligibility: "eligible",
@@ -141,6 +159,8 @@ export function validateWaitinglist(
     no_hp_wa: normalizePhone(String(payload.no_hp_wa ?? "")),
     email,
     konfirmasi_data: 1,
+    konfirmasi_bukti_transfer: 1,
+    konfirmasi_ketentuan_biaya: 1,
     created_at: now.toISOString(),
   } as WaitinglistRecordInput;
 }

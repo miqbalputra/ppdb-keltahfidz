@@ -98,6 +98,7 @@ h1, h2, h3, p { margin-top: 0; }
 .subheading-rule { width: 100%; height: 1px; background: #e9e7df; }
 .field-grid { display: grid; gap: 15px; }
 .parent-grid, .child-grid, .contact-grid { grid-template-columns: 1fr 1fr; }
+.birthdate-field, .school-field { grid-column: 1 / -1; }
 .address-grid { grid-template-columns: 1fr 1fr; }
 .field { min-width: 0; display: flex; flex-direction: column; gap: 8px; color: #525c53; font-size: 10px; font-weight: 600; }
 .field input, .field select { width: 100%; height: 44px; padding: 0 12px; color: var(--ink); background: #fff; border: 1px solid #dcded5; border-radius: 2px; outline: 0; font-size: 11px; font-weight: 400; transition: border-color .18s, box-shadow .18s; }
@@ -366,6 +367,15 @@ main[id] { scroll-margin-top: 24px; }
 .confirm-row input, .custom-check { width: 22px; height: 22px; }
 .custom-check { min-width: 22px; }
 .consent-error { display: block; margin: 5px 0 0 33px; }
+.payment-proof-section { display: grid; gap: 15px; margin-top: 6px; }
+.payment-confirm-row { margin-top: 0; color: var(--text-secondary); }
+.payment-terms-row { margin-top: 15px; }
+.upload-field { gap: 8px; }
+.upload-control { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+.file-upload-button { min-height: 48px; color: var(--green-dark); cursor: pointer; }
+.file-input-visually-hidden { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+.upload-control:focus-within .file-upload-button { outline: 3px solid #856126; outline-offset: 3px; }
+.field-invalid .file-upload-button { color: #8a3025; border-color: #a33d32; }
 .button { min-height: 48px; padding-inline: 20px; font-size: 14px; }
 .button-primary { font-size: 15px; }
 .form-footnote { color: #59645a; font-size: 12px; line-height: 1.55; }
@@ -508,7 +518,13 @@ td { color: #35443a; font-size: 13px; }
 .field input::placeholder, .field-hint { color: #777670; }
 .field select:disabled { color: #777670; background: var(--surface-muted); }
 .radio-option span { color: var(--text-secondary); border-color: #d6d6d1; border-radius: 6px; }
-.radio-option input:checked + span { color: var(--green-dark); border-color: #9daf9f; background: #f4f7f4; }
+.radio-option input:checked + span {
+  color: var(--white);
+  border-color: var(--green-dark);
+  background: var(--green-dark);
+  font-weight: 700;
+  box-shadow: 0 0 0 2px rgba(60, 78, 66, .18);
+}
 .eligibility-message.eligible { color: #35533d; background: #f0f5f0; border-left-color: #78907f; }
 .eligibility-message.ineligible { color: #833b32; background: #fbf1ef; border-left-color: #c47a6f; }
 .confirm-row { color: var(--text-secondary); }
@@ -541,6 +557,7 @@ th { color: var(--text-secondary); }
 td { color: #514f49; border-top-color: #efefed; }
 .person-cell strong { color: var(--ink); }
 .person-cell small, .table-empty, .table-footer, .dashboard-note { color: var(--text-secondary); }
+.proof-download-link { min-height: 44px; display: inline-flex; align-items: center; color: var(--green-dark); font-size: 12px; font-weight: 700; text-decoration: underline; text-underline-offset: 3px; }
 .status-badge { color: #35533d; background: #edf3ed; border-radius: 4px; }
 .status-badge.not_eligible { color: #833b32; background: #fbf1ef; }
 .success-icon { color: var(--green); border-color: #cdd8ce; background: #f4f7f4; }

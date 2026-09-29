@@ -12,6 +12,8 @@
   const eligibilityMessage = document.querySelector("#eligibility-message");
   const phoneInput = form.elements.no_hp_wa;
   const phonePreview = document.querySelector("#phone-preview");
+  const paymentProofInput = form.elements.bukti_transfer;
+  const paymentProofFilename = document.querySelector("#bukti-transfer-filename");
   const regionSelects = [...form.querySelectorAll("select[data-region]")];
   let config = null;
   let turnstileToken = "";
@@ -27,14 +29,19 @@
     nama_ortu: "Nama orang tua",
     status_ortu: "Status sebagai orang tua",
     nama_anak: "Nama lengkap Ananda",
+    jenis_kelamin: "Jenis kelamin Ananda",
     tanggal_lahir_anak: "Tanggal lahir Ananda",
+    sekolah_asal: "Sekolah asal",
     provinsi: "Provinsi",
     kabupaten: "Kabupaten / Kota",
     kecamatan: "Kecamatan",
     desa: "Desa / Kelurahan",
     no_hp_wa: "Nomor WhatsApp",
     email: "Email orang tua",
+    konfirmasi_bukti_transfer: "Konfirmasi bukti transfer",
+    bukti_transfer: "Bukti transfer",
     konfirmasi_data: "Konfirmasi data",
+    konfirmasi_ketentuan_biaya: "Persetujuan ketentuan biaya pendaftaran",
   };
 
   const regionLevels = ["provinces", "regencies", "districts", "villages"];
@@ -121,6 +128,19 @@
     updateSubmitState();
   }
 
+  function updatePaymentProof() {
+    const file = paymentProofInput.files?.[0];
+    paymentProofInput.setCustomValidity("");
+    paymentProofFilename.textContent = file ? file.name : "Belum ada file yang dipilih.";
+    if (!file) return;
+    const extension = file.name.toLowerCase().split(".").pop();
+    if (file.size > 5 * 1024 * 1024) {
+      paymentProofInput.setCustomValidity("Ukuran bukti transfer maksimal 5 MB.");
+    } else if (!['jpg', 'jpeg', 'png', 'pdf'].includes(extension)) {
+      paymentProofInput.setCustomValidity("Pilih bukti transfer berformat JPG, PNG, atau PDF.");
+    }
+  }
+
   function validPhone() {
     let value = phoneInput.value.replace(/[^0-9+]/g, "");
     if (value.startsWith("+62")) value = value.slice(1);
@@ -151,6 +171,10 @@
           : "Data wilayah belum tersedia. Gunakan tombol coba lagi di bawah.";
       } else if (name === "konfirmasi_data" && invalid) {
         message = "Centang konfirmasi data sebelum melanjutkan.";
+      } else if (name === "konfirmasi_bukti_transfer" && invalid) {
+        message = "Centang konfirmasi bahwa bukti transfer sudah dikirim.";
+      } else if (name === "konfirmasi_ketentuan_biaya" && invalid) {
+        message = "Centang persetujuan ketentuan biaya pendaftaran.";
       } else if (control.validity.customError) {
         message = control.validationMessage;
       } else if (control.validity.valueMissing) {
@@ -164,6 +188,7 @@
         if (invalid) item.setAttribute("aria-invalid", "true");
         else item.removeAttribute("aria-invalid");
       }
+      if (name === "bukti_transfer") control.closest(".field")?.classList.toggle("field-invalid", invalid);
       if (invalid) issues.push({ name, control, message });
     }
 
@@ -362,6 +387,10 @@
   birthdateInput.addEventListener("input", updateEligibility);
   birthdateInput.addEventListener("change", updateEligibility);
   phoneInput.addEventListener("input", updatePhone);
+  paymentProofInput.addEventListener("change", () => {
+    updatePaymentProof();
+    updateSubmitState();
+  });
   form.elements.nama_ortu.addEventListener("input", updateNameValidity);
   form.elements.nama_anak.addEventListener("input", updateNameValidity);
   form.addEventListener("input", updateSubmitState);
@@ -373,6 +402,7 @@
     updateEligibility();
     updatePhone();
     updateNameValidity();
+    updatePaymentProof();
     validationAttempted = true;
     renderFieldErrors();
     if (!form.checkValidity() || !validationSummary.hidden) {
@@ -407,11 +437,15 @@
       nama_ortu: form.elements.nama_ortu.value.trim(),
       status_ortu: form.querySelector('input[name="status_ortu"]:checked')?.value,
       nama_anak: form.elements.nama_anak.value.trim(),
+      jenis_kelamin: form.querySelector('input[name="jenis_kelamin"]:checked')?.value,
       tanggal_lahir_anak: birthdateInput.value,
+      sekolah_asal: form.elements.sekolah_asal.value.trim(),
       no_hp_wa: phoneInput.value,
       email: form.elements.email.value.trim(),
       website: form.elements.website.value,
       konfirmasi_data: form.elements.konfirmasi_data.checked,
+      konfirmasi_bukti_transfer: form.elements.konfirmasi_bukti_transfer.checked,
+      konfirmasi_ketentuan_biaya: form.elements.konfirmasi_ketentuan_biaya.checked,
       turnstile_token: turnstileToken,
     };
     for (const key of ["provinsi", "kabupaten", "kecamatan", "desa"]) {
@@ -424,10 +458,14 @@
     submitButton.disabled = true;
     submitButton.querySelector("span:first-child").textContent = "Mengirim data…";
     try {
+      const formData = new FormData();
+      for (const [key, value] of Object.entries(payload)) {
+        formData.append(key, typeof value === "boolean" ? String(value) : String(value ?? ""));
+      }
+      formData.append("bukti_transfer", paymentProofInput.files[0]);
       const response = await fetch("/api/waitinglist", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
+        body: formData,
       });
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || "Data belum dapat dikirim. Silakan coba kembali.");

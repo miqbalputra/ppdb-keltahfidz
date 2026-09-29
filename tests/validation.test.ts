@@ -21,6 +21,8 @@ function validPayload() {
     nama_ortu: "Aminah",
     status_ortu: "ibu",
     nama_anak: "Ahmad",
+    jenis_kelamin: "putra",
+    sekolah_asal: " TAUD Griya Qur'an ",
     tanggal_lahir_anak: "2021-01-01",
     provinsi_id: "32",
     provinsi_nama: "Jawa Barat",
@@ -33,6 +35,8 @@ function validPayload() {
     no_hp_wa: "0812-3456 7890",
     email: "aminah@example.com",
     konfirmasi_data: true,
+    konfirmasi_bukti_transfer: true,
+    konfirmasi_ketentuan_biaya: true,
   };
 }
 
@@ -45,6 +49,21 @@ describe("eligibility rules", () => {
   test("rejects a birthdate one day after the boundary", () => {
     expect(() => validateWaitinglist({ ...validPayload(), tanggal_lahir_anak: "2021-01-02" }, settings))
       .toThrow("belum masuk kriteria");
+  });
+
+  test("normalizes optional school names and permits children without a prior school", () => {
+    expect(validateWaitinglist(validPayload(), settings).sekolah_asal).toBe("TAUD Griya Qur'an");
+    expect(validateWaitinglist({ ...validPayload(), sekolah_asal: "   " }, settings).sekolah_asal).toBeNull();
+    expect(() => validateWaitinglist({ ...validPayload(), sekolah_asal: "S".repeat(121) }, settings))
+      .toThrow("Sekolah asal terlalu panjang.");
+  });
+
+  test("requires the calon santri's gender to be Putra or Putri", () => {
+    expect(validateWaitinglist({ ...validPayload(), jenis_kelamin: "putri" }, settings).jenis_kelamin).toBe("putri");
+    expect(() => validateWaitinglist({ ...validPayload(), jenis_kelamin: "" }, settings))
+      .toThrow("Pilih jenis kelamin Putra atau Putri.");
+    expect(() => validateWaitinglist({ ...validPayload(), jenis_kelamin: "lainnya" }, settings))
+      .toThrow("Pilih jenis kelamin Putra atau Putri.");
   });
 
   test("requires region IDs to match the EMSIFA v2 hierarchy", () => {
@@ -71,9 +90,13 @@ describe("input normalization", () => {
     expect(() => normalizePhone("021123456")).toThrow("Nomor WhatsApp tidak valid");
   });
 
-  test("requires explicit data confirmation", () => {
+  test("requires explicit data, payment-proof, and payment-terms confirmations", () => {
     expect(() => validateWaitinglist({ ...validPayload(), konfirmasi_data: false }, settings))
-      .toThrow("Centang konfirmasi");
+      .toThrow("Centang konfirmasi bahwa data sudah benar dan lengkap.");
+    expect(() => validateWaitinglist({ ...validPayload(), konfirmasi_bukti_transfer: false }, settings))
+      .toThrow("Centang konfirmasi bahwa bukti transfer biaya pendaftaran sudah dikirim.");
+    expect(() => validateWaitinglist({ ...validPayload(), konfirmasi_ketentuan_biaya: false }, settings))
+      .toThrow("Setujui ketentuan biaya pendaftaran sebelum melanjutkan.");
   });
 
   test("validates editable system settings and WhatsApp URL", () => {
