@@ -78,7 +78,7 @@ describe("frontend accessibility contracts", () => {
     expect(html).toContain("Saya menyatakan setuju bahwa biaya pendaftaran digunakan untuk keperluan administrasi SPSB 2027.");
     expect(html).toContain("Apabila saya mengundurkan diri setelah melakukan pembayaran, maka biaya tersebut tidak dapat dikembalikan dengan alasan apa pun.");
     expect(html).toContain("SISTEM PENERIMAAN SANTRI BARU");
-    expect(html).toContain('<h1><span>Kelompok Tahfidz Griya Qur\'an</span><em>Tunas Ilmu</em></h1>');
+    expect(html).toContain('<h1><span class="hero-title-primary">Kelompok Tahfidz Griya Qur\'an</span><br><em>Tunas Ilmu</em></h1>');
     expect(html).toContain("Isi data dengan teliti pada form di bawah ini.");
     expect(html).toContain("Pastikan data sudah benar sebelum dikirim ke panitia.");
     expect(html).toContain("Tanggal lahir minimal <b id=\"deadline-label\">1 Januari 2021</b> atau sebelum tanggal tersebut.");
