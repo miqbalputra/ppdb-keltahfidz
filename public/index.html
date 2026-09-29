@@ -109,8 +109,13 @@
             <small class="field-error consent-error" id="error-konfirmasi-bukti-transfer" data-error-for="konfirmasi_bukti_transfer" hidden></small>
             <div class="field upload-field">
               <span id="bukti-transfer-label">Bukti transfer <i>*</i></span>
-              <div class="upload-control"><label class="button button-outline file-upload-button" for="bukti-transfer">Upload Bukti Transfer</label><input class="file-input-visually-hidden" id="bukti-transfer" name="bukti_transfer" type="file" accept=".jpg,.jpeg,.png,.pdf,image/jpeg,image/png,application/pdf" aria-labelledby="bukti-transfer-label" aria-describedby="bukti-transfer-hint bukti-transfer-filename error-bukti-transfer" required><span class="field-hint" id="bukti-transfer-filename" aria-live="polite">Belum ada file yang dipilih.</span></div>
-              <small class="field-hint" id="bukti-transfer-hint">Format JPG, PNG, atau PDF. Maksimal 5 MB.</small>
+              <div class="upload-control">
+                <span class="upload-icon" aria-hidden="true">↑</span>
+                <span class="upload-copy"><strong>Unggah bukti transfer</strong><small id="bukti-transfer-hint">JPG, PNG, atau PDF · Maksimal 5 MB</small></span>
+                <label class="button button-outline file-upload-button" for="bukti-transfer">Upload Bukti Transfer</label>
+                <input class="file-input-visually-hidden" id="bukti-transfer" name="bukti_transfer" type="file" accept=".jpg,.jpeg,.png,.pdf,image/jpeg,image/png,application/pdf" aria-labelledby="bukti-transfer-label" aria-describedby="bukti-transfer-hint bukti-transfer-filename error-bukti-transfer" required>
+                <span class="field-hint upload-filename" id="bukti-transfer-filename" aria-live="polite">Belum ada file yang dipilih.</span>
+              </div>
               <small class="field-error" id="error-bukti-transfer" data-error-for="bukti_transfer" hidden></small>
             </div>
           </div>

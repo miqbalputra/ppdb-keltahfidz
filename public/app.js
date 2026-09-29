@@ -66,6 +66,32 @@
     return Math.max(months, 0);
   }
 
+  function addCalendarYears(value, years) {
+    const [year, month, day] = value.split("-").map(Number);
+    const targetYear = year + years;
+    const lastDay = new Date(Date.UTC(targetYear, month, 0)).getUTCDate();
+    const targetDay = Math.min(day, lastDay);
+    return `${targetYear}-${String(month).padStart(2, "0")}-${String(targetDay).padStart(2, "0")}`;
+  }
+
+  function nextEligibleCohort(birthdate) {
+    const requiredMonths = config.minAgeYears * 12 + config.minAgeMonths;
+    for (let yearsAway = 1; yearsAway <= 100; yearsAway += 1) {
+      const cutoffDate = addCalendarYears(config.cutoffDate, yearsAway);
+      if (monthAge(birthdate, cutoffDate) >= requiredMonths) {
+        return { year: Number(cutoffDate.slice(0, 4)), yearsAway };
+      }
+    }
+    return null;
+  }
+
+  function eligibilityRetryMessage(birthdate) {
+    const cohort = nextEligibleCohort(birthdate);
+    if (!cohort) return "Umur Ananda belum memenuhi batas usia. Silakan hubungi panitia untuk informasi pendaftaran berikutnya.";
+    const currentYear = config.cutoffDate.slice(0, 4);
+    return `Mohon maaf umur Ananda belum masuk kriteria SPSB ${currentYear}. Ananda dapat mendaftar kembali pada SPSB ${cohort.year}, sekitar ${cohort.yearsAway} tahun lagi.`;
+  }
+
   function formatDate(value) {
     const [year, month, day] = value.split("-").map(Number);
     return new Intl.DateTimeFormat("id-ID", {
@@ -83,16 +109,16 @@
       updateSubmitState();
       return;
     }
-    birthdateInput.setCustomValidity(value > config.eligibleBirthdate
-      ? "Tanggal lahir Ananda belum memenuhi batas usia SPSB 2027."
-      : "");
+    const isIneligible = value > config.eligibleBirthdate;
+    const retryMessage = isIneligible ? eligibilityRetryMessage(value) : "";
+    birthdateInput.setCustomValidity(retryMessage);
     const months = monthAge(value, config.cutoffDate);
     const years = Math.floor(months / 12);
     const remainingMonths = months % 12;
     const ageText = `${years} tahun${remainingMonths ? ` ${remainingMonths} bulan` : ""}`;
     ageHint.textContent = `Umur Ananda pada ${cutoffDateLabel}: ${ageText}.`;
-    if (value > config.eligibleBirthdate) {
-      eligibilityMessage.textContent = "Mohon maaf umur Ananda belum masuk kriteria, Ananda bisa mendaftar kembali tahun depan.";
+    if (isIneligible) {
+      eligibilityMessage.textContent = retryMessage;
       eligibilityMessage.className = "eligibility-message ineligible";
       eligibilityMessage.hidden = false;
     } else {
@@ -132,6 +158,7 @@
     const file = paymentProofInput.files?.[0];
     paymentProofInput.setCustomValidity("");
     paymentProofFilename.textContent = file ? file.name : "Belum ada file yang dipilih.";
+    paymentProofInput.closest(".upload-control")?.classList.toggle("has-file", Boolean(file));
     if (!file) return;
     const extension = file.name.toLowerCase().split(".").pop();
     if (file.size > 5 * 1024 * 1024) {

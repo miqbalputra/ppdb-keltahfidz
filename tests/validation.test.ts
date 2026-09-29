@@ -1,8 +1,11 @@
 import { describe, expect, test } from "bun:test";
 import {
+  addCalendarYears,
   completedAgeMonths,
   csvSafe,
   eligibleBirthdate,
+  eligibilityRetryMessage,
+  nextEligibleCohort,
   normalizePhone,
   validateSettings,
   validateWaitinglist,
@@ -46,9 +49,25 @@ describe("eligibility rules", () => {
     expect(validateWaitinglist(validPayload(), settings).umur_terhitung_bulan).toBe(78);
   });
 
-  test("rejects a birthdate one day after the boundary", () => {
+  test("rejects a birthdate one day after the boundary with the next eligible cohort", () => {
     expect(() => validateWaitinglist({ ...validPayload(), tanggal_lahir_anak: "2021-01-02" }, settings))
-      .toThrow("belum masuk kriteria");
+      .toThrow("SPSB 2028, sekitar 1 tahun lagi");
+    expect(eligibilityRetryMessage("2021-01-02", settings))
+      .toBe("Mohon maaf umur Ananda belum masuk kriteria SPSB 2027. Ananda dapat mendaftar kembali pada SPSB 2028, sekitar 1 tahun lagi.");
+  });
+
+  test("finds the first annual cohort that meets the configured minimum age", () => {
+    expect(nextEligibleCohort("2022-06-01", settings)).toEqual({
+      cutoffDate: "2029-07-01",
+      year: 2029,
+      yearsAway: 2,
+    });
+    expect(nextEligibleCohort("2022-06-01", { ...settings, minAgeYears: 8, minAgeMonths: 0 }))
+      .toMatchObject({ year: 2030, yearsAway: 3 });
+  });
+
+  test("clamps leap-day annual cutoffs to the last valid day of February", () => {
+    expect(addCalendarYears("2028-02-29", 1)).toBe("2029-02-28");
   });
 
   test("normalizes optional school names and permits children without a prior school", () => {

@@ -71,6 +71,8 @@ describe("frontend accessibility contracts", () => {
     expect(html).toContain("Saya sudah kirim bukti transfer biaya pendaftaran Rp. 150.000.");
     expect(html).toContain('id="bukti-transfer" name="bukti_transfer" type="file"');
     expect(html).toContain('accept=".jpg,.jpeg,.png,.pdf,image/jpeg,image/png,application/pdf"');
+    expect(html).toContain('class="upload-control"');
+    expect(html).toContain('class="upload-icon" aria-hidden="true">↑</span>');
     expect(html).toContain("Upload Bukti Transfer");
     expect(html).toContain('id="konfirmasi-ketentuan-biaya" name="konfirmasi_ketentuan_biaya" type="checkbox"');
     expect(html).toContain("Saya menyatakan setuju bahwa biaya pendaftaran digunakan untuk keperluan administrasi SPSB 2027.");

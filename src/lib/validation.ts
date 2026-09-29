@@ -56,12 +56,43 @@ export function eligibleBirthdate(settings: SystemSettings): string {
   return subtractMonths(settings.cutoffDate, settings.minAgeYears * 12 + settings.minAgeMonths);
 }
 
+export function addCalendarYears(value: string, years: number): string {
+  if (!isValidIsoDate(value) || !Number.isInteger(years)) throw new Error("Tanggal tahun tidak valid.");
+  const [year, month, day] = value.split("-").map(Number);
+  const targetYear = year + years;
+  const lastDay = new Date(Date.UTC(targetYear, month, 0)).getUTCDate();
+  const targetDay = Math.min(day, lastDay);
+  return `${targetYear}-${String(month).padStart(2, "0")}-${String(targetDay).padStart(2, "0")}`;
+}
+
 export function completedAgeMonths(birthdate: string, referenceDate: string): number {
   const [birthYear, birthMonth, birthDay] = birthdate.split("-").map(Number);
   const [referenceYear, referenceMonth, referenceDay] = referenceDate.split("-").map(Number);
   let months = (referenceYear - birthYear) * 12 + referenceMonth - birthMonth;
   if (referenceDay < birthDay) months -= 1;
   return Math.max(months, 0);
+}
+
+export function nextEligibleCohort(
+  birthdate: string,
+  settings: SystemSettings,
+): { cutoffDate: string; year: number; yearsAway: number } | null {
+  if (!isValidIsoDate(birthdate) || !isValidIsoDate(settings.cutoffDate)) return null;
+  const requiredMonths = settings.minAgeYears * 12 + settings.minAgeMonths;
+  for (let yearsAway = 1; yearsAway <= 100; yearsAway += 1) {
+    const cutoffDate = addCalendarYears(settings.cutoffDate, yearsAway);
+    if (completedAgeMonths(birthdate, cutoffDate) >= requiredMonths) {
+      return { cutoffDate, year: Number(cutoffDate.slice(0, 4)), yearsAway };
+    }
+  }
+  return null;
+}
+
+export function eligibilityRetryMessage(birthdate: string, settings: SystemSettings): string {
+  const cohort = nextEligibleCohort(birthdate, settings);
+  if (!cohort) return "Umur Ananda belum memenuhi batas usia. Silakan hubungi panitia untuk informasi pendaftaran berikutnya.";
+  const currentYear = settings.cutoffDate.slice(0, 4);
+  return `Mohon maaf umur Ananda belum masuk kriteria SPSB ${currentYear}. Ananda dapat mendaftar kembali pada SPSB ${cohort.year}, sekitar ${cohort.yearsAway} tahun lagi.`;
 }
 
 export function normalizePhone(raw: string): string {
@@ -114,7 +145,7 @@ export function validateWaitinglist(
     throw new Error("Tanggal lahir tidak boleh di masa depan.");
   }
   if (tanggal_lahir_anak > eligibleBirthdate(settings)) {
-    throw new Error("Mohon maaf umur Ananda belum masuk kriteria, Ananda bisa mendaftar kembali tahun depan.");
+    throw new Error(eligibilityRetryMessage(tanggal_lahir_anak, settings));
   }
 
   const region: Record<string, string> = {};
