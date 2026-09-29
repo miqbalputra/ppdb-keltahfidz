@@ -148,6 +148,13 @@
         `${item.umur_terhitung_bulan} bulan · snapshot saat daftar`,
       ].filter(Boolean).join(" · ");
       child.append(childName, childDetail);
+      const feeAccepted = Number(item.konfirmasi_ketentuan_biaya) === 1;
+      if (feeAccepted) {
+        const feeConsent = document.createElement("small");
+        feeConsent.className = "fee-consent-status accepted";
+        feeConsent.textContent = "Ketentuan biaya: disetujui";
+        child.append(feeConsent);
+      }
       if (item.bukti_transfer_mime) {
         const proofLink = document.createElement("a");
         proofLink.href = `/api/admin/waitinglist/${encodeURIComponent(item.id)}/proof`;

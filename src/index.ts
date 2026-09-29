@@ -245,6 +245,7 @@ export const app = new Elysia({ name: "spsb-waitinglist" })
   .get("/admin.js", () => Bun.file(join(PUBLIC_DIR, "admin.js")))
   .get("/success.js", () => Bun.file(join(PUBLIC_DIR, "success.js")))
   .get("/favicon.svg", () => Bun.file(join(PUBLIC_DIR, "favicon.svg")))
+  .get("/logo-gq.png", () => Bun.file(join(PUBLIC_DIR, "logo-gq.png")))
   .get("/healthz", () => ({ status: "ok" }))
   .get("/readyz", async ({ set }) => {
     try {

@@ -39,7 +39,8 @@ describe("frontend accessibility contracts", () => {
   for (const page of pages) {
     test(`${page} has unique IDs and valid in-page/ARIA references`, async () => {
       const html = await pageSource(page);
-      expect(html).toContain('href="/favicon.svg"');
+      expect(html).toContain('href="/logo-gq.png" type="image/png"');
+      expect(html).toContain('class="brand-logo" src="/logo-gq.png"');
       expect(html).toContain('name="description"');
       const ids = attributes(html, "id");
       const idSet = new Set(ids);
@@ -100,6 +101,14 @@ describe("frontend accessibility contracts", () => {
     expect(html).toContain("<caption");
     expect(attributes(html, "scope").filter((value) => value === "col").length).toBeGreaterThan(0);
     expect(html).toContain('aria-label="Navigasi dashboard"');
+  });
+
+  test("admin rows show payment-terms consent status", async () => {
+    const adminScript = await readFile(new URL("../public/admin.js", import.meta.url), "utf8");
+    expect(adminScript).toContain("Ketentuan biaya: disetujui");
+    expect(adminScript).toContain("if (feeAccepted)");
+    expect(adminScript).toContain("fee-consent-status accepted");
+    expect(adminScript).not.toContain("Persetujuan biaya belum tercatat");
   });
 
   test("primary palette text colors meet WCAG AA contrast on their intended surfaces", async () => {

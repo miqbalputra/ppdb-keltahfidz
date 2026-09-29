@@ -17,7 +17,7 @@ describe("Elysia application", () => {
 
   test("serves every static page and frontend asset", async () => {
     const { app } = await import("../src/index");
-    const assets = ["/", "/admin", "/success", "/app.css", "/app.js", "/admin.js", "/success.js", "/favicon.svg"];
+    const assets = ["/", "/admin", "/success", "/app.css", "/app.js", "/admin.js", "/success.js", "/favicon.svg", "/logo-gq.png"];
     const responses = await Promise.all(assets.map((path) => app.handle(new Request(`http://localhost${path}`))));
 
     const bodies = await Promise.all(responses.map((response) => response.text()));

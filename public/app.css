@@ -32,7 +32,7 @@ a { color: inherit; }
 .shell { width: min(1120px, calc(100% - 64px)); margin-inline: auto; }
 .topbar { height: 82px; padding-inline: max(32px, calc((100vw - 1120px) / 2)); display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid rgba(40, 83, 67, .12); }
 .brand { min-height: 44px; display: inline-flex; gap: 11px; align-items: center; text-decoration: none; }
-.brand-mark { width: 38px; height: 38px; border: 1px solid rgba(40, 83, 67, .36); border-radius: 50%; display: grid; place-items: center; color: var(--green); font-family: var(--serif); font-size: 23px; }
+.brand-logo { width: 42px; height: 42px; display: block; flex: 0 0 auto; object-fit: contain; }
 .brand-copy { display: grid; gap: 2px; }
 .brand-copy strong { font-size: 13px; line-height: 1; letter-spacing: -.02em; }
 .brand-copy small { color: var(--muted); font-size: 10px; letter-spacing: .12em; text-transform: uppercase; }
@@ -140,7 +140,7 @@ h1, h2, h3, p { margin-top: 0; }
 .site-footer { border-top: 1px solid #e3e1d8; }
 .footer-inner { min-height: 94px; display: flex; align-items: center; gap: 27px; color: #868a80; font-size: 10px; }
 .footer-brand { margin-right: auto; color: var(--ink); }
-.footer-brand .brand-mark { width: 31px; height: 31px; font-size: 19px; }
+.footer-brand .brand-logo { width: 34px; height: 34px; }
 .footer-brand .brand-copy strong { font-size: 11px; }
 .footer-brand .brand-copy small { font-size: 8px; }
 .admin-link { color: #747b70; text-decoration: none; }
@@ -267,7 +267,7 @@ td { padding: 13px; color: #566056; border-top: 1px solid #eeece6; font-size: 10
 @media (max-width: 580px) {
   .shell { width: calc(100% - 36px); }
   .topbar { height: 69px; padding-inline: 18px; }
-  .brand-mark { width: 34px; height: 34px; }
+  .brand-logo { width: 38px; height: 38px; }
   .topbar-link { font-size: 10px; }
   .hero { min-height: auto; grid-template-columns: 1fr; padding-top: 65px; padding-bottom: 55px; }
   .hero h1 { margin-top: 20px; font-size: 54px; }
@@ -475,7 +475,7 @@ td { color: #35443a; font-size: 13px; }
 
 /* Quiet, Notion-inspired neutral palette with the institution green as an accent */
 .topbar { border-bottom-color: var(--border); }
-.brand-mark { border-color: #d7d7d2; }
+.brand-logo { object-fit: contain; }
 .hero-lede, .form-aside > p, .eligibility-note p,
 .success-copy, .login-card > p, .dashboard-heading p { color: var(--text-secondary); }
 .text-link { border-bottom-color: #c7c7c1; }
@@ -558,6 +558,7 @@ td { color: #514f49; border-top-color: #efefed; }
 .person-cell strong { color: var(--ink); }
 .person-cell small, .table-empty, .table-footer, .dashboard-note { color: var(--text-secondary); }
 .proof-download-link { min-height: 44px; display: inline-flex; align-items: center; color: var(--green-dark); font-size: 12px; font-weight: 700; text-decoration: underline; text-underline-offset: 3px; }
+.fee-consent-status.accepted { color: #35533d; font-weight: 700; }
 .status-badge { color: #35533d; background: #edf3ed; border-radius: 4px; }
 .status-badge.not_eligible { color: #833b32; background: #fbf1ef; }
 .success-icon { color: var(--green); border-color: #cdd8ce; background: #f4f7f4; }
