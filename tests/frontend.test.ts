@@ -42,6 +42,7 @@ describe("frontend accessibility contracts", () => {
       expect(html).toContain('href="/logo-gq.png" type="image/png"');
       expect(html).toContain('class="brand-logo" src="/logo-gq.png"');
       expect(html).toContain('name="description"');
+      expect(html).toContain('<link rel="stylesheet" href="/app.css?v=e07ed00">');
       const ids = attributes(html, "id");
       const idSet = new Set(ids);
       expect(idSet.size).toBe(ids.length);
