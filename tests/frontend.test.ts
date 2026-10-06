@@ -42,7 +42,7 @@ describe("frontend accessibility contracts", () => {
       expect(html).toContain('href="/logo-gq.png" type="image/png"');
       expect(html).toContain('class="brand-logo" src="/logo-gq.png"');
       expect(html).toContain('name="description"');
-      expect(html).toContain(`<link rel="stylesheet" href="/app.css?v=${page === "index.html" ? "2027-opening-v2" : "2027-countdown-cta"}">`);
+      expect(html).toContain(`<link rel="stylesheet" href="/app.css?v=${page === "index.html" ? "2027-opening-v4" : "2027-countdown-cta"}">`);
       const ids = attributes(html, "id");
       const idSet = new Set(ids);
       expect(idSet.size).toBe(ids.length);
@@ -66,6 +66,7 @@ describe("frontend accessibility contracts", () => {
     expect(html).toContain('id="waitinglist-form"');
     expect(html).toContain('id="opening-countdown"');
     expect(html).toContain('id="opening-title">Segera <em>Dibuka.</em>');
+    expect(html).not.toContain("PENDAFTARAN BELUM DIBUKA");
     expect(html).toContain("Kelompok Tahfidz Griya Qur'an Tunas Ilmu");
     expect(html).toContain("1449 H / 2027-2028 M");
     expect(html).toContain('id="countdown-clock" role="timer"');
@@ -74,7 +75,10 @@ describe("frontend accessibility contracts", () => {
     expect(html).toContain('id="countdown-schedule" aria-live="polite"');
     expect(html).toContain('src="/app.js?v=2027-opening-v2"');
     expect(html).toContain('href="https://wa.me/6285173394373"');
-    expect(html).toContain("085173394373 · Admin Griya Qur'an");
+    expect(html).toContain('aria-label="Pertanyaan/Informasi: 085173394373 (Admin Griya Qur\'an), buka WhatsApp"');
+    expect(html).toContain('<strong>Pertanyaan / Informasi</strong>');
+    expect(html).toContain('<span class="countdown-contact-detail">085173394373 · Admin Griya Qur\'an</span>');
+    expect(html).toContain('class="contact-arrow" aria-hidden="true"');
     expect(html).toContain('name="jenis_kelamin" type="radio" value="putra" required');
     expect(html).toContain('name="jenis_kelamin" type="radio" value="putri"');
     expect(html).toContain('id="sekolah-asal" name="sekolah_asal" type="text"');

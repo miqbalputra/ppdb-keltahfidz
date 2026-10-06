@@ -651,9 +651,7 @@ td { color: #514f49; border-top-color: #efefed; }
 .opening-countdown::before { width: 380px; height: 380px; top: -210px; left: -170px; box-shadow: 0 0 0 44px rgba(58,91,67,.035), 0 0 0 92px rgba(58,91,67,.025); }
 .opening-countdown::after { width: 300px; height: 300px; right: -165px; bottom: -115px; box-shadow: 0 0 0 36px rgba(133,98,38,.035), 0 0 0 78px rgba(133,98,38,.025); }
 .opening-inner { width: min(760px, 100%); margin-inline: auto; }
-.opening-status { min-height: 34px; padding: 8px 15px; display: inline-flex; align-items: center; gap: 9px; color: #29543a; background: #eaf1e8; border: 1px solid #c9dcc9; border-radius: 999px; font-size: 11px; font-weight: 800; letter-spacing: .1em; }
-.opening-status-dot { width: 8px; height: 8px; flex: none; background: #a27830; border-radius: 50%; }
-.opening-countdown h1 { margin: 23px 0 0; color: #254832; font-size: clamp(51px, 8vw, 88px); font-weight: 850; letter-spacing: -.065em; line-height: 1.06; }
+.opening-countdown h1 { margin: 0; color: #254832; font-size: clamp(51px, 8vw, 88px); font-weight: 850; letter-spacing: -.065em; line-height: 1.06; }
 .opening-countdown h1 em { color: #96702c; font-style: normal; }
 .countdown-campaign { margin: 22px 0 0; color: #3c4e42; font-size: clamp(16px, 2.4vw, 21px); line-height: 1.6; }
 .countdown-campaign strong { color: #244831; font-weight: 750; }
@@ -668,18 +666,19 @@ td { color: #514f49; border-top-color: #efefed; }
 .countdown-schedule { width: fit-content; max-width: 100%; margin: 23px auto 0; padding: 11px 18px; color: #244831; background: #fff; border: 1px solid #ccddc9; border-radius: 999px; font-size: 14px; font-weight: 700; line-height: 1.55; }
 .opening-contact { margin-top: 40px; }
 .opening-contact p { margin: 0 0 13px; color: #536454; font-size: 14px; }
-.countdown-contact { width: fit-content; max-width: 100%; min-height: 60px; margin-inline: auto; padding: 10px 19px; display: inline-flex; align-items: center; gap: 13px; color: #fff; background: #294e35; border: 1px solid #294e35; border-radius: 12px; box-shadow: 0 10px 24px rgba(32,65,44,.13); text-align: left; text-decoration: none; transition: background-color .2s, transform .2s; }
+.countdown-contact { width: min(100%, 405px); min-height: 70px; margin-inline: auto; padding: 11px 16px; display: grid; grid-template-columns: 36px minmax(0, 1fr) 18px; align-items: center; gap: 12px; color: #fff; background: #294e35; border: 1px solid #294e35; border-radius: 12px; box-shadow: 0 10px 24px rgba(32,65,44,.13); text-align: left; text-decoration: none; transition: background-color .2s, transform .2s; }
 .countdown-contact:hover { background: #193b27; transform: translateY(-2px); }
 .countdown-contact:focus-visible { outline: 3px solid #9c7028; outline-offset: 4px; }
-.contact-symbol { width: 35px; height: 35px; flex: none; display: grid; place-items: center; color: #294e35; background: #f4d892; border-radius: 50%; font-size: 21px; }
-.countdown-contact strong, .countdown-contact small { display: block; line-height: 1.45; }
-.countdown-contact strong { font-size: 14px; }
-.countdown-contact small { color: #e6eee3; font-size: 12px; }
+.contact-symbol { width: 36px; height: 36px; display: grid; place-items: center; color: #294e35; background: #f4d892; border-radius: 50%; font-size: 21px; font-weight: 800; }
+.countdown-contact-copy { min-width: 0; display: grid; gap: 3px; }
+.countdown-contact-copy strong { font-size: 15px; line-height: 1.25; }
+.countdown-contact-detail { color: #e6eee3; font-size: 12px; line-height: 1.4; overflow-wrap: anywhere; }
+.contact-arrow { justify-self: end; color: #f4d892; font-size: 19px; }
 .countdown-mode .topbar-link, .countdown-mode .hero, .countdown-mode .steps-band, .countdown-mode .form-section,
 .config-pending .topbar-link, .config-pending .hero, .config-pending .steps-band, .config-pending .form-section { display: none !important; }
 @media (max-width: 560px) {
   .opening-countdown { min-height: calc(100svh - 69px); padding: 42px 18px 56px; }
-  .opening-countdown h1 { margin-top: 19px; font-size: clamp(48px, 13vw, 68px); }
+  .opening-countdown h1 { font-size: clamp(48px, 13vw, 68px); }
   .countdown-campaign { margin-top: 16px; }
   .opening-divider { margin: 22px auto 17px; }
   .countdown-clock { max-width: 380px; margin-inline: auto; grid-template-columns: repeat(2, minmax(0, 1fr)); }
