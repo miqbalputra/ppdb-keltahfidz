@@ -108,6 +108,38 @@ describe("Elysia application", () => {
     expect(incorrectCredentials.status).toBe(401);
   });
 
+  test("protects all participant export endpoints without an admin session", async () => {
+    const { app } = await import("../src/index");
+    const id = "0123456789abcdef0123456789abcdef";
+    const paths = [
+      "/api/admin/export.csv",
+      "/api/admin/export.xlsx",
+      `/api/admin/waitinglist/${id}/export.pdf`,
+      `/api/admin/waitinglist/${id}/export.xlsx`,
+    ];
+    for (const path of paths) {
+      const response = await app.handle(new Request(`http://localhost${path}`));
+      expect(response.status).toBe(401);
+    }
+  });
+
+  test("rejects reversed export date ranges before reading the database", async () => {
+    const { app } = await import("../src/index");
+    const login = await app.handle(new Request("http://localhost/api/admin/login", {
+      method: "POST",
+      headers: { host: "localhost", origin: "http://localhost", "content-type": "application/json" },
+      body: JSON.stringify({ username: "test-admin", password: "test-admin-password" }),
+    }));
+    expect(login.status).toBe(200);
+    const cookie = login.headers.get("set-cookie")?.split(";")[0] ?? "";
+    const response = await app.handle(new Request(
+      "http://localhost/api/admin/export.xlsx?tanggal_daftar_mulai=2027-02-03&tanggal_daftar_sampai=2027-02-02",
+      { headers: { cookie } },
+    ));
+    expect(response.status).toBe(400);
+    expect(await response.json()).toMatchObject({ error: expect.stringContaining("harus berurutan") });
+  });
+
   test("admin login issues a signed HttpOnly session and logout requires CSRF", async () => {
     const { app } = await import("../src/index");
     const login = await app.handle(new Request("http://localhost/api/admin/login", {

@@ -4,17 +4,24 @@ import { db } from "../db";
 import { systemSettings } from "../db/schema";
 import { validateSettings, type SystemSettings } from "./validation";
 
-const settingKeys = ["cutoffDate", "minAgeYears", "minAgeMonths", "whatsappGroupUrl"] as const;
+const settingKeys = ["cutoffDate", "minAgeYears", "minAgeMonths", "whatsappGroupUrl", "openingCountdownEnabled", "openingDateTime"] as const;
 
 export async function getSystemSettings(): Promise<SystemSettings> {
   const rows = await db.select().from(systemSettings);
   const saved = new Map(rows.map((row) => [row.setting_key, row.setting_value]));
   const defaults = validateSettings(getInitialSettings());
-  return {
+  const coreSettings = validateSettings({
     cutoffDate: saved.get("cutoffDate") ?? defaults.cutoffDate,
     minAgeYears: Number(saved.get("minAgeYears") ?? defaults.minAgeYears),
     minAgeMonths: Number(saved.get("minAgeMonths") ?? defaults.minAgeMonths),
     whatsappGroupUrl: saved.get("whatsappGroupUrl") ?? defaults.whatsappGroupUrl,
+    openingCountdownEnabled: false,
+    openingDateTime: "",
+  });
+  return {
+    ...coreSettings,
+    openingCountdownEnabled: saved.get("openingCountdownEnabled") === "true",
+    openingDateTime: saved.get("openingDateTime") ?? "",
   };
 }
 
@@ -27,6 +34,8 @@ export async function seedSystemSettings(): Promise<void> {
     minAgeYears: String(defaults.minAgeYears),
     minAgeMonths: String(defaults.minAgeMonths),
     whatsappGroupUrl: defaults.whatsappGroupUrl,
+    openingCountdownEnabled: "false",
+    openingDateTime: "",
   };
   const missing = settingKeys.filter((key) => !keys.has(key));
   if (!missing.length) return;
@@ -43,6 +52,8 @@ export async function saveSystemSettings(settings: SystemSettings): Promise<void
     { setting_key: "minAgeYears", setting_value: String(settings.minAgeYears), updated_at: now },
     { setting_key: "minAgeMonths", setting_value: String(settings.minAgeMonths), updated_at: now },
     { setting_key: "whatsappGroupUrl", setting_value: settings.whatsappGroupUrl, updated_at: now },
+    { setting_key: "openingCountdownEnabled", setting_value: String(settings.openingCountdownEnabled), updated_at: now },
+    { setting_key: "openingDateTime", setting_value: settings.openingDateTime, updated_at: now },
   ]).onDuplicateKeyUpdate({
     set: {
       setting_value: sql`values(${systemSettings.setting_value})`,

@@ -70,7 +70,7 @@
     const options = includeTime
       ? { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }
       : { day: "numeric", month: "short", year: "numeric" };
-    return new Intl.DateTimeFormat("id-ID", options).format(date);
+    return new Intl.DateTimeFormat("id-ID", { ...options, timeZone: "Asia/Jakarta" }).format(date);
   }
 
   function setSystemStatus(elementId, healthy, label) {
@@ -86,6 +86,8 @@
     settingsForm.elements.minAgeYears.value = settings.minAgeYears;
     settingsForm.elements.minAgeMonths.value = settings.minAgeMonths;
     settingsForm.elements.whatsappGroupUrl.value = settings.whatsappGroupUrl || "";
+    settingsForm.elements.openingCountdownEnabled.checked = settings.openingCountdownEnabled === true;
+    settingsForm.elements.openingDateTime.value = settings.openingDateTime || "";
   }
 
   async function loadSystem() {
@@ -163,6 +165,17 @@
         proofLink.setAttribute("aria-label", `Unduh bukti transfer ${item.nama_anak}`);
         child.append(proofLink);
       }
+      const exportActions = document.createElement("div");
+      exportActions.className = "individual-export-actions";
+      for (const [format, label] of [["pdf", "PDF"], ["xlsx", "Excel"]]) {
+        const link = document.createElement("a");
+        link.href = `/api/admin/waitinglist/${encodeURIComponent(item.id)}/export.${format}`;
+        link.className = "individual-export-link";
+        link.textContent = label;
+        link.setAttribute("aria-label", `Ekspor data ${item.nama_anak} sebagai ${format === "pdf" ? "PDF" : "Excel"}`);
+        exportActions.append(link);
+      }
+      child.append(exportActions);
       tr.append(child);
 
       const parent = document.createElement("td");
@@ -204,9 +217,20 @@
     }
   }
 
-  function filtersQuery(page = currentPage) {
-    const params = new URLSearchParams(new FormData(filterForm));
-    params.set("page", String(page));
+  let appliedFilters = new URLSearchParams();
+
+  function filtersFromForm() {
+    const params = new URLSearchParams();
+    for (const [key, value] of new FormData(filterForm)) {
+      const normalized = String(value).trim();
+      if (normalized && normalized !== "all") params.set(key, normalized);
+    }
+    return params;
+  }
+
+  function filtersQuery(page) {
+    const params = new URLSearchParams(appliedFilters);
+    if (page !== undefined) params.set("page", String(page));
     return params.toString();
   }
 
@@ -218,7 +242,7 @@
     document.querySelector(".table-scroll").setAttribute("aria-busy", "true");
     renderTableMessage("Memuat data pendaftar…");
     try {
-      const result = await api(`/api/admin/waitinglist?${filtersQuery()}`, { signal: controller.signal });
+      const result = await api(`/api/admin/waitinglist?${filtersQuery(currentPage)}`, { signal: controller.signal });
       if (controller.signal.aborted) return;
       renderRows(result.rows);
       totalPages = result.pages;
@@ -276,6 +300,7 @@
   filterForm.addEventListener("submit", (event) => {
     event.preventDefault();
     currentPage = 1;
+    appliedFilters = filtersFromForm();
     loadRows();
   });
 
@@ -295,6 +320,8 @@
           minAgeYears: Number(formData.get("minAgeYears")),
           minAgeMonths: Number(formData.get("minAgeMonths")),
           whatsappGroupUrl: formData.get("whatsappGroupUrl"),
+          openingCountdownEnabled: formData.get("openingCountdownEnabled") === "on",
+          openingDateTime: formData.get("openingDateTime"),
         }),
       });
       showAlert(settingsAlert, "Pengaturan berhasil disimpan.", "success");
@@ -320,8 +347,11 @@
   document.querySelector("#next-page").addEventListener("click", () => {
     if (currentPage < totalPages) { currentPage += 1; loadRows(); }
   });
+  document.querySelector("#export-xlsx-button").addEventListener("click", () => {
+    window.location.assign(`/api/admin/export.xlsx?${filtersQuery()}`);
+  });
   document.querySelector("#export-button").addEventListener("click", () => {
-    window.location.assign(`/api/admin/export.csv?${filtersQuery(1)}`);
+    window.location.assign(`/api/admin/export.csv?${filtersQuery()}`);
   });
   document.querySelector("#logout-button").addEventListener("click", async () => {
     try {

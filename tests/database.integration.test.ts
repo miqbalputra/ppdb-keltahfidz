@@ -1,4 +1,6 @@
 import { afterAll, expect, test } from "bun:test";
+import ExcelJS from "exceljs";
+import { PDFDocument } from "pdf-lib";
 import { unlink } from "node:fs/promises";
 import { join, resolve } from "node:path";
 
@@ -7,7 +9,7 @@ let closeDb: (() => Promise<void>) | undefined;
 let webhookServer: ReturnType<typeof Bun.serve> | undefined;
 let originalFetch: typeof fetch | undefined;
 const insertedIds: string[] = [];
-let previousSettings: { cutoffDate: string; minAgeYears: number; minAgeMonths: number; whatsappGroupUrl: string } | undefined;
+let previousSettings: { cutoffDate: string; minAgeYears: number; minAgeMonths: number; whatsappGroupUrl: string; openingCountdownEnabled: boolean; openingDateTime: string } | undefined;
 
 // This suite is opt-in because it runs destructive migrations against its database.
 test.skipIf(!testDatabaseUrl)("MariaDB-backed public, admin, security, and notification flows", async () => {
@@ -78,6 +80,8 @@ test.skipIf(!testDatabaseUrl)("MariaDB-backed public, admin, security, and notif
       minAgeYears: 6,
       minAgeMonths: 6,
       whatsappGroupUrl: "https://chat.whatsapp.com/integration-default",
+      openingCountdownEnabled: false,
+      openingDateTime: "",
     };
     await settingsModule.saveSystemSettings(testSettings);
 
@@ -115,6 +119,7 @@ test.skipIf(!testDatabaseUrl)("MariaDB-backed public, admin, security, and notif
 
     const { app } = await import("../src/index");
     const nonce = crypto.randomUUID().slice(0, 8);
+    const proofSecret = `PAYMENT_PROOF_BYTES_ONLY_${nonce}`;
     const requestHeaders = {
       host: "localhost",
       origin: "http://localhost",
@@ -151,7 +156,7 @@ test.skipIf(!testDatabaseUrl)("MariaDB-backed public, admin, security, and notif
     const submissionForm = (payload: Record<string, unknown>) => {
       const form = new FormData();
       for (const [key, value] of Object.entries(payload)) form.append(key, String(value));
-      form.append("bukti_transfer", new Blob([`%PDF-1.7\n${String(payload.nama_anak)}\n%%EOF`], { type: "application/pdf" }), "receipt.pdf");
+      form.append("bukti_transfer", new Blob([`%PDF-1.7\n${String(payload.nama_anak)}\n${proofSecret}\n%%EOF`], { type: "application/pdf" }), "receipt.pdf");
       return form;
     };
 
@@ -165,6 +170,8 @@ test.skipIf(!testDatabaseUrl)("MariaDB-backed public, admin, security, and notif
       eligibleBirthdate: "2021-01-01",
       turnstileSiteKey: "integration-site-key",
       whatsappGroupUrl: testSettings.whatsappGroupUrl,
+      registrationOpen: true,
+      openingCountdownEnabled: false,
     });
 
     const unverified = await app.handle(new Request("http://localhost/api/waitinglist", {
@@ -245,21 +252,94 @@ test.skipIf(!testDatabaseUrl)("MariaDB-backed public, admin, security, and notif
       integrations: { n8nConfigured: true, turnstileEnabled: true },
     });
 
-    const query = new URLSearchParams({ q: nonce, status: "eligible", page: "1" });
+    const registrationDate = new Date(Date.parse(storedRows[0]!.created_at) + 7 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    const query = new URLSearchParams({
+      q: nonce,
+      status: "eligible",
+      page: "1",
+      jenis_kelamin: "putra",
+      tanggal_daftar_mulai: registrationDate,
+      tanggal_daftar_sampai: registrationDate,
+      tanggal_lahir_mulai: "2021-01-01",
+      tanggal_lahir_sampai: "2021-01-01",
+    });
+    const exportQuery = new URLSearchParams(query);
+    exportQuery.delete("page");
     const list = await app.handle(new Request(`http://localhost/api/admin/waitinglist?${query}`, { headers: adminHeaders }));
     expect(list.status).toBe(200);
     const listResult = await list.json() as { rows: Array<{ id: string; nama_anak: string }>; total: number };
     expect(listResult.total).toBe(2);
     expect(listResult.rows.map((row) => row.id)).toContain(successResult.id);
 
+    const noGenderMatch = await app.handle(new Request(`http://localhost/api/admin/waitinglist?${new URLSearchParams({ q: nonce, jenis_kelamin: "putri", page: "1" })}`, { headers: adminHeaders }));
+    expect(noGenderMatch.status).toBe(200);
+    expect((await noGenderMatch.json() as { total: number }).total).toBe(0);
+
     const exportResponse = await app.handle(new Request(`http://localhost/api/admin/export.csv?${query}`, { headers: adminHeaders }));
     expect(exportResponse.status).toBe(200);
     expect(exportResponse.headers.get("content-type")).toContain("text/csv");
+    expect(exportResponse.headers.get("cache-control")).toContain("no-store");
     const csv = await exportResponse.text();
     expect(csv).toContain(basePayload.nama_anak);
     expect(csv).toContain("Putra");
     expect(csv).toContain("TAUD Griya Qur'an");
     expect(csv).toContain("Setuju");
+
+    const bulkXlsxResponse = await app.handle(new Request(`http://localhost/api/admin/export.xlsx?${exportQuery}`, { headers: adminHeaders }));
+    expect(bulkXlsxResponse.status).toBe(200);
+    expect(bulkXlsxResponse.headers.get("content-type")).toContain("spreadsheetml.sheet");
+    expect(bulkXlsxResponse.headers.get("content-disposition")).toContain(".xlsx");
+    expect(bulkXlsxResponse.headers.get("cache-control")).toContain("no-store");
+    const bulkBytes = Buffer.from(await bulkXlsxResponse.arrayBuffer());
+    expect(bulkBytes.subarray(0, 2).toString()).toBe("PK");
+    const bulkWorkbook = new ExcelJS.Workbook();
+    await bulkWorkbook.xlsx.load(bulkBytes as unknown as Parameters<typeof bulkWorkbook.xlsx.load>[0]);
+    const bulkSheet = bulkWorkbook.getWorksheet("Data Pendaftar")!;
+    expect(bulkSheet.rowCount).toBe(3);
+    const bulkValues: string[] = [];
+    bulkSheet.eachRow((row) => row.eachCell((cell) => bulkValues.push(String(cell.value ?? ""))));
+    expect(bulkValues).toContain(basePayload.nama_anak);
+    expect(bulkValues.join(" ")).not.toContain(proofSecret);
+
+    const noGenderMatchXlsx = await app.handle(new Request(
+      `http://localhost/api/admin/export.xlsx?${new URLSearchParams({ q: nonce, jenis_kelamin: "putri" })}`,
+      { headers: adminHeaders },
+    ));
+    expect(noGenderMatchXlsx.status).toBe(200);
+    const noGenderWorkbook = new ExcelJS.Workbook();
+    const noGenderBytes = Buffer.from(await noGenderMatchXlsx.arrayBuffer());
+    await noGenderWorkbook.xlsx.load(noGenderBytes as unknown as Parameters<typeof noGenderWorkbook.xlsx.load>[0]);
+    expect(noGenderWorkbook.getWorksheet("Data Pendaftar")!.rowCount).toBe(1);
+
+    const invalidDateRange = await app.handle(new Request(
+      "http://localhost/api/admin/export.xlsx?tanggal_daftar_mulai=2027-02-03&tanggal_daftar_sampai=2027-02-02",
+      { headers: adminHeaders },
+    ));
+    expect(invalidDateRange.status).toBe(400);
+
+    const participantPdfResponse = await app.handle(new Request(`http://localhost/api/admin/waitinglist/${successResult.id}/export.pdf`, { headers: adminHeaders }));
+    expect(participantPdfResponse.status).toBe(200);
+    expect(participantPdfResponse.headers.get("content-type")).toBe("application/pdf");
+    expect(participantPdfResponse.headers.get("content-disposition")).toContain(".pdf");
+    expect(participantPdfResponse.headers.get("cache-control")).toContain("no-store");
+    const participantPdfBytes = Buffer.from(await participantPdfResponse.arrayBuffer());
+    expect(participantPdfBytes.subarray(0, 5).toString()).toBe("%PDF-");
+    expect((await PDFDocument.load(participantPdfBytes)).getPageCount()).toBeGreaterThan(0);
+    expect(participantPdfBytes.toString("latin1")).not.toContain(proofSecret);
+
+    const participantXlsxResponse = await app.handle(new Request(`http://localhost/api/admin/waitinglist/${successResult.id}/export.xlsx`, { headers: adminHeaders }));
+    expect(participantXlsxResponse.status).toBe(200);
+    expect(participantXlsxResponse.headers.get("content-type")).toContain("spreadsheetml.sheet");
+    expect(participantXlsxResponse.headers.get("content-disposition")).toContain(".xlsx");
+    expect(participantXlsxResponse.headers.get("cache-control")).toContain("no-store");
+    const participantWorkbook = new ExcelJS.Workbook();
+    const participantWorkbookBytes = Buffer.from(await participantXlsxResponse.arrayBuffer());
+    await participantWorkbook.xlsx.load(participantWorkbookBytes as unknown as Parameters<typeof participantWorkbook.xlsx.load>[0]);
+    const participantSheet = participantWorkbook.getWorksheet("Data Peserta")!;
+    expect(participantSheet.getColumn(2).values).toContain(basePayload.nama_anak);
+    const participantValues: string[] = [];
+    participantSheet.eachRow((row) => row.eachCell((cell) => participantValues.push(String(cell.value ?? ""))));
+    expect(participantValues.join(" ")).not.toContain(proofSecret);
 
     const newGroupUrl = `https://chat.whatsapp.com/integration-${nonce}`;
     const updateSettings = await app.handle(new Request("http://localhost/api/admin/settings", {
@@ -270,12 +350,22 @@ test.skipIf(!testDatabaseUrl)("MariaDB-backed public, admin, security, and notif
         minAgeYears: 6,
         minAgeMonths: 6,
         whatsappGroupUrl: newGroupUrl,
+        openingCountdownEnabled: true,
+        openingDateTime: "2030-01-01T10:00",
       }),
     }));
     expect(updateSettings.status).toBe(200);
     expect((await updateSettings.json() as { saved: boolean }).saved).toBe(true);
     expect(await (await app.handle(new Request("http://localhost/api/config"))).json())
-      .toMatchObject({ whatsappGroupUrl: newGroupUrl });
+      .toMatchObject({ whatsappGroupUrl: newGroupUrl, registrationOpen: false, openingCountdownEnabled: true, openingDateTime: "2030-01-01T10:00" });
+    const closedSubmission = await app.handle(new Request("http://localhost/api/waitinglist", {
+      method: "POST",
+      headers: uploadHeaders,
+      body: submissionForm({ ...basePayload, turnstile_token: "valid-integration-token" }),
+    }));
+    expect(closedSubmission.status).toBe(403);
+    expect(await closedSubmission.json()).toMatchObject({ error: expect.stringContaining("belum dibuka") });
+    expect(turnstileRequests).toBe(2);
 
     const logout = await app.handle(new Request("http://localhost/api/admin/logout", {
       method: "POST",

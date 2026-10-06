@@ -5,6 +5,27 @@ export interface SystemSettings {
   minAgeYears: number;
   minAgeMonths: number;
   whatsappGroupUrl: string;
+  openingCountdownEnabled: boolean;
+  openingDateTime: string;
+}
+
+export function openingTimestamp(value: string): number | null {
+  const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/.exec(value);
+  if (!match) return null;
+  const [, yearText, monthText, dayText, hourText, minuteText] = match;
+  const year = Number(yearText);
+  const month = Number(monthText);
+  const day = Number(dayText);
+  const hour = Number(hourText);
+  const minute = Number(minuteText);
+  if (!isValidIsoDate(`${yearText}-${monthText}-${dayText}`) || hour > 23 || minute > 59) return null;
+  return Date.UTC(year, month - 1, day, hour - 7, minute);
+}
+
+export function isRegistrationOpen(settings: SystemSettings, now = new Date()): boolean {
+  if (!settings.openingCountdownEnabled) return true;
+  const timestamp = openingTimestamp(settings.openingDateTime);
+  return timestamp !== null && now.getTime() >= timestamp;
 }
 
 export interface WaitinglistRecordInput {
@@ -203,6 +224,8 @@ export function validateSettings(input: unknown): SystemSettings {
   const minAgeYears = Number(value.minAgeYears);
   const minAgeMonths = Number(value.minAgeMonths);
   const whatsappGroupUrl = String(value.whatsappGroupUrl ?? "").trim();
+  const openingCountdownEnabled = value.openingCountdownEnabled === true;
+  const openingDateTime = String(value.openingDateTime ?? "").trim();
 
   if (!isValidIsoDate(cutoffDate)) throw new Error("Tanggal acuan tidak valid.");
   if (!Number.isInteger(minAgeYears) || minAgeYears < 0 || minAgeYears > 18) {
@@ -212,6 +235,12 @@ export function validateSettings(input: unknown): SystemSettings {
     throw new Error("Usia minimum bulan harus di antara 0 dan 11.");
   }
   if (minAgeYears === 0 && minAgeMonths === 0) throw new Error("Usia minimum tidak boleh nol.");
+  if (openingCountdownEnabled && openingTimestamp(openingDateTime) === null) {
+    throw new Error("Tanggal dan jam pembukaan WIB wajib diisi dengan format yang valid.");
+  }
+  if (openingDateTime && openingTimestamp(openingDateTime) === null) {
+    throw new Error("Tanggal dan jam pembukaan WIB tidak valid.");
+  }
   if (whatsappGroupUrl) {
     try {
       const parsed = new URL(whatsappGroupUrl);
@@ -223,7 +252,7 @@ export function validateSettings(input: unknown): SystemSettings {
     }
   }
 
-  return { cutoffDate, minAgeYears, minAgeMonths, whatsappGroupUrl };
+  return { cutoffDate, minAgeYears, minAgeMonths, whatsappGroupUrl, openingCountdownEnabled, openingDateTime };
 }
 
 export function csvSafe(value: unknown): string {

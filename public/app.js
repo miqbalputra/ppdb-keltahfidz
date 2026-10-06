@@ -22,6 +22,8 @@
   let submitting = false;
   let validationAttempted = false;
   let cutoffDateLabel = "tanggal acuan";
+  let countdownTimer = null;
+  let formInitialized = false;
   const regionRequests = new Map();
   const fieldErrors = new Map([...form.querySelectorAll("[data-error-for]")]
     .map((element) => [element.dataset.errorFor, element]));
@@ -393,22 +395,84 @@
     }
   }
 
+  function openingTime(value) {
+    const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/.exec(value || "");
+    if (!match) return null;
+    const [, y, m, d, h, min] = match;
+    const date = new Date(Date.UTC(Number(y), Number(m) - 1, Number(d), Number(h) - 7, Number(min)));
+    return date.getUTCFullYear() === Number(y) && date.getUTCMonth() === Number(m) - 1
+      && date.getUTCDate() === Number(d) && Number(h) < 24 && Number(min) < 60 ? date.getTime() : null;
+  }
+
+  async function initializeForm() {
+    if (formInitialized) return;
+    formInitialized = true;
+    document.body.classList.remove("countdown-mode");
+    document.querySelector("#opening-countdown").hidden = true;
+    await loadRegions(regionSelects[0], "provinces");
+    await initTurnstile();
+    updateSubmitState();
+  }
+
+  function showCountdown(timestamp) {
+    const panel = document.querySelector("#opening-countdown");
+    const schedule = document.querySelector("#countdown-schedule");
+    panel.hidden = false;
+    document.body.classList.add("countdown-mode");
+    if (timestamp === null) {
+      document.querySelector("#countdown-clock").hidden = true;
+      schedule.textContent = "Jadwal pembukaan belum tersedia. Silakan hubungi panitia.";
+      return;
+    }
+    schedule.textContent = `Dibuka ${new Intl.DateTimeFormat("id-ID", { dateStyle: "long", timeStyle: "short", timeZone: "Asia/Jakarta" }).format(timestamp)} WIB`;
+    const tick = async () => {
+      const remaining = timestamp - Date.now();
+      if (remaining <= 0) {
+        clearInterval(countdownTimer);
+        try {
+          const response = await fetch("/api/config", { cache: "no-store" });
+          const latestConfig = await response.json();
+          if (response.ok && latestConfig.registrationOpen) {
+            await initializeForm();
+            return;
+          }
+        } catch {
+          // Keep the countdown closed until the server confirms the opening time.
+        }
+        countdownTimer = setTimeout(tick, 5000);
+        return;
+      }
+      const values = [Math.floor(remaining / 86400000), Math.floor(remaining / 3600000) % 24,
+        Math.floor(remaining / 60000) % 60, Math.floor(remaining / 1000) % 60];
+      ["days", "hours", "minutes", "seconds"].forEach((unit, index) => {
+        document.querySelector(`#countdown-${unit}`).textContent = String(values[index]).padStart(2, "0");
+      });
+    };
+    tick();
+    countdownTimer = setInterval(tick, 1000);
+  }
+
   async function initialize() {
     try {
       const response = await fetch("/api/config");
       if (!response.ok) throw new Error("Konfigurasi belum dapat dimuat.");
       config = await response.json();
+      document.body.classList.remove("config-pending");
       cutoffDateLabel = formatDate(config.cutoffDate);
       birthdateInput.max = new Date().toISOString().slice(0, 10);
       document.querySelector("#cutoff-date-label").textContent = cutoffDateLabel;
       document.querySelector("#minimum-age-label").textContent = `${config.minAgeYears} tahun ${config.minAgeMonths} bulan`;
       document.querySelector("#deadline-label").textContent = formatDate(config.eligibleBirthdate);
-      await loadRegions(regionSelects[0], "provinces");
-      await initTurnstile();
+      const timestamp = openingTime(config.openingDateTime);
+      if (config.openingCountdownEnabled && !config.registrationOpen) {
+        showCountdown(timestamp !== null && timestamp > Date.now() ? timestamp : null);
+        return;
+      }
+      await initializeForm();
     } catch {
+      document.body.classList.remove("config-pending");
       setAlert("Aplikasi belum dapat dimuat. Muat ulang halaman beberapa saat lagi.");
     }
-    updateSubmitState();
   }
 
   birthdateInput.addEventListener("input", updateEligibility);

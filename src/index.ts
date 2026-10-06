@@ -42,14 +42,26 @@ import {
   decryptSensitiveRecord,
   encryptPaymentProof,
   encryptSensitiveRecord,
-  type DecryptedRow,
 } from "./lib/encryption";
 import { detectPaymentProofMime } from "./lib/payment-proof";
+import {
+  generateParticipantPdf,
+  generateParticipantXlsx,
+  generateParticipantsXlsx,
+  type ParticipantExportRecord,
+} from "./lib/participant-export";
+import {
+  hasWaitinglistFilters,
+  matchesEncryptedWaitinglist,
+  validateWaitinglistFilterQuery,
+  type WaitinglistFilterQuery,
+} from "./lib/waitinglist-filters";
 import { getSettingUpdatedAt, getSystemSettings, saveSystemSettings, seedSystemSettings } from "./lib/settings";
 import { encryptLegacyWaitinglistRows } from "./lib/security-migration";
 import {
   csvSafe,
   eligibleBirthdate,
+  isRegistrationOpen,
   validateSettings,
   validateWaitinglist,
   type SystemSettings,
@@ -59,9 +71,6 @@ import {
 const PUBLIC_DIR = resolve(import.meta.dir, "../public");
 const PAYMENT_PROOF_DIR = resolve(DATA_DIR, "payment-proofs");
 const SESSION_HOURS = 4;
-type WaitinglistView = DecryptedRow<typeof calonSantriWaitinglist.$inferSelect>;
-type StoredWaitinglistRow = typeof calonSantriWaitinglist.$inferSelect;
-type WaitinglistFilterQuery = { q?: string; status?: string; kecamatan?: string };
 
 const waitinglistBody = t.Object({
   nama_ortu: t.String({ minLength: 1, maxLength: 120 }),
@@ -93,7 +102,39 @@ const adminSettingsBody = t.Object({
   minAgeYears: t.Integer({ minimum: 0, maximum: 18 }),
   minAgeMonths: t.Integer({ minimum: 0, maximum: 11 }),
   whatsappGroupUrl: t.String({ maxLength: 500 }),
+  openingCountdownEnabled: t.Boolean(),
+  openingDateTime: t.String({ maxLength: 16 }),
 });
+
+function waitinglistFilterProperties() {
+  const date = () => t.Optional(t.String({
+    minLength: 10,
+    maxLength: 10,
+    pattern: "^\\d{4}-\\d{2}-\\d{2}$",
+  }));
+  return {
+    q: t.Optional(t.String({ maxLength: 120 })),
+    status: t.Optional(t.Union([t.Literal("all"), t.Literal("eligible"), t.Literal("not_eligible")])),
+    kecamatan: t.Optional(t.String({ maxLength: 120 })),
+    jenis_kelamin: t.Optional(t.Union([t.Literal("all"), t.Literal("putra"), t.Literal("putri")])),
+    tanggal_daftar_mulai: date(),
+    tanggal_daftar_sampai: date(),
+    tanggal_lahir_mulai: date(),
+    tanggal_lahir_sampai: date(),
+  };
+}
+
+function exportAttachment(bytes: Uint8Array, mime: string, filename: string): Response {
+  return new Response(Buffer.from(bytes), {
+    headers: {
+      "Content-Type": mime,
+      "Content-Disposition": `attachment; filename=\"${filename}\"`,
+      "Cache-Control": "no-store, max-age=0",
+      Pragma: "no-cache",
+      "X-Content-Type-Options": "nosniff",
+    },
+  });
+}
 
 function getAdminSession(request: Request): AdminSession | null {
   return validateSession(readSessionCookie(request.headers.get("cookie")));
@@ -154,36 +195,6 @@ async function triggerN8n(recordId: string, values: WaitinglistRecordInput, grou
     console.error("n8n webhook delivery failed");
     return "failed";
   }
-}
-
-function matchesEncryptedWaitinglist(row: StoredWaitinglistRow, query: WaitinglistFilterQuery): boolean {
-  const status = query.status ?? "all";
-  if (status === "eligible" || status === "not_eligible") {
-    const rowStatus = decryptField(row.status_eligibility, "status_eligibility", row.id);
-    if (rowStatus !== status) return false;
-  }
-
-  const kecamatan = (query.kecamatan ?? "").trim().slice(0, 120);
-  if (kecamatan) {
-    const districtName = decryptField(row.kecamatan_nama, "kecamatan_nama", row.id);
-    if (!districtName.toLocaleLowerCase().includes(kecamatan.toLocaleLowerCase())) return false;
-  }
-
-  const text = (query.q ?? "").trim().slice(0, 120).toLocaleLowerCase();
-  if (text) {
-    const searchableFields = [
-      ["nama_anak", row.nama_anak],
-      ["nama_ortu", row.nama_ortu],
-      ["email", row.email],
-      ["no_hp_wa", row.no_hp_wa],
-      ["desa_nama", row.desa_nama],
-    ] as const;
-    const found = searchableFields.some(([field, value]) => (
-      decryptField(value, field, row.id).toLocaleLowerCase().includes(text)
-    ));
-    if (!found) return false;
-  }
-  return true;
 }
 
 export const app = new Elysia({ name: "spsb-waitinglist" })
@@ -264,6 +275,9 @@ export const app = new Elysia({ name: "spsb-waitinglist" })
       minAgeYears: settings.minAgeYears,
       minAgeMonths: settings.minAgeMonths,
       whatsappGroupUrl: settings.whatsappGroupUrl,
+      registrationOpen: isRegistrationOpen(settings),
+      openingCountdownEnabled: settings.openingCountdownEnabled,
+      openingDateTime: settings.openingDateTime,
       turnstileSiteKey: TURNSTILE_ENABLED ? TURNSTILE_SITE_KEY : "",
     };
   })
@@ -283,6 +297,11 @@ export const app = new Elysia({ name: "spsb-waitinglist" })
       set.status = 403;
       return { error: "Permintaan lintas situs ditolak." };
     }
+    const settings = await getSystemSettings();
+    if (!isRegistrationOpen(settings)) {
+      set.status = 403;
+      return { error: "Pendaftaran belum dibuka. Silakan kembali sesuai jadwal pembukaan." };
+    }
     const ip = clientIp(request);
     if (!allowedRate(`submit:${ip}`, 8, 10 * 60)) {
       set.status = 429;
@@ -297,7 +316,6 @@ export const app = new Elysia({ name: "spsb-waitinglist" })
       return { error: "Verifikasi anti-spam gagal. Silakan coba lagi." };
     }
 
-    const settings = await getSystemSettings();
     let values: WaitinglistRecordInput;
     try {
       values = validateWaitinglist(body, settings);
@@ -475,11 +493,15 @@ export const app = new Elysia({ name: "spsb-waitinglist" })
   }, { params: t.Object({ id: t.String({ pattern: "^[a-f0-9]{32}$" }) }) })
   .get("/api/admin/waitinglist", async ({ query, request, set }) => {
     if (!requireAdmin(request, set)) return { error: "Silakan login sebagai admin." };
+    const filterError = validateWaitinglistFilterQuery(query);
+    if (filterError) {
+      set.status = 400;
+      return { error: filterError };
+    }
     const pageSize = 25;
     const parsedPage = Number.parseInt(query.page ?? "1", 10);
     const page = Number.isFinite(parsedPage) ? Math.max(1, Math.min(parsedPage, 1_000_000)) : 1;
-    const filtersActive = Boolean(query.q?.trim() || query.kecamatan?.trim()
-      || (query.status && query.status !== "all"));
+    const filtersActive = hasWaitinglistFilters(query);
     if (!filtersActive) {
       const [totalRows, storedRows] = await Promise.all([
         db.select({ total: count() }).from(calonSantriWaitinglist),
@@ -506,14 +528,66 @@ export const app = new Elysia({ name: "spsb-waitinglist" })
     return { rows, total, page, pageSize, pages: Math.max(1, Math.ceil(total / pageSize)) };
   }, {
     query: t.Object({
-      q: t.Optional(t.String({ maxLength: 120 })),
-      status: t.Optional(t.Union([t.Literal("all"), t.Literal("eligible"), t.Literal("not_eligible")])),
-      kecamatan: t.Optional(t.String({ maxLength: 120 })),
+      ...waitinglistFilterProperties(),
       page: t.Optional(t.String({ maxLength: 12 })),
     }),
   })
+  .get("/api/admin/waitinglist/:id/export.pdf", async ({ params, request, set }) => {
+    if (!requireAdmin(request, set)) return { error: "Silakan login sebagai admin." };
+    const storedRows = await db.select().from(calonSantriWaitinglist)
+      .where(eq(calonSantriWaitinglist.id, params.id)).limit(1);
+    const stored = storedRows[0];
+    if (!stored) {
+      set.status = 404;
+      return { error: "Data pendaftar tidak ditemukan." };
+    }
+    const record: ParticipantExportRecord = decryptSensitiveRecord(stored);
+    const bytes = await generateParticipantPdf(record);
+    return exportAttachment(bytes, "application/pdf", `spsb-2027-${params.id}.pdf`);
+  }, { params: t.Object({ id: t.String({ pattern: "^[a-f0-9]{32}$" }) }) })
+  .get("/api/admin/waitinglist/:id/export.xlsx", async ({ params, request, set }) => {
+    if (!requireAdmin(request, set)) return { error: "Silakan login sebagai admin." };
+    const storedRows = await db.select().from(calonSantriWaitinglist)
+      .where(eq(calonSantriWaitinglist.id, params.id)).limit(1);
+    const stored = storedRows[0];
+    if (!stored) {
+      set.status = 404;
+      return { error: "Data pendaftar tidak ditemukan." };
+    }
+    const record: ParticipantExportRecord = decryptSensitiveRecord(stored);
+    const bytes = await generateParticipantXlsx(record);
+    return exportAttachment(
+      bytes,
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      `spsb-2027-${params.id}.xlsx`,
+    );
+  }, { params: t.Object({ id: t.String({ pattern: "^[a-f0-9]{32}$" }) }) })
+  .get("/api/admin/export.xlsx", async ({ query, request, set }) => {
+    if (!requireAdmin(request, set)) return { error: "Silakan login sebagai admin." };
+    const filterError = validateWaitinglistFilterQuery(query);
+    if (filterError) {
+      set.status = 400;
+      return { error: filterError };
+    }
+    const storedRows = await db.select().from(calonSantriWaitinglist)
+      .orderBy(desc(calonSantriWaitinglist.created_at));
+    const rows = storedRows
+      .filter((row) => matchesEncryptedWaitinglist(row, query))
+      .map((row) => decryptSensitiveRecord(row));
+    const bytes = await generateParticipantsXlsx(rows);
+    return exportAttachment(
+      bytes,
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      "waitinglist-spsb-2027.xlsx",
+    );
+  }, { query: t.Object(waitinglistFilterProperties()) })
   .get("/api/admin/export.csv", async ({ query, request, set }) => {
     if (!requireAdmin(request, set)) return { error: "Silakan login sebagai admin." };
+    const filterError = validateWaitinglistFilterQuery(query);
+    if (filterError) {
+      set.status = 400;
+      return { error: filterError };
+    }
     const storedRows = await db.select().from(calonSantriWaitinglist)
       .orderBy(desc(calonSantriWaitinglist.created_at));
     const rows = storedRows
@@ -538,13 +612,12 @@ export const app = new Elysia({ name: "spsb-waitinglist" })
     const csv = `\uFEFF${output.map((line) => line.map((value) => `"${value.replaceAll('"', '""')}"`).join(",")).join("\r\n")}`;
     set.headers["Content-Type"] = "text/csv; charset=utf-8";
     set.headers["Content-Disposition"] = 'attachment; filename="waitinglist-spsb-2027.csv"';
-    set.headers["Cache-Control"] = "no-store";
+    set.headers["Cache-Control"] = "no-store, max-age=0";
+    set.headers.Pragma = "no-cache";
     return csv;
   }, {
     query: t.Object({
-      q: t.Optional(t.String({ maxLength: 120 })),
-      status: t.Optional(t.Union([t.Literal("all"), t.Literal("eligible"), t.Literal("not_eligible")])),
-      kecamatan: t.Optional(t.String({ maxLength: 120 })),
+      ...waitinglistFilterProperties(),
       page: t.Optional(t.String({ maxLength: 12 })),
     }),
   });

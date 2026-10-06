@@ -64,6 +64,10 @@ describe("frontend accessibility contracts", () => {
     expect(html).toContain('id="validation-summary"');
     expect(html).toContain('aria-live="polite"');
     expect(html).toContain('id="waitinglist-form"');
+    expect(html).toContain('id="opening-countdown"');
+    expect(html).toContain("Segera Dibuka");
+    expect(html).toContain("Tahun Ajaran 1449 H / 2027-2028 M");
+    expect(html).toContain('id="countdown-days"');
     expect(html).toContain('name="jenis_kelamin" type="radio" value="putra" required');
     expect(html).toContain('name="jenis_kelamin" type="radio" value="putri"');
     expect(html).toContain('id="sekolah-asal" name="sekolah_asal" type="text"');
@@ -99,11 +103,19 @@ describe("frontend accessibility contracts", () => {
     expect(html).not.toContain("Data waitinglist");
   });
 
-  test("admin table has a caption and scoped column headers", async () => {
+  test("admin table and export controls are accessible and include every requested filter", async () => {
     const html = await pageSource("admin.html");
     expect(html).toContain("<caption");
     expect(attributes(html, "scope").filter((value) => value === "col").length).toBeGreaterThan(0);
     expect(html).toContain('aria-label="Navigasi dashboard"');
+    expect(html).toContain('id="export-xlsx-button"');
+    expect(html).toContain('name="openingCountdownEnabled"');
+    expect(html).toContain('name="openingDateTime"');
+    expect(html).toContain('id="export-button"');
+    for (const name of ["jenis_kelamin", "tanggal_daftar_mulai", "tanggal_daftar_sampai", "tanggal_lahir_mulai", "tanggal_lahir_sampai"]) {
+      expect(html).toContain(`name="${name}"`);
+    }
+    expect(html).toContain('role="group" aria-label="Ekspor data pendaftar"');
   });
 
   test("admin rows show payment-terms consent status", async () => {

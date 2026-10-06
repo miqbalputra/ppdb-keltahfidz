@@ -5,6 +5,8 @@ import {
   csvSafe,
   eligibleBirthdate,
   eligibilityRetryMessage,
+  isRegistrationOpen,
+  openingTimestamp,
   nextEligibleCohort,
   normalizePhone,
   validateSettings,
@@ -17,6 +19,8 @@ const settings: SystemSettings = {
   minAgeYears: 6,
   minAgeMonths: 6,
   whatsappGroupUrl: "",
+  openingCountdownEnabled: false,
+  openingDateTime: "",
 };
 
 function validPayload() {
@@ -118,11 +122,24 @@ describe("input normalization", () => {
       .toThrow("Setujui ketentuan biaya pendaftaran sebelum melanjutkan.");
   });
 
+  test("opens registration only when disabled or its valid WIB opening time has arrived", () => {
+    const scheduled = { ...settings, openingCountdownEnabled: true, openingDateTime: "2027-07-01T09:30" };
+    expect(openingTimestamp(scheduled.openingDateTime)).toBe(Date.UTC(2027, 6, 1, 2, 30));
+    expect(isRegistrationOpen(scheduled, new Date("2027-07-01T02:29:59Z"))).toBe(false);
+    expect(isRegistrationOpen(scheduled, new Date("2027-07-01T02:30:00Z"))).toBe(true);
+    expect(isRegistrationOpen({ ...scheduled, openingDateTime: "invalid" }, new Date())).toBe(false);
+    expect(isRegistrationOpen(settings, new Date())).toBe(true);
+  });
+
   test("validates editable system settings and WhatsApp URL", () => {
     expect(validateSettings({ ...settings, whatsappGroupUrl: "https://chat.whatsapp.com/example" }))
       .toMatchObject({ whatsappGroupUrl: "https://chat.whatsapp.com/example" });
     expect(() => validateSettings({ ...settings, whatsappGroupUrl: "https://evil.example/invite" }))
       .toThrow("WhatsApp");
+    expect(() => validateSettings({ ...settings, openingCountdownEnabled: true }))
+      .toThrow("Tanggal dan jam pembukaan WIB wajib diisi");
+    expect(() => validateSettings({ ...settings, openingDateTime: "2027-02-30T09:30" }))
+      .toThrow("Tanggal dan jam pembukaan WIB tidak valid");
   });
 
   test("neutralizes CSV formulas", () => {

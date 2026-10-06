@@ -87,5 +87,7 @@ export function getInitialSettings() {
     minAgeYears: Number(env("MIN_AGE_YEARS", "6")),
     minAgeMonths: Number(env("MIN_AGE_MONTHS", "6")),
     whatsappGroupUrl: env("WHATSAPP_GROUP_URL"),
+    openingCountdownEnabled: false,
+    openingDateTime: "",
   };
 }
