@@ -674,6 +674,11 @@ td { color: #514f49; border-top-color: #efefed; }
 .countdown-contact-copy strong { font-size: 15px; line-height: 1.25; }
 .countdown-contact-detail { color: #e6eee3; font-size: 12px; line-height: 1.4; overflow-wrap: anywhere; }
 .contact-arrow { justify-self: end; color: #f4d892; font-size: 19px; }
+.countdown-brochure { width: min(100%, 405px); min-height: 52px; margin: 12px auto 0; padding: 11px 18px; display: flex; align-items: center; justify-content: center; gap: 10px; color: #294e35; background: #fff; border: 1px solid #9bac98; border-radius: 12px; font-size: 15px; font-weight: 750; cursor: pointer; }
+.countdown-brochure:hover:not(:disabled) { background: #edf3e9; }
+.countdown-brochure:focus-visible { outline: 3px solid #9c7028; outline-offset: 4px; }
+.countdown-brochure:disabled { opacity: .7; cursor: wait; }
+.brochure-feedback { max-width: 405px; margin: 12px auto 0; color: #294e35; font-size: 13px; line-height: 1.5; }
 .countdown-mode .topbar-link, .countdown-mode .hero, .countdown-mode .steps-band, .countdown-mode .form-section,
 .config-pending .topbar-link, .config-pending .hero, .config-pending .steps-band, .config-pending .form-section { display: none !important; }
 @media (max-width: 560px) {
@@ -689,6 +694,23 @@ td { color: #514f49; border-top-color: #efefed; }
   .opening-contact { margin-top: 32px; }
 }
 @media (prefers-reduced-motion: reduce) { .countdown-contact { transition: none; } .countdown-contact:hover { transform: none; } }
+
+/* Brochure management */
+.brochure-admin #brochure-current { margin: 18px 22px 0; color: var(--green-dark); font-size: 14px; line-height: 1.5; }
+.brochure-admin #brochure-alert { margin: 14px 22px 0; }
+.brochure-form { padding: 18px 22px 10px; }
+.brochure-form .field { max-width: 560px; }
+.brochure-form input[type="file"] { height: auto; min-height: 48px; padding: 9px; font-size: 13px; }
+.brochure-actions { margin-top: 18px; display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.brochure-actions .button { width: auto; min-height: 44px; margin: 0; padding-inline: 15px; text-decoration: none; }
+.brochure-actions .button:disabled { opacity: .6; cursor: not-allowed; }
+.brochure-admin > .field-hint { display: block; margin: 0 22px 20px; }
+@media (max-width: 560px) {
+  .brochure-form { padding: 18px 16px 10px; }
+  .brochure-admin #brochure-current, .brochure-admin #brochure-alert { margin-inline: 16px; }
+  .brochure-admin > .field-hint { margin-inline: 16px; }
+  .brochure-actions .button { flex: 1 1 100%; justify-content: center; }
+}
 
 /* Admin exports and expanded filters */
 .export-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }

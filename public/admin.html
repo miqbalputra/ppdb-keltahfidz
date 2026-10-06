@@ -8,8 +8,8 @@
   <meta name="robots" content="noindex,nofollow">
   <title>Dashboard Panitia — SPSB 2027</title>
   <link rel="icon" href="/logo-gq.png" type="image/png">
-  <link rel="stylesheet" href="/app.css?v=2027-countdown-cta">
-  <script src="/admin.js" defer></script>
+  <link rel="stylesheet" href="/app.css?v=2027-brochure-v1">
+  <script src="/admin.js?v=2027-brochure-v1" defer></script>
 </head>
 <body class="admin-page">
   <a class="skip-link" href="#main-content">Lewati ke konten utama</a>
@@ -31,7 +31,7 @@
     <section class="dashboard" id="dashboard" hidden>
       <div class="dashboard-heading"><div><span class="section-kicker">RUANG KERJA PANITIA</span><h1 tabindex="-1">Dashboard <em>SPSB.</em></h1><p>Pantau sistem, kelola pengaturan, dan data pendaftaran SPSB.</p></div><button class="button button-outline" id="logout-button" type="button">Keluar <span aria-hidden="true">↗</span></button></div>
       <div class="dashboard-alert form-alert" id="dashboard-alert" role="alert" aria-live="assertive" aria-atomic="true" hidden></div>
-      <nav class="dashboard-nav" aria-label="Navigasi dashboard"><a href="#system-panel">Status sistem</a><a href="#settings-panel">Pengaturan</a><a href="#waitinglist-panel">Pendaftar</a></nav>
+      <nav class="dashboard-nav" aria-label="Navigasi dashboard"><a href="#system-panel">Status sistem</a><a href="#settings-panel">Pengaturan</a><a href="#brochure-panel">Brosur</a><a href="#waitinglist-panel">Pendaftar</a></nav>
       <section class="system-panel" id="system-panel">
         <div class="table-heading"><div><span class="section-kicker">MONITORING</span><h2>Status sistem</h2></div><button class="button button-outline" id="refresh-system" type="button">Muat ulang</button></div>
         <div class="system-status-grid">
@@ -53,6 +53,16 @@
           <fieldset class="opening-settings settings-wide"><legend>Jadwal pembukaan pendaftaran</legend><label class="opening-toggle"><input type="checkbox" name="openingCountdownEnabled"><span>Aktifkan halaman “Segera Dibuka” dan kunci pendaftaran sampai jadwal</span></label><label class="field opening-datetime"><span>Tanggal dan jam pembukaan (WIB)</span><input type="datetime-local" name="openingDateTime"><small class="field-hint">Formulir terbuka otomatis pada waktu ini. Nonaktifkan toggle untuk membuka pendaftaran lebih awal.</small></label></fieldset>
           <div class="settings-actions"><p class="field-hint">URL webhook n8n dan kunci anti-spam dikelola sebagai secret di environment Coolify.</p><button class="button button-primary" id="save-settings" type="submit">Simpan pengaturan</button></div>
         </form>
+      </section>
+      <section class="settings-card brochure-admin" id="brochure-panel">
+        <div class="table-heading"><div><span class="section-kicker">MATERI PENDAFTARAN</span><h2>Brosur SPSB</h2></div></div>
+        <p id="brochure-current" role="status" aria-live="polite">Memeriksa brosur…</p>
+        <div class="form-alert" id="brochure-alert" role="status" aria-live="polite" hidden></div>
+        <form id="brochure-form" class="brochure-form">
+          <label class="field"><span>Unggah brosur PDF (maksimal 10 MB)</span><input id="brochure-file" type="file" name="brochure" accept=".pdf,application/pdf" required></label>
+          <div class="brochure-actions"><button class="button button-primary" id="brochure-save" type="submit">Unggah / Ganti brosur</button><a class="button button-outline" id="brochure-preview" href="/api/brochure" hidden>Download brosur saat ini</a><button class="button button-outline" id="brochure-delete" type="button" disabled>Hapus brosur</button></div>
+        </form>
+        <p class="field-hint">Brosur disimpan pada volume data persisten dan tampil pada halaman “Segera Dibuka”.</p>
       </section>
       <section class="table-card" id="waitinglist-panel">
         <div class="table-heading"><div><span class="section-kicker">DAFTAR CALON SANTRI</span><h2>Data pendaftar</h2></div><div class="export-actions" role="group" aria-label="Ekspor data pendaftar"><button class="button button-export" id="export-xlsx-button" type="button" aria-label="Ekspor semua atau hasil filter ke Excel"><span aria-hidden="true">↓</span> Ekspor Excel</button><button class="button button-export button-export-secondary" id="export-button" type="button" aria-label="Ekspor semua atau hasil filter ke CSV"><span aria-hidden="true">↓</span> CSV</button></div></div>

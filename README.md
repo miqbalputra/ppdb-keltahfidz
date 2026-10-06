@@ -73,7 +73,8 @@ Dashboard di `/admin` mencakup:
 - Monitoring status aplikasi, koneksi MariaDB, runtime Bun, webhook n8n, dan Turnstile.
 - Ringkasan total pendaftar, jumlah yang memenuhi kriteria, dan pendaftar dalam 24 jam terakhir.
 - Pencarian, filter, paginasi, serta ekspor CSV data pendaftar.
-- Pengaturan tanggal acuan usia, usia minimum, dan link grup WhatsApp. Perubahan disimpan di MariaDB.
+- Pengaturan tanggal acuan usia, usia minimum, link grup WhatsApp, dan jadwal halaman “Segera Dibuka”. Perubahan disimpan di MariaDB.
+- Unggah, ganti, atau hapus brosur PDF SPSB (maksimal 10 MB). Tombol Download Brosur selalu terlihat pada halaman countdown; sebelum diunggah atau setelah dihapus, pengunjung mendapat pesan “Brosur belum tersedia”. PDF tersimpan sebagai file di volume persisten `DATA_DIR`.
 
 Kredensial admin, `APP_SECRET`, URL webhook n8n, dan secret Turnstile tetap dikelola melalui environment Coolify—bukan ditampilkan atau disimpan sebagai pengaturan biasa di dashboard.
 
@@ -105,7 +106,7 @@ Salin `.env.example` sebagai titik awal. Variabel penting:
 | `WHATSAPP_GROUP_URL` | Nilai awal link grup; dapat diubah dari dashboard. |
 | `N8N_WEBHOOK_URL` | Webhook notifikasi email n8n. Secret ini dikelola melalui environment. |
 | `TURNSTILE_SITE_KEY`, `TURNSTILE_SECRET_KEY` | Wajib di production: isi pasangan site key dan secret key Cloudflare Turnstile. Startup production ditolak jika salah satu atau keduanya tidak ada; pasangan parsial selalu ditolak. Development lokal dapat berjalan tanpa keduanya. |
-| `HOST`, `PORT`, `DATA_DIR` | Alamat listener, port aplikasi, serta cache wilayah dan penyimpanan bukti transfer terenkripsi. Di Docker, pasang volume persisten pada `/app/data`; Dockerfile menetapkan host `0.0.0.0` dan port `8000`. |
+| `HOST`, `PORT`, `DATA_DIR` | Alamat listener, port aplikasi, serta cache wilayah, brosur publik, dan penyimpanan bukti transfer terenkripsi. Di Docker, pasang volume persisten pada `/app/data`; Dockerfile menetapkan host `0.0.0.0` dan port `8000`. |
 
 Pengaturan tanggal acuan dan WhatsApp disalin dari environment ke tabel `system_settings` saat pertama kali database kosong. Setelah itu, nilai di dashboard menjadi sumber aktifnya.
 
@@ -134,12 +135,12 @@ Dropdown wilayah menggunakan proxy backend ke [EMSIFA API Wilayah Indonesia v2](
 Repository ini menyediakan `Dockerfile` berbasis image resmi Bun. Di Coolify:
 
 1. Buat resource MariaDB, database, dan user khusus aplikasi. Aktifkan backup database serta volume persisten aplikasi pada `/app/data` untuk menyimpan bukti transfer terenkripsi. Pastikan volume dapat ditulis oleh UID `10001`.
-2. Deploy repository sebagai aplikasi berbasis Dockerfile, gunakan port container `8000`, dan pasang domain HTTPS. Izinkan request upload minimal 5,2 MB di reverse proxy. Jangan publikasikan port aplikasi langsung ke internet; akses harus melalui reverse proxy Coolify.
+2. Deploy repository sebagai aplikasi berbasis Dockerfile, gunakan port container `8000`, dan pasang domain HTTPS. Izinkan request upload minimal 10,2 MB di reverse proxy untuk brosur PDF (maksimal 10 MB). Jangan publikasikan port aplikasi langsung ke internet; akses harus melalui reverse proxy Coolify.
 3. Isi environment aplikasi dari `.env.example`. Gunakan hostname/internal connection details MariaDB dari Coolify—jangan gunakan `localhost` antar-container. Pastikan app dan database terhubung ke network internal yang sama.
 4. Set `COOKIE_SECURE=true`. Isi `ADMIN_PASSWORD` unik (minimal 16 karakter), `APP_SECRET` acak (minimal 32 karakter), `DATA_ENCRYPTION_KEY` hasil `openssl rand -hex 32`, serta pasangan `TURNSTILE_SITE_KEY` dan `TURNSTILE_SECRET_KEY` dari Cloudflare. Kredensial MariaDB harus unik dengan password minimal 20 karakter; production menolak konfigurasi database `localhost`, webhook n8n non-HTTPS, atau key Turnstile yang tidak tersedia.
 5. Pastikan `/readyz` merespons status `ready`. Pemeriksaan kesehatan container juga menunggu kesiapan koneksi database. Jangan membuka port MariaDB ke internet publik.
 
-Data pendaftar berada di MariaDB, sedangkan bukti transfer terenkripsi berada di volume persisten `/app/data/payment-proofs`; backup dan pemulihan perlu mencakup keduanya serta `DATA_ENCRYPTION_KEY`. Cache wilayah di direktori yang sama dapat dibuat ulang. Database SQLite lama (`data/waitinglist.sqlite3`) tetap dipertahankan, tetapi tidak diimpor otomatis; lakukan migrasi terencana bila file tersebut berisi data yang harus dibawa ke MariaDB.
+Data pendaftar berada di MariaDB, sedangkan bukti transfer terenkripsi berada di volume persisten `/app/data/payment-proofs` dan brosur publik di `/app/data/spsb-brochure.pdf`; backup dan pemulihan perlu mencakup database, keduanya, serta `DATA_ENCRYPTION_KEY`. Jangan menaruh brosur hanya di filesystem sementara container karena akan hilang saat redeploy. Cache wilayah di direktori yang sama dapat dibuat ulang. Database SQLite lama (`data/waitinglist.sqlite3`) tetap dipertahankan, tetapi tidak diimpor otomatis; lakukan migrasi terencana bila file tersebut berisi data yang harus dibawa ke MariaDB.
 
 Untuk memeriksa dan mengimpor record dari file SQLite lama, atur `SQLITE_IMPORT_PATH` bila lokasinya berbeda, lalu jalankan `bun run db:import-sqlite -- --dry-run` untuk hitung saja atau `bun run db:import-sqlite` untuk mengimpor. Importer mempertahankan ID record dan melewati ID yang sudah ada di MariaDB; tetap buat backup sebelum migrasi.
 

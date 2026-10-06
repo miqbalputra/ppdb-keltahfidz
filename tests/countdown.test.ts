@@ -7,6 +7,8 @@ const script = await readFile(new URL("../public/app.js", import.meta.url), "utf
 function browserHarness(openingDateTime: string, start: string) {
   let now = new Date(start).getTime();
   let serverOpen = false;
+  let brochureAvailable = false;
+  let downloads = 0;
   let interval: (() => void) | undefined;
   let retry: (() => void) | undefined;
   const nodes = new Map<string, any>();
@@ -15,8 +17,11 @@ function browserHarness(openingDateTime: string, start: string) {
     if (!nodes.has(selector)) nodes.set(selector, {
       hidden: false, textContent: "", value: "", disabled: false,
       classList: { add: (name: string) => classes.add(name), remove: (name: string) => classes.delete(name), toggle: () => {} },
-      addEventListener: () => {}, setCustomValidity: () => {}, setAttribute: () => {}, removeAttribute: () => {},
+      listeners: {} as Record<string, () => void>,
+      addEventListener(event: string, fn: () => void) { this.listeners[event] = fn; },
+      setCustomValidity: () => {}, setAttribute: () => {}, removeAttribute: () => {},
       replaceChildren: () => {}, closest: () => ({ querySelector: () => null }),
+      click: () => { downloads += 1; }, remove: () => {},
     });
     return nodes.get(selector);
   };
@@ -25,12 +30,15 @@ function browserHarness(openingDateTime: string, start: string) {
   form.elements = new Proxy({}, { get: (_, key: string) => node(`#input-${key}`) });
   form.querySelectorAll = (selector: string) => selector === "select[data-region]" ? [region] : [];
   const document = {
-    body: { classList: { add: (name: string) => classes.add(name), remove: (name: string) => classes.delete(name) } },
+    body: { classList: { add: (name: string) => classes.add(name), remove: (name: string) => classes.delete(name) }, append: () => {} },
     querySelector: node,
     createElement: () => node("#created"),
   };
   const FakeDate = class extends Date { static now() { return now; } };
-  const fetch = async (url: string) => ({
+  const fetch = async (url: string) => url === "/api/brochure" ? {
+    ok: brochureAvailable, status: brochureAvailable ? 200 : 404,
+    blob: async () => new Blob(["%PDF-1.7\n%%EOF"]),
+  } : ({
     ok: true,
     json: async () => url === "/api/config"
       ? {
@@ -41,6 +49,7 @@ function browserHarness(openingDateTime: string, start: string) {
   });
   runInNewContext(script, {
     document, Date: FakeDate, fetch, Intl, AbortController,
+    URL: { createObjectURL: () => "blob:test-brochure", revokeObjectURL: () => {} },
     Option: class { dataset = {}; constructor(public text: string, public value: string) {} },
     setInterval: (fn: () => void) => { interval = fn; return 1; },
     clearInterval: () => { interval = undefined; },
@@ -51,6 +60,9 @@ function browserHarness(openingDateTime: string, start: string) {
     node, classes, settle,
     setTime: (time: string) => { now = new Date(time).getTime(); },
     openOnServer: () => { serverOpen = true; },
+    brochureIsAvailable: () => { brochureAvailable = true; },
+    downloadCount: () => downloads,
+    clickBrochure: async () => { node("#download-brochure").listeners.click(); await settle(); },
     tick: async () => { interval?.(); await settle(); },
     retry: async () => { retry?.(); await settle(); },
   };
@@ -71,6 +83,19 @@ describe("browser opening countdown", () => {
     expect(browser.node("#countdown-schedule").textContent).toContain("WIB");
     expect(browser.classes.has("countdown-mode")).toBe(true);
     expect(browser.classes.has("config-pending")).toBe(false);
+  });
+
+  test("brochure button stays available and reports absence until a PDF is uploaded", async () => {
+    const browser = browserHarness("2027-01-01T00:01", "2026-12-31T17:00:00Z");
+    await browser.settle();
+    await browser.clickBrochure();
+    expect(browser.node("#brochure-feedback").textContent).toContain("Brosur belum tersedia");
+    expect(browser.node("#download-brochure").disabled).toBe(false);
+    expect(browser.downloadCount()).toBe(0);
+    browser.brochureIsAvailable();
+    await browser.clickBrochure();
+    expect(browser.downloadCount()).toBe(1);
+    expect(browser.node("#brochure-feedback").hidden).toBe(true);
   });
 
   test("keeps registration hidden until server confirms the opening boundary", async () => {

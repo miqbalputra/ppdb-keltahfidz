@@ -8,6 +8,11 @@
   const rowsContainer = document.querySelector("#waitinglist-rows");
   const filterForm = document.querySelector("#filter-form");
   const settingsForm = document.querySelector("#settings-form");
+  const brochureForm = document.querySelector("#brochure-form");
+  const brochureAlert = document.querySelector("#brochure-alert");
+  const brochureFile = document.querySelector("#brochure-file");
+  const brochureSave = document.querySelector("#brochure-save");
+  const brochureDelete = document.querySelector("#brochure-delete");
   let csrfToken = "";
   let currentPage = 1;
   let totalPages = 1;
@@ -21,7 +26,7 @@
 
   async function api(path, options = {}) {
     const headers = { ...(options.headers || {}) };
-    if (options.body && !headers["Content-Type"]) headers["Content-Type"] = "application/json";
+    if (options.body && !(options.body instanceof FormData) && !headers["Content-Type"]) headers["Content-Type"] = "application/json";
     if (csrfToken && options.method && options.method !== "GET") headers["X-CSRF-Token"] = csrfToken;
     let response;
     try {
@@ -48,6 +53,7 @@
     dashboard.hidden = false;
     if (focusHeading) dashboard.querySelector(".dashboard-heading h1").focus();
     loadSystem();
+    loadBrochure();
     loadRows();
   }
 
@@ -111,6 +117,19 @@
       showAlert(dashboardAlert, error.message);
       setSystemStatus("#system-app-status", false, "Tidak dapat diperiksa");
       setSystemStatus("#system-db-status", false, "Tidak dapat diperiksa");
+    }
+  }
+
+  async function loadBrochure() {
+    try {
+      const current = await api("/api/admin/brochure");
+      document.querySelector("#brochure-current").textContent = current.available
+        ? `Brosur tersedia · ${(current.size / (1024 * 1024)).toFixed(2)} MB · diperbarui ${formatDate(current.updatedAt, true)} WIB`
+        : "Belum ada brosur. Tombol publik akan menampilkan pesan 'Brosur belum tersedia'.";
+      document.querySelector("#brochure-preview").hidden = !current.available;
+      brochureDelete.disabled = !current.available;
+    } catch (error) {
+      showAlert(brochureAlert, error.message);
     }
   }
 
@@ -336,8 +355,48 @@
     }
   });
 
+  brochureForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    showAlert(brochureAlert, "");
+    const file = brochureFile.files?.[0];
+    if (!file || file.size > 10 * 1024 * 1024) {
+      showAlert(brochureAlert, "Pilih brosur PDF dengan ukuran maksimal 10 MB.");
+      return;
+    }
+    brochureSave.disabled = true;
+    brochureForm.setAttribute("aria-busy", "true");
+    try {
+      const data = new FormData();
+      data.append("brochure", file);
+      await api("/api/admin/brochure", { method: "POST", body: data });
+      brochureForm.reset();
+      await loadBrochure();
+      showAlert(brochureAlert, "Brosur berhasil diunggah dan siap diunduh.", "success");
+    } catch (error) {
+      showAlert(brochureAlert, error.message);
+    } finally {
+      brochureSave.disabled = false;
+      brochureForm.removeAttribute("aria-busy");
+    }
+  });
+
+  brochureDelete.addEventListener("click", async () => {
+    if (!window.confirm("Hapus brosur SPSB yang sedang tampil?")) return;
+    showAlert(brochureAlert, "");
+    brochureDelete.disabled = true;
+    try {
+      await api("/api/admin/brochure", { method: "DELETE" });
+      await loadBrochure();
+      showAlert(brochureAlert, "Brosur berhasil dihapus.", "success");
+    } catch (error) {
+      showAlert(brochureAlert, error.message);
+      await loadBrochure();
+    }
+  });
+
   document.querySelector("#refresh-system").addEventListener("click", () => {
     loadSystem();
+    loadBrochure();
     loadRows();
   });
 

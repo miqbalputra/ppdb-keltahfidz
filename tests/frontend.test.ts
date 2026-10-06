@@ -42,7 +42,7 @@ describe("frontend accessibility contracts", () => {
       expect(html).toContain('href="/logo-gq.png" type="image/png"');
       expect(html).toContain('class="brand-logo" src="/logo-gq.png"');
       expect(html).toContain('name="description"');
-      expect(html).toContain(`<link rel="stylesheet" href="/app.css?v=${page === "index.html" ? "2027-opening-v4" : "2027-countdown-cta"}">`);
+      expect(html).toContain(`<link rel="stylesheet" href="/app.css?v=${page === "success.html" ? "2027-countdown-cta" : "2027-brochure-v1"}">`);
       const ids = attributes(html, "id");
       const idSet = new Set(ids);
       expect(idSet.size).toBe(ids.length);
@@ -73,7 +73,9 @@ describe("frontend accessibility contracts", () => {
     expect(html).toContain('aria-live="off"');
     for (const unit of ["days", "hours", "minutes", "seconds"]) expect(html).toContain(`id="countdown-${unit}"`);
     expect(html).toContain('id="countdown-schedule" aria-live="polite"');
-    expect(html).toContain('src="/app.js?v=2027-opening-v2"');
+    expect(html).toContain('src="/app.js?v=2027-brochure-v1"');
+    expect(html).toContain('id="download-brochure" type="button"');
+    expect(html).toContain('id="brochure-feedback" role="status" aria-live="polite"');
     expect(html).toContain('href="https://wa.me/6285173394373"');
     expect(html).toContain('aria-label="Pertanyaan/Informasi: 085173394373 (Admin Griya Qur\'an), buka WhatsApp"');
     expect(html).toContain('<strong>Pertanyaan / Informasi</strong>');
@@ -122,6 +124,10 @@ describe("frontend accessibility contracts", () => {
     expect(html).toContain('id="export-xlsx-button"');
     expect(html).toContain('name="openingCountdownEnabled"');
     expect(html).toContain('name="openingDateTime"');
+    expect(html).toContain('id="brochure-form"');
+    expect(html).toContain('name="brochure" accept=".pdf,application/pdf"');
+    expect(html).toContain('id="brochure-alert" role="status"');
+    expect(html).toContain('id="brochure-delete"');
     expect(html).toContain('id="export-button"');
     for (const name of ["jenis_kelamin", "tanggal_daftar_mulai", "tanggal_daftar_sampai", "tanggal_lahir_mulai", "tanggal_lahir_sampai"]) {
       expect(html).toContain(`name="${name}"`);

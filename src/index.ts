@@ -11,6 +11,8 @@ import {
   COOKIE_SECURE,
   DATA_DIR,
   HOST,
+  MAX_BROCHURE_BYTES,
+  MAX_BROCHURE_REQUEST_BYTES,
   MAX_PAYMENT_PROOF_BYTES,
   MAX_REQUEST_BYTES,
   MAX_UPLOAD_REQUEST_BYTES,
@@ -44,6 +46,7 @@ import {
   encryptSensitiveRecord,
 } from "./lib/encryption";
 import { detectPaymentProofMime } from "./lib/payment-proof";
+import { brochureStatus, deleteBrochure, readBrochure, saveBrochure, validateBrochure } from "./lib/brochure";
 import {
   generateParticipantPdf,
   generateParticipantXlsx,
@@ -96,6 +99,8 @@ const waitinglistBody = t.Object({
   website: t.Optional(t.String({ maxLength: 255 })),
   turnstile_token: t.Optional(t.String({ maxLength: 4096 })),
 });
+
+const brochureUploadBody = t.Object({ brochure: t.File({ maxSize: MAX_BROCHURE_BYTES }) });
 
 const adminSettingsBody = t.Object({
   cutoffDate: t.String({ minLength: 10, maxLength: 10 }),
@@ -199,10 +204,11 @@ async function triggerN8n(recordId: string, values: WaitinglistRecordInput, grou
 
 export const app = new Elysia({ name: "spsb-waitinglist" })
   .onRequest(({ request, set }) => {
-    const isProofUpload = request.method === "POST"
-      && new URL(request.url).pathname === "/api/waitinglist"
-      && request.headers.get("content-type")?.toLowerCase().startsWith("multipart/form-data");
-    const maxBytes = isProofUpload ? MAX_UPLOAD_REQUEST_BYTES : MAX_REQUEST_BYTES;
+    const path = new URL(request.url).pathname;
+    const isMultipart = request.headers.get("content-type")?.toLowerCase().startsWith("multipart/form-data");
+    const isProofUpload = request.method === "POST" && path === "/api/waitinglist" && isMultipart;
+    const isBrochureUpload = request.method === "POST" && path === "/api/admin/brochure" && isMultipart;
+    const maxBytes = isBrochureUpload ? MAX_BROCHURE_REQUEST_BYTES : isProofUpload ? MAX_UPLOAD_REQUEST_BYTES : MAX_REQUEST_BYTES;
     const contentLength = Number(request.headers.get("content-length") ?? 0);
     if (contentLength > maxBytes) {
       set.status = 413;
@@ -280,6 +286,22 @@ export const app = new Elysia({ name: "spsb-waitinglist" })
       openingDateTime: settings.openingDateTime,
       turnstileSiteKey: TURNSTILE_ENABLED ? TURNSTILE_SITE_KEY : "",
     };
+  })
+  .get("/api/brochure/status", async () => ({ available: (await brochureStatus()).available }))
+  .get("/api/brochure", async ({ set }) => {
+    const bytes = await readBrochure();
+    if (!bytes) {
+      set.status = 404;
+      return { error: "Brosur belum tersedia." };
+    }
+    return new Response(new Uint8Array(bytes), {
+      headers: {
+        "Content-Type": "application/pdf",
+        "Content-Disposition": 'attachment; filename="brosur-spsb-2027.pdf"',
+        "Cache-Control": "no-store, max-age=0",
+        "X-Content-Type-Options": "nosniff",
+      },
+    });
   })
   .get("/api/regions/:level", async ({ params, query, set }) => {
     try {
@@ -429,6 +451,50 @@ export const app = new Elysia({ name: "spsb-waitinglist" })
       console.error("Admin system dashboard could not read database status");
     }
     return base;
+  })
+  .get("/api/admin/brochure", async ({ request, set }) => {
+    if (!requireAdmin(request, set)) return { error: "Silakan login sebagai admin." };
+    return brochureStatus();
+  })
+  .post("/api/admin/brochure", async ({ body, request, set }) => {
+    if (!originIsSame(request)) {
+      set.status = 403;
+      return { error: "Permintaan lintas situs ditolak." };
+    }
+    const session = requireAdmin(request, set);
+    if (!session) return { error: "Silakan login sebagai admin." };
+    if (!requireCsrf(request, session, set)) return { error: "Sesi keamanan tidak valid." };
+    try {
+      const bytes = new Uint8Array(await body.brochure.arrayBuffer());
+      validateBrochure(bytes);
+      await saveBrochure(bytes);
+      return { saved: true, brochure: await brochureStatus() };
+    } catch (error) {
+      if (error instanceof Error && (error.message.startsWith("Brosur harus") || error.message.startsWith("Ukuran brosur"))) {
+        set.status = 400;
+        return { error: error.message };
+      }
+      console.error("Failed to save brochure");
+      set.status = 500;
+      return { error: "Brosur belum dapat disimpan. Silakan coba kembali." };
+    }
+  }, { body: brochureUploadBody })
+  .delete("/api/admin/brochure", async ({ request, set }) => {
+    if (!originIsSame(request)) {
+      set.status = 403;
+      return { error: "Permintaan lintas situs ditolak." };
+    }
+    const session = requireAdmin(request, set);
+    if (!session) return { error: "Silakan login sebagai admin." };
+    if (!requireCsrf(request, session, set)) return { error: "Sesi keamanan tidak valid." };
+    try {
+      await deleteBrochure();
+      return { deleted: true };
+    } catch {
+      console.error("Failed to delete brochure");
+      set.status = 500;
+      return { error: "Brosur belum dapat dihapus. Silakan coba kembali." };
+    }
   })
   .get("/api/admin/settings", async ({ request, set }) => {
     if (!requireAdmin(request, set)) return { error: "Silakan login sebagai admin." };

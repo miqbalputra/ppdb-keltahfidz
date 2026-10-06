@@ -490,6 +490,38 @@
   form.addEventListener("input", updateSubmitState);
   form.addEventListener("change", updateSubmitState);
 
+  const brochureButton = document.querySelector("#download-brochure");
+  const brochureFeedback = document.querySelector("#brochure-feedback");
+  brochureButton.addEventListener("click", async () => {
+    brochureButton.disabled = true;
+    brochureFeedback.hidden = false;
+    brochureFeedback.textContent = "Menyiapkan brosur…";
+    try {
+      // Fetch the file itself rather than trusting an old availability flag: an admin
+      // may upload or delete it while this page remains open.
+      const response = await fetch("/api/brochure", { cache: "no-store" });
+      if (response.status === 404) {
+        brochureFeedback.textContent = "Brosur belum tersedia. Silakan hubungi admin untuk informasi.";
+        return;
+      }
+      if (!response.ok) throw new Error("Brosur belum dapat diunduh. Silakan coba lagi.");
+      const url = URL.createObjectURL(await response.blob());
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = "brosur-spsb-2027.pdf";
+      document.body.append(link);
+      link.click();
+      link.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
+      brochureFeedback.hidden = true;
+      brochureFeedback.textContent = "";
+    } catch {
+      brochureFeedback.textContent = "Brosur belum dapat diunduh. Silakan coba lagi.";
+    } finally {
+      brochureButton.disabled = false;
+    }
+  });
+
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
     setAlert("");
