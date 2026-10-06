@@ -398,10 +398,13 @@
   function openingTime(value) {
     const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/.exec(value || "");
     if (!match) return null;
-    const [, y, m, d, h, min] = match;
-    const date = new Date(Date.UTC(Number(y), Number(m) - 1, Number(d), Number(h) - 7, Number(min)));
-    return date.getUTCFullYear() === Number(y) && date.getUTCMonth() === Number(m) - 1
-      && date.getUTCDate() === Number(d) && Number(h) < 24 && Number(min) < 60 ? date.getTime() : null;
+    const [y, m, d, h, min] = match.slice(1).map(Number);
+    // Validate the calendar date in WIB before converting it to UTC. Midnight WIB
+    // belongs to the previous UTC day (sometimes the previous month/year).
+    const local = new Date(Date.UTC(y, m - 1, d, h, min));
+    if (local.getUTCFullYear() !== y || local.getUTCMonth() !== m - 1
+      || local.getUTCDate() !== d || local.getUTCHours() !== h || local.getUTCMinutes() !== min) return null;
+    return local.getTime() - 7 * 60 * 60 * 1000;
   }
 
   async function initializeForm() {
@@ -424,7 +427,7 @@
       schedule.textContent = "Jadwal pembukaan belum tersedia. Silakan hubungi panitia.";
       return;
     }
-    schedule.textContent = `Dibuka ${new Intl.DateTimeFormat("id-ID", { dateStyle: "long", timeStyle: "short", timeZone: "Asia/Jakarta" }).format(timestamp)} WIB`;
+    schedule.textContent = `Pendaftaran dibuka ${new Intl.DateTimeFormat("id-ID", { dateStyle: "long", timeStyle: "short", timeZone: "Asia/Jakarta" }).format(timestamp)} WIB`;
     const tick = async () => {
       const remaining = timestamp - Date.now();
       if (remaining <= 0) {
