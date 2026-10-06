@@ -42,7 +42,7 @@ describe("frontend accessibility contracts", () => {
       expect(html).toContain('href="/logo-gq.png" type="image/png"');
       expect(html).toContain('class="brand-logo" src="/logo-gq.png"');
       expect(html).toContain('name="description"');
-      expect(html).toContain(`<link rel="stylesheet" href="/app.css?v=${page === "index.html" ? "2027-transfer-card-v1" : page === "success.html" ? "2027-countdown-cta" : "2027-brochure-v1"}">`);
+      expect(html).toContain(`<link rel="stylesheet" href="/app.css?v=${page === "index.html" ? "2027-transfer-card-compact-v1" : page === "success.html" ? "2027-countdown-cta" : "2027-brochure-v1"}">`);
       const ids = attributes(html, "id");
       const idSet = new Set(ids);
       expect(idSet.size).toBe(ids.length);
@@ -97,9 +97,10 @@ describe("frontend accessibility contracts", () => {
     expect(html).toContain('id="payment-account-number">7355331193</span>');
     const css = await stylesheet();
     expect(css).toContain(".copy-account-button { min-width: 70px; min-height: 44px;");
-    expect(css).toContain(".payment-details dl > .payment-account-row { margin-top: 14px;");
+    expect(css).toContain(".payment-details { width: min(440px, calc(100% - 29px));");
+    expect(css).toContain(".payment-details dl > .payment-account-row { margin-top: 8px;");
     expect(css).toContain(".payment-account-value { display: flex; flex-wrap: wrap; align-items: center;");
-    expect(css).toContain(".payment-details dl > div { padding: 12px 0; grid-template-columns: 1fr;");
+    expect(css).toContain(".payment-details dl > div { padding: 8px 0; grid-template-columns: 1fr;");
     expect(html.indexOf('class="payment-details"')).toBeGreaterThan(html.indexOf("Saya sudah kirim bukti transfer biaya pendaftaran Rp. 150.000."));
     expect(html.indexOf('class="payment-details"')).toBeLessThan(html.indexOf('id="bukti-transfer" name="bukti_transfer" type="file"'));
     expect(html).toContain('aria-labelledby="payment-details-title"');
