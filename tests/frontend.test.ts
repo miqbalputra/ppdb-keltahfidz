@@ -42,7 +42,7 @@ describe("frontend accessibility contracts", () => {
       expect(html).toContain('href="/logo-gq.png" type="image/png"');
       expect(html).toContain('class="brand-logo" src="/logo-gq.png"');
       expect(html).toContain('name="description"');
-      expect(html).toContain(`<link rel="stylesheet" href="/app.css?v=${page === "success.html" ? "2027-countdown-cta" : "2027-brochure-v1"}">`);
+      expect(html).toContain(`<link rel="stylesheet" href="/app.css?v=${page === "index.html" ? "2027-account-copy-v1" : page === "success.html" ? "2027-countdown-cta" : "2027-brochure-v1"}">`);
       const ids = attributes(html, "id");
       const idSet = new Set(ids);
       expect(idSet.size).toBe(ids.length);
@@ -73,7 +73,7 @@ describe("frontend accessibility contracts", () => {
     expect(html).toContain('aria-live="off"');
     for (const unit of ["days", "hours", "minutes", "seconds"]) expect(html).toContain(`id="countdown-${unit}"`);
     expect(html).toContain('id="countdown-schedule" aria-live="polite"');
-    expect(html).toContain('src="/app.js?v=2027-brochure-v1"');
+    expect(html).toContain('src="/app.js?v=2027-account-copy-v1"');
     expect(html).toContain('id="download-brochure" type="button"');
     expect(html).toContain('id="brochure-feedback" role="status" aria-live="polite"');
     expect(html).toContain('href="https://wa.me/6285173394373"');
@@ -87,6 +87,19 @@ describe("frontend accessibility contracts", () => {
     expect(html).toContain("Contoh: TAUD Griya Qur'an");
     expect(html).toContain("Kirim Bukti Biaya Pendaftaran");
     expect(html).toContain("Saya sudah kirim bukti transfer biaya pendaftaran Rp. 150.000.");
+    expect(html).toContain("Bank Syariah Indonesia (BSI)");
+    expect(html).toContain("An. Muhamad Riana Yudianto");
+    expect(html).toContain("7355331193");
+    expect(html).toContain('id="copy-account-number" type="button" aria-describedby="account-copy-status"');
+    expect(html).toContain('id="account-copy-status" role="status" aria-live="polite"');
+    expect(html).toContain('id="payment-account-number">7355331193</span>');
+    const css = await stylesheet();
+    expect(css).toContain(".copy-account-button { min-width: 70px; min-height: 44px;");
+    expect(css).toContain(".payment-account-value { display: flex; flex-wrap: wrap; align-items: center;");
+    expect(css).toContain(".payment-account-value { flex-wrap: nowrap; justify-content: space-between;");
+    expect(html.indexOf('class="payment-details"')).toBeGreaterThan(html.indexOf("Saya sudah kirim bukti transfer biaya pendaftaran Rp. 150.000."));
+    expect(html.indexOf('class="payment-details"')).toBeLessThan(html.indexOf('id="bukti-transfer" name="bukti_transfer" type="file"'));
+    expect(html).toContain('aria-labelledby="payment-details-title"');
     expect(html).toContain('id="bukti-transfer" name="bukti_transfer" type="file"');
     expect(html).toContain('accept=".jpg,.jpeg,.png,.pdf,image/jpeg,image/png,application/pdf"');
     expect(html).toContain('class="upload-control"');

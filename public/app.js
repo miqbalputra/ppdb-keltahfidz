@@ -490,6 +490,46 @@
   form.addEventListener("input", updateSubmitState);
   form.addEventListener("change", updateSubmitState);
 
+  const copyAccountButton = document.querySelector("#copy-account-number");
+  const accountCopyStatus = document.querySelector("#account-copy-status");
+  copyAccountButton.addEventListener("click", async () => {
+    const accountNumber = document.querySelector("#payment-account-number").textContent.trim();
+    copyAccountButton.disabled = true;
+    copyAccountButton.setAttribute("aria-busy", "true");
+    accountCopyStatus.textContent = "";
+    try {
+      let copied = false;
+      if (navigator.clipboard?.writeText) {
+        try {
+          await navigator.clipboard.writeText(accountNumber);
+          copied = true;
+        } catch {
+          // Try the selection-based fallback if clipboard permission is unavailable.
+        }
+      }
+      if (!copied) {
+        const field = document.createElement("textarea");
+        field.value = accountNumber;
+        field.setAttribute("readonly", "");
+        field.style.position = "fixed";
+        field.style.opacity = "0";
+        document.body.append(field);
+        field.select();
+        copied = typeof document.execCommand === "function" && document.execCommand("copy");
+        field.remove();
+      }
+      if (!copied) throw new Error("Clipboard unavailable");
+      accountCopyStatus.textContent = "Nomor rekening berhasil disalin.";
+      copyAccountButton.classList.add("is-copied");
+      setTimeout(() => copyAccountButton.classList.remove("is-copied"), 1800);
+    } catch {
+      accountCopyStatus.textContent = "Nomor belum dapat disalin. Silakan tekan lama atau pilih nomor rekening.";
+    } finally {
+      copyAccountButton.disabled = false;
+      copyAccountButton.removeAttribute("aria-busy");
+    }
+  });
+
   const brochureButton = document.querySelector("#download-brochure");
   const brochureFeedback = document.querySelector("#brochure-feedback");
   brochureButton.addEventListener("click", async () => {

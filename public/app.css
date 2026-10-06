@@ -122,6 +122,19 @@ h1, h2, h3, p { margin-top: 0; }
 .eligibility-message.ineligible { color: #844737; background: #fbefec; border-left: 2px solid #bd705c; }
 .honeypot { position: absolute; left: -10000px; width: 1px; height: 1px; overflow: hidden; }
 .turnstile-container { margin-top: 18px; }
+.payment-details { margin: 14px 0 20px 29px; padding: 17px 18px; color: #294e35; background: #f3f6f0; border: 1px solid #d8e1d4; border-left: 3px solid #4f6b57; border-radius: 5px; }
+.payment-details h4 { margin: 0 0 12px; color: #294e35; font-size: 13px; font-weight: 750; }
+.payment-details dl { margin: 0; display: grid; gap: 10px; }
+.payment-details dl > div { display: grid; grid-template-columns: minmax(100px, .7fr) 1.5fr; gap: 12px; align-items: baseline; }
+.payment-details dt { color: #667066; font-size: 11px; }
+.payment-details dd { min-width: 0; margin: 0; color: #303b32; font-size: 12px; font-weight: 650; overflow-wrap: anywhere; }
+.payment-account-value { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.payment-details .payment-account-number { color: #244831; font-size: 16px; font-weight: 800; letter-spacing: .06em; font-variant-numeric: tabular-nums; user-select: all; }
+.copy-account-button { min-width: 70px; min-height: 44px; padding: 7px 11px; display: inline-flex; align-items: center; justify-content: center; gap: 6px; color: #294e35; background: #fff; border: 1px solid #aebdaa; border-radius: 5px; font: inherit; font-size: 12px; font-weight: 750; cursor: pointer; }
+.copy-account-button:hover, .copy-account-button.is-copied { background: #eaf1e8; }
+.copy-account-button.is-copied { border-color: #6e9875; }
+.copy-account-button:focus-visible { outline: 3px solid rgba(40,83,67,.3); outline-offset: 2px; }
+.copy-account-button[aria-busy="true"] { opacity: .7; cursor: wait; }
 .confirm-row { position: relative; display: grid; grid-template-columns: 18px 1fr; gap: 11px; align-items: start; margin-top: 27px; color: #70776d; font-size: 10px; line-height: 1.65; cursor: pointer; }
 .confirm-row input { position: absolute; width: 18px; height: 18px; margin: 0; opacity: 0; cursor: pointer; }
 .custom-check { width: 17px; height: 17px; display: grid; place-items: center; border: 1px solid #b9beb3; border-radius: 2px; background: #fff; }
@@ -692,6 +705,11 @@ td { color: #514f49; border-top-color: #efefed; }
   .countdown-unit span { margin-top: 8px; }
   .countdown-schedule { border-radius: 14px; }
   .opening-contact { margin-top: 32px; }
+  .payment-details { margin: 12px 0 18px 0; padding: 14px; }
+  .payment-details dl > div { grid-template-columns: 1fr; gap: 5px; }
+  .payment-account-value { flex-wrap: nowrap; justify-content: space-between; gap: 8px; }
+  .payment-details .payment-account-number { font-size: 15px; letter-spacing: .045em; }
+  .copy-account-button { flex: none; }
 }
 @media (prefers-reduced-motion: reduce) { .countdown-contact { transition: none; } .countdown-contact:hover { transform: none; } }
 

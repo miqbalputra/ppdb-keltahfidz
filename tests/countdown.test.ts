@@ -9,6 +9,7 @@ function browserHarness(openingDateTime: string, start: string) {
   let serverOpen = false;
   let brochureAvailable = false;
   let downloads = 0;
+  let copiedAccount = "";
   let interval: (() => void) | undefined;
   let retry: (() => void) | undefined;
   const nodes = new Map<string, any>();
@@ -26,6 +27,7 @@ function browserHarness(openingDateTime: string, start: string) {
     return nodes.get(selector);
   };
   const region = node("#region-stub");
+  node("#payment-account-number").textContent = "7355331193";
   const form = node("#waitinglist-form");
   form.elements = new Proxy({}, { get: (_, key: string) => node(`#input-${key}`) });
   form.querySelectorAll = (selector: string) => selector === "select[data-region]" ? [region] : [];
@@ -49,6 +51,7 @@ function browserHarness(openingDateTime: string, start: string) {
   });
   runInNewContext(script, {
     document, Date: FakeDate, fetch, Intl, AbortController,
+    navigator: { clipboard: { writeText: async (value: string) => { copiedAccount = value; } } },
     URL: { createObjectURL: () => "blob:test-brochure", revokeObjectURL: () => {} },
     Option: class { dataset = {}; constructor(public text: string, public value: string) {} },
     setInterval: (fn: () => void) => { interval = fn; return 1; },
@@ -62,6 +65,8 @@ function browserHarness(openingDateTime: string, start: string) {
     openOnServer: () => { serverOpen = true; },
     brochureIsAvailable: () => { brochureAvailable = true; },
     downloadCount: () => downloads,
+    clickCopyAccount: async () => { await node("#copy-account-number").listeners.click(); await settle(); },
+    copiedAccount: () => copiedAccount,
     clickBrochure: async () => { node("#download-brochure").listeners.click(); await settle(); },
     tick: async () => { interval?.(); await settle(); },
     retry: async () => { retry?.(); await settle(); },
@@ -96,6 +101,15 @@ describe("browser opening countdown", () => {
     await browser.clickBrochure();
     expect(browser.downloadCount()).toBe(1);
     expect(browser.node("#brochure-feedback").hidden).toBe(true);
+  });
+
+  test("copies the account number and announces success to assistive technology", async () => {
+    const browser = browserHarness("2027-01-01T00:01", "2026-12-31T17:00:00Z");
+    await browser.settle();
+    await browser.clickCopyAccount();
+    expect(browser.copiedAccount()).toBe("7355331193");
+    expect(browser.node("#account-copy-status").textContent).toBe("Nomor rekening berhasil disalin.");
+    expect(browser.node("#copy-account-number").disabled).toBe(false);
   });
 
   test("keeps registration hidden until server confirms the opening boundary", async () => {
