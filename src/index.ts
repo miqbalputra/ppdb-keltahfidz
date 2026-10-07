@@ -46,7 +46,7 @@ import {
   encryptSensitiveRecord,
 } from "./lib/encryption";
 import { detectPaymentProofMime } from "./lib/payment-proof";
-import { brochureStatus, deleteBrochure, readBrochure, saveBrochure, validateBrochure } from "./lib/brochure";
+import { brochureStatus, deleteBrochure, detectBrochureMime, readBrochure, saveBrochure, validateBrochure } from "./lib/brochure";
 import {
   generateParticipantPdf,
   generateParticipantXlsx,
@@ -294,10 +294,16 @@ export const app = new Elysia({ name: "spsb-waitinglist" })
       set.status = 404;
       return { error: "Brosur belum tersedia." };
     }
+    const mime = detectBrochureMime(bytes);
+    if (!mime) {
+      set.status = 404;
+      return { error: "Brosur belum tersedia." };
+    }
+    const extension = mime === "image/png" ? "png" : "jpg";
     return new Response(new Uint8Array(bytes), {
       headers: {
-        "Content-Type": "application/pdf",
-        "Content-Disposition": 'attachment; filename="brosur-spsb-2027.pdf"',
+        "Content-Type": mime,
+        "Content-Disposition": `attachment; filename="brosur-spsb-2027.${extension}"`,
         "Cache-Control": "no-store, max-age=0",
         "X-Content-Type-Options": "nosniff",
       },

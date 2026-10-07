@@ -545,10 +545,11 @@
         return;
       }
       if (!response.ok) throw new Error("Brosur belum dapat diunduh. Silakan coba lagi.");
-      const url = URL.createObjectURL(await response.blob());
+      const brochure = await response.blob();
+      const url = URL.createObjectURL(brochure);
       const link = document.createElement("a");
       link.href = url;
-      link.download = "brosur-spsb-2027.pdf";
+      link.download = `brosur-spsb-2027.${brochure.type === "image/png" ? "png" : "jpg"}`;
       document.body.append(link);
       link.click();
       link.remove();

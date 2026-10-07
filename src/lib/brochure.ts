@@ -4,16 +4,26 @@ import { join } from "node:path";
 import { DATA_DIR, MAX_BROCHURE_BYTES } from "../config";
 
 // The name and location are fixed: client-provided file names never become paths.
-const brochurePath = join(DATA_DIR, "spsb-brochure.pdf");
+const brochurePath = join(DATA_DIR, "spsb-brochure.image");
+
+export type BrochureMime = "image/jpeg" | "image/png";
+
+const PNG_SIGNATURE = Uint8Array.of(0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a);
+
+export function detectBrochureMime(bytes: Uint8Array): BrochureMime | null {
+  if (bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) return "image/jpeg";
+  if (bytes.length >= PNG_SIGNATURE.length && PNG_SIGNATURE.every((byte, index) => bytes[index] === byte)) {
+    return "image/png";
+  }
+  return null;
+}
 
 export function validateBrochure(bytes: Uint8Array): void {
   if (!bytes.length || bytes.length > MAX_BROCHURE_BYTES) {
-    throw new Error("Ukuran brosur PDF maksimal 10 MB.");
+    throw new Error("Ukuran brosur maksimal 10 MB.");
   }
-  const beginning = Buffer.from(bytes.subarray(0, 8)).toString("ascii");
-  const end = Buffer.from(bytes.subarray(Math.max(0, bytes.length - 1024))).toString("latin1").trimEnd();
-  if (!/^%PDF-\d\.\d/.test(beginning) || !end.endsWith("%%EOF")) {
-    throw new Error("Brosur harus berupa file PDF yang valid.");
+  if (!detectBrochureMime(bytes)) {
+    throw new Error("Brosur harus berupa gambar JPG atau PNG yang valid.");
   }
 }
 

@@ -359,8 +359,9 @@
     event.preventDefault();
     showAlert(brochureAlert, "");
     const file = brochureFile.files?.[0];
-    if (!file || file.size > 10 * 1024 * 1024) {
-      showAlert(brochureAlert, "Pilih brosur PDF dengan ukuran maksimal 10 MB.");
+    const isImage = file && (["image/jpeg", "image/png"].includes(file.type) || /\.(jpe?g|png)$/i.test(file.name));
+    if (!file || !isImage || file.size > 10 * 1024 * 1024) {
+      showAlert(brochureAlert, "Pilih brosur JPG atau PNG dengan ukuran maksimal 10 MB.");
       return;
     }
     brochureSave.disabled = true;

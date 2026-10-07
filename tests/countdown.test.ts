@@ -39,7 +39,7 @@ function browserHarness(openingDateTime: string, start: string) {
   const FakeDate = class extends Date { static now() { return now; } };
   const fetch = async (url: string) => url === "/api/brochure" ? {
     ok: brochureAvailable, status: brochureAvailable ? 200 : 404,
-    blob: async () => new Blob(["%PDF-1.7\n%%EOF"]),
+    blob: async () => new Blob(["\x89PNG\r\n\x1a\n"], { type: "image/png" }),
   } : ({
     ok: true,
     json: async () => url === "/api/config"
@@ -90,7 +90,7 @@ describe("browser opening countdown", () => {
     expect(browser.classes.has("config-pending")).toBe(false);
   });
 
-  test("brochure button stays available and reports absence until a PDF is uploaded", async () => {
+  test("brochure button stays available and reports absence until an image is uploaded", async () => {
     const browser = browserHarness("2027-01-01T00:01", "2026-12-31T17:00:00Z");
     await browser.settle();
     await browser.clickBrochure();

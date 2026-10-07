@@ -142,7 +142,7 @@ describe("frontend accessibility contracts", () => {
     expect(html).toContain('name="openingCountdownEnabled"');
     expect(html).toContain('name="openingDateTime"');
     expect(html).toContain('id="brochure-form"');
-    expect(html).toContain('name="brochure" accept=".pdf,application/pdf"');
+    expect(html).toContain('name="brochure" accept=".jpg,.jpeg,.png,image/jpeg,image/png"');
     expect(html).toContain('id="brochure-alert" role="status"');
     expect(html).toContain('id="brochure-delete"');
     expect(html).toContain('id="export-button"');

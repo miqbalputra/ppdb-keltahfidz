@@ -9,7 +9,7 @@
   <title>Dashboard Panitia — SPSB 2027</title>
   <link rel="icon" href="/logo-gq.png" type="image/png">
   <link rel="stylesheet" href="/app.css?v=2027-brochure-v1">
-  <script src="/admin.js?v=2027-brochure-v1" defer></script>
+  <script src="/admin.js?v=2027-brochure-image-v1" defer></script>
 </head>
 <body class="admin-page">
   <a class="skip-link" href="#main-content">Lewati ke konten utama</a>
@@ -59,7 +59,7 @@
         <p id="brochure-current" role="status" aria-live="polite">Memeriksa brosur…</p>
         <div class="form-alert" id="brochure-alert" role="status" aria-live="polite" hidden></div>
         <form id="brochure-form" class="brochure-form">
-          <label class="field"><span>Unggah brosur PDF (maksimal 10 MB)</span><input id="brochure-file" type="file" name="brochure" accept=".pdf,application/pdf" required></label>
+          <label class="field"><span>Unggah brosur gambar JPG atau PNG (maksimal 10 MB)</span><input id="brochure-file" type="file" name="brochure" accept=".jpg,.jpeg,.png,image/jpeg,image/png" required></label>
           <div class="brochure-actions"><button class="button button-primary" id="brochure-save" type="submit">Unggah / Ganti brosur</button><a class="button button-outline" id="brochure-preview" href="/api/brochure" hidden>Download brosur saat ini</a><button class="button button-outline" id="brochure-delete" type="button" disabled>Hapus brosur</button></div>
         </form>
         <p class="field-hint">Brosur disimpan pada volume data persisten dan tampil pada halaman “Segera Dibuka”.</p>
