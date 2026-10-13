@@ -42,7 +42,7 @@ describe("frontend accessibility contracts", () => {
       expect(html).toContain('href="/logo-gq.png" type="image/png"');
       expect(html).toContain('class="brand-logo" src="/logo-gq.png"');
       expect(html).toContain('name="description"');
-      expect(html).toContain(`<link rel="stylesheet" href="/app.css?v=${page === "index.html" ? "2027-public-clean-v2" : page === "success.html" ? "2027-countdown-cta" : "2027-brochure-v1"}">`);
+      expect(html).toContain(`<link rel="stylesheet" href="/app.css?v=${page === "index.html" ? "2027-brochure-gold-badge-v3" : page === "success.html" ? "2027-countdown-cta" : "2027-brochure-v1"}">`);
       const ids = attributes(html, "id");
       const idSet = new Set(ids);
       expect(idSet.size).toBe(ids.length);
@@ -172,6 +172,16 @@ describe("frontend accessibility contracts", () => {
     expect(adminScript).toContain("if (feeAccepted)");
     expect(adminScript).toContain("fee-consent-status accepted");
     expect(adminScript).not.toContain("Persetujuan biaya belum tercatat");
+  });
+
+  test("brochure badge label and number have readable contrast against the gold background", async () => {
+    const css = await stylesheet();
+    const badge = css.match(/\.opening-contact \.brochure-download-count\s*\{([^}]+)\}/)?.[1];
+    const number = css.match(/\.brochure-download-count strong\s*\{([^}]+)\}/)?.[1];
+    if (!badge || !number) throw new Error("Missing brochure badge styles");
+    const background = colorToken(badge, "background");
+    expect(contrastRatio(colorToken(badge, "color"), background)).toBeGreaterThanOrEqual(4.5);
+    expect(contrastRatio(colorToken(number, "color"), background)).toBeGreaterThanOrEqual(4.5);
   });
 
   test("primary palette text colors meet WCAG AA contrast on their intended surfaces", async () => {
