@@ -47,6 +47,7 @@ import {
 } from "./lib/encryption";
 import { detectPaymentProofMime } from "./lib/payment-proof";
 import { brochureStatus, deleteBrochure, detectBrochureMime, readBrochure, saveBrochure, validateBrochure } from "./lib/brochure";
+import { getBrochureDownloadCount, recordBrochureDownload } from "./lib/brochure-downloads";
 import {
   generateParticipantPdf,
   generateParticipantXlsx,
@@ -287,8 +288,15 @@ export const app = new Elysia({ name: "spsb-waitinglist" })
       turnstileSiteKey: TURNSTILE_ENABLED ? TURNSTILE_SITE_KEY : "",
     };
   })
-  .get("/api/brochure/status", async () => ({ available: (await brochureStatus()).available }))
-  .get("/api/brochure", async ({ set }) => {
+  .get("/api/brochure/status", async ({ set }) => {
+    try {
+      return { available: (await brochureStatus()).available, downloadCount: await getBrochureDownloadCount() };
+    } catch {
+      set.status = 503;
+      return { error: "Informasi brosur belum dapat dimuat." };
+    }
+  })
+  .get("/api/brochure", async ({ request, set }) => {
     const bytes = await readBrochure();
     if (!bytes) {
       set.status = 404;
@@ -300,7 +308,7 @@ export const app = new Elysia({ name: "spsb-waitinglist" })
       return { error: "Brosur belum tersedia." };
     }
     const extension = mime === "image/png" ? "png" : "jpg";
-    return new Response(new Uint8Array(bytes), {
+    const response = new Response(new Uint8Array(bytes), {
       headers: {
         "Content-Type": mime,
         "Content-Disposition": `attachment; filename="brosur-spsb-2027.${extension}"`,
@@ -308,6 +316,15 @@ export const app = new Elysia({ name: "spsb-waitinglist" })
         "X-Content-Type-Options": "nosniff",
       },
     });
+    if (request.method === "GET") {
+      try {
+        await recordBrochureDownload();
+      } catch {
+        set.status = 503;
+        return { error: "Brosur belum dapat diunduh. Silakan coba lagi." };
+      }
+    }
+    return response;
   })
   .get("/api/regions/:level", async ({ params, query, set }) => {
     try {

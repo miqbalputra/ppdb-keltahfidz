@@ -1,5 +1,5 @@
-import { afterAll, describe, expect, test } from "bun:test";
-import { mkdtemp, readdir, rm } from "node:fs/promises";
+import { afterAll, describe, expect, mock, test } from "bun:test";
+import { mkdir, mkdtemp, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -9,6 +9,19 @@ process.env.ADMIN_USERNAME = "brochure-test-admin";
 process.env.ADMIN_PASSWORD = "brochure-test-password";
 process.env.APP_SECRET = "brochure-test-secret-with-at-least-32-characters";
 process.env.DATA_ENCRYPTION_KEY = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+let totalDownloads = 0;
+let storageAvailable = true;
+// Endpoint tests isolate MariaDB; the opt-in integration suite tests real storage.
+mock.module("../src/lib/brochure-downloads", () => ({
+  getBrochureDownloadCount: async () => {
+    if (!storageAvailable) throw new Error("Database unavailable");
+    return totalDownloads;
+  },
+  recordBrochureDownload: async () => {
+    if (!storageAvailable) throw new Error("Database unavailable");
+    totalDownloads += 1;
+  },
+}));
 const { app } = await import("../src/index");
 const { readBrochure, saveBrochure, validateBrochure, brochureStatus, detectBrochureMime } = await import("../src/lib/brochure");
 
@@ -49,7 +62,7 @@ describe("admin brochure and public download", () => {
     const absent = await app.handle(new Request(url("/api/brochure")));
     expect(absent.status).toBe(404);
     expect(await absent.json()).toMatchObject({ error: "Brosur belum tersedia." });
-    expect(await (await app.handle(new Request(url("/api/brochure/status")))).json()).toEqual({ available: false });
+    expect(await (await app.handle(new Request(url("/api/brochure/status")))).json()).toEqual({ available: false, downloadCount: 0 });
     expect((await app.handle(new Request(url("/api/admin/brochure")))).status).toBe(401);
     expect((await upload(jpeg("first"))).status).toBe(401);
 
@@ -75,7 +88,7 @@ describe("admin brochure and public download", () => {
     expect((await upload(oversizedImage, headers)).status).toBe(400);
     expect(await brochureStatus()).toMatchObject({ available: false });
     expect((await upload(png("first"), headers)).status).toBe(200);
-    expect(await (await app.handle(new Request(url("/api/brochure/status")))).json()).toEqual({ available: true });
+    expect(await (await app.handle(new Request(url("/api/brochure/status")))).json()).toEqual({ available: true, downloadCount: 0 });
     expect(await (await app.handle(new Request(url("/api/admin/brochure"), { headers: { cookie } }))).json())
       .toMatchObject({ available: true, size: png("first").length });
     const first = await app.handle(new Request(url("/api/brochure")));
@@ -97,6 +110,51 @@ describe("admin brochure and public download", () => {
     expect((await app.handle(new Request(url("/api/admin/brochure"), { method: "DELETE", headers: { host: "localhost", origin: "http://localhost" } }))).status).toBe(401);
     expect((await app.handle(new Request(url("/api/admin/brochure"), { method: "DELETE", headers: { host: "localhost", ...headers, origin: "http://localhost" } }))).status).toBe(200);
     expect((await app.handle(new Request(url("/api/brochure")))).status).toBe(404);
-    expect(await (await app.handle(new Request(url("/api/brochure/status")))).json()).toEqual({ available: false });
+    expect(await (await app.handle(new Request(url("/api/brochure/status")))).json()).toEqual({ available: false, downloadCount: 2 });
+  });
+
+  test("counts repeated successful downloads but not status, HEAD, invalid files, read failures, or unavailable storage", async () => {
+    const { deleteBrochure } = await import("../src/lib/brochure");
+    const before = totalDownloads;
+    await saveBrochure(png("repeat"));
+    for (let i = 0; i < 2; i += 1) {
+      const response = await app.handle(new Request(url("/api/brochure")));
+      expect(response.status).toBe(200);
+      expect(Buffer.from(await response.arrayBuffer()).equals(png("repeat"))).toBe(true);
+    }
+    const expected = before + 2;
+    const status = await app.handle(new Request(url("/api/brochure/status")));
+    expect(status.headers.get("cache-control")).toContain("no-store");
+    expect(await status.json()).toEqual({ available: true, downloadCount: expected });
+    const head = await app.handle(new Request(url("/api/brochure"), { method: "HEAD" }));
+    expect([200, 404]).toContain(head.status);
+    expect(totalDownloads).toBe(expected);
+
+    storageAvailable = false;
+    try {
+      const failed = await app.handle(new Request(url("/api/brochure")));
+      expect(failed.status).toBe(503);
+      expect(failed.headers.get("content-disposition")).toBeNull();
+      expect(await failed.json()).toMatchObject({ error: expect.stringContaining("coba lagi") });
+      expect((await app.handle(new Request(url("/api/brochure/status")))).status).toBe(503);
+      expect(totalDownloads).toBe(expected);
+    } finally {
+      storageAvailable = true;
+    }
+
+    const path = join(temporaryData, "spsb-brochure.image");
+    await writeFile(path, "invalid image");
+    expect((await app.handle(new Request(url("/api/brochure")))).status).toBe(404);
+    await deleteBrochure();
+    await mkdir(path);
+    try {
+      expect((await app.handle(new Request(url("/api/brochure")))).status).toBe(500);
+      expect(totalDownloads).toBe(expected);
+    } finally {
+      await rm(path, { recursive: true, force: true });
+    }
+    expect((await app.handle(new Request(url("/api/brochure")))).status).toBe(404);
+    expect(await (await app.handle(new Request(url("/api/brochure/status")))).json())
+      .toEqual({ available: false, downloadCount: expected });
   });
 });

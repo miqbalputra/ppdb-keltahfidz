@@ -4,11 +4,14 @@ import { runInNewContext } from "node:vm";
 
 const script = await readFile(new URL("../public/app.js", import.meta.url), "utf8");
 
-function browserHarness(openingDateTime: string, start: string) {
+function browserHarness(openingDateTime: string, start: string, initialCount = 0) {
   let now = new Date(start).getTime();
   let serverOpen = false;
   let brochureAvailable = false;
   let downloads = 0;
+  let totalDownloads = initialCount;
+  let brochureStatusAvailable = true;
+  let brochureDownloadFails = false;
   let copiedAccount = "";
   let interval: (() => void) | undefined;
   let retry: (() => void) | undefined;
@@ -37,18 +40,29 @@ function browserHarness(openingDateTime: string, start: string) {
     createElement: () => node("#created"),
   };
   const FakeDate = class extends Date { static now() { return now; } };
-  const fetch = async (url: string) => url === "/api/brochure" ? {
-    ok: brochureAvailable, status: brochureAvailable ? 200 : 404,
-    blob: async () => new Blob(["\x89PNG\r\n\x1a\n"], { type: "image/png" }),
-  } : ({
-    ok: true,
-    json: async () => url === "/api/config"
-      ? {
-        cutoffDate: "2027-07-01", eligibleBirthdate: "2021-01-01", minAgeYears: 6, minAgeMonths: 6,
-        openingCountdownEnabled: true, openingDateTime, registrationOpen: serverOpen, turnstileSiteKey: "",
-      }
-      : { items: [] },
-  });
+  const fetch = async (url: string) => {
+    if (url === "/api/brochure") {
+      const ok = brochureAvailable && !brochureDownloadFails;
+      if (ok) totalDownloads += 1;
+      return {
+        ok, status: brochureDownloadFails ? 503 : brochureAvailable ? 200 : 404,
+        blob: async () => new Blob(["\x89PNG\r\n\x1a\n"], { type: "image/png" }),
+      };
+    }
+    if (url === "/api/brochure/status") return {
+      ok: brochureStatusAvailable,
+      json: async () => ({ available: brochureAvailable, downloadCount: totalDownloads }),
+    };
+    return {
+      ok: true,
+      json: async () => url === "/api/config"
+        ? {
+          cutoffDate: "2027-07-01", eligibleBirthdate: "2021-01-01", minAgeYears: 6, minAgeMonths: 6,
+          openingCountdownEnabled: true, openingDateTime, registrationOpen: serverOpen, turnstileSiteKey: "",
+        }
+        : { items: [] },
+    };
+  };
   runInNewContext(script, {
     document, Date: FakeDate, fetch, Intl, AbortController,
     navigator: { clipboard: { writeText: async (value: string) => { copiedAccount = value; } } },
@@ -64,6 +78,8 @@ function browserHarness(openingDateTime: string, start: string) {
     setTime: (time: string) => { now = new Date(time).getTime(); },
     openOnServer: () => { serverOpen = true; },
     brochureIsAvailable: () => { brochureAvailable = true; },
+    statusFails: () => { brochureStatusAvailable = false; },
+    downloadFails: () => { brochureDownloadFails = true; },
     downloadCount: () => downloads,
     clickCopyAccount: async () => { await node("#copy-account-number").listeners.click(); await settle(); },
     copiedAccount: () => copiedAccount,
@@ -93,14 +109,48 @@ describe("browser opening countdown", () => {
   test("brochure button stays available and reports absence until an image is uploaded", async () => {
     const browser = browserHarness("2027-01-01T00:01", "2026-12-31T17:00:00Z");
     await browser.settle();
+    expect(browser.node("#brochure-download-count").textContent).toBe("Sudah diunduh 0 kali");
+    expect(browser.node("#brochure-download-count").hidden).toBe(false);
     await browser.clickBrochure();
     expect(browser.node("#brochure-feedback").textContent).toContain("Brosur belum tersedia");
     expect(browser.node("#download-brochure").disabled).toBe(false);
     expect(browser.downloadCount()).toBe(0);
+    expect(browser.node("#brochure-download-count").textContent).toBe("Sudah diunduh 0 kali");
     browser.brochureIsAvailable();
     await browser.clickBrochure();
     expect(browser.downloadCount()).toBe(1);
     expect(browser.node("#brochure-feedback").hidden).toBe(true);
+    expect(browser.node("#brochure-download-count").textContent).toBe("Sudah diunduh 1 kali");
+    await browser.clickBrochure();
+    expect(browser.downloadCount()).toBe(2);
+    expect(browser.node("#brochure-download-count").textContent).toBe("Sudah diunduh 2 kali");
+  });
+
+  test("formats the persisted total in Indonesian and does not increment a failed download", async () => {
+    const browser = browserHarness("2027-01-01T00:01", "2026-12-31T17:00:00Z", 1234);
+    await browser.settle();
+    expect(browser.node("#brochure-download-count").textContent).toBe("Sudah diunduh 1.234 kali");
+    browser.brochureIsAvailable();
+    browser.downloadFails();
+    await browser.clickBrochure();
+    expect(browser.downloadCount()).toBe(0);
+    expect(browser.node("#brochure-download-count").textContent).toBe("Sudah diunduh 1.234 kali");
+    expect(browser.node("#brochure-feedback").textContent).toContain("coba lagi");
+    expect(browser.node("#download-brochure").disabled).toBe(false);
+  });
+
+  test("hides unavailable metrics without interfering with a successful download", async () => {
+    const browser = browserHarness("2027-01-01T00:01", "2026-12-31T17:00:00Z");
+    browser.statusFails();
+    await browser.settle();
+    expect(browser.node("#brochure-download-count").hidden).toBe(true);
+    expect(browser.node("#brochure-download-count").textContent).toBe("");
+    browser.brochureIsAvailable();
+    await browser.clickBrochure();
+    expect(browser.downloadCount()).toBe(1);
+    expect(browser.node("#brochure-feedback").hidden).toBe(true);
+    expect(browser.node("#brochure-download-count").hidden).toBe(true);
+    expect(browser.node("#download-brochure").disabled).toBe(false);
   });
 
   test("copies the account number and announces success to assistive technology", async () => {

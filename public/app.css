@@ -692,6 +692,7 @@ td { color: #514f49; border-top-color: #efefed; }
 .countdown-brochure:hover:not(:disabled) { background: #edf3e9; }
 .countdown-brochure:focus-visible { outline: 3px solid #9c7028; outline-offset: 4px; }
 .countdown-brochure:disabled { opacity: .7; cursor: wait; }
+.opening-contact .brochure-download-count { max-width: 405px; margin: 8px auto 0; color: #335942; font-size: 13px; font-weight: 650; font-variant-numeric: tabular-nums; line-height: 1.5; overflow-wrap: anywhere; }
 .brochure-feedback { max-width: 405px; margin: 12px auto 0; color: #294e35; font-size: 13px; line-height: 1.5; }
 .countdown-mode .topbar-link, .countdown-mode .hero, .countdown-mode .steps-band, .countdown-mode .form-section,
 .config-pending .topbar-link, .config-pending .hero, .config-pending .steps-band, .config-pending .form-section { display: none !important; }

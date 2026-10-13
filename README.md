@@ -76,6 +76,8 @@ Dashboard di `/admin` mencakup:
 - Pengaturan tanggal acuan usia, usia minimum, link grup WhatsApp, dan jadwal halaman “Segera Dibuka”. Perubahan disimpan di MariaDB.
 - Unggah, ganti, atau hapus brosur SPSB dalam format JPG/PNG (maksimal 10 MB). Tombol Download Brosur selalu terlihat pada halaman countdown; sebelum diunggah atau setelah dihapus, pengunjung mendapat pesan “Brosur belum tersedia”. Gambar tersimpan sebagai file di volume persisten `DATA_DIR`. Setelah pembaruan dari versi PDF, unggah brosur gambar agar kembali tersedia.
 
+Pada landing page “Segera Dibuka”, teks **“Sudah diunduh X kali”** di bawah tombol brosur menunjukkan total respons unduhan yang berhasil dilayani server (bukan jumlah orang unik atau kepastian berkas disimpan di perangkat). Hitungan dimulai dari 0 saat fitur dipasang, tanpa menebak riwayat sebelumnya; unduhan berulang dan unduhan langsung dari endpoint yang sama, termasuk tombol admin, ikut dihitung. Nilai disimpan secara atomik di MariaDB pada kunci internal `brochureDownloadCount` dalam `system_settings`, tetap ada setelah restart/ganti/hapus brosur dan perubahan pengaturan admin. Status, HEAD, serta unduhan yang gagal sebelum respons sukses tidak menambah hitungan. Tampilan mengambil angka asli saat countdown dimuat dan memperbaruinya setelah unduhan berhasil; jika status gagal dimuat, angka disembunyikan. Jika pencatatan database gagal, endpoint unduhan mengembalikan 503 tanpa melayani attachment.
+
 Kredensial admin, `APP_SECRET`, URL webhook n8n, dan secret Turnstile tetap dikelola melalui environment Coolify—bukan ditampilkan atau disimpan sebagai pengaturan biasa di dashboard.
 
 ## Perlindungan data dan operasional keamanan
@@ -117,6 +119,8 @@ Dropdown wilayah menggunakan proxy backend ke [EMSIFA API Wilayah Indonesia v2](
 ## API utama
 
 - `GET /api/config`
+- `GET /api/brochure/status` — `{ available, downloadCount }`, tidak menambah hitungan dan tidak di-cache.
+- `GET /api/brochure` — unduh JPG/PNG; respons sukses menambah total satu kali, brosur belum tersedia mengembalikan 404.
 - `GET /api/regions/provinces`
 - `GET /api/regions/regencies?parent_id=<id>`
 - `GET /api/regions/districts?parent_id=<id>`

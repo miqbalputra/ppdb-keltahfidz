@@ -1,7 +1,7 @@
 import { afterAll, expect, test } from "bun:test";
 import ExcelJS from "exceljs";
 import { PDFDocument } from "pdf-lib";
-import { unlink } from "node:fs/promises";
+import { readFile, unlink, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 
 const testDatabaseUrl = process.env.TEST_DATABASE_URL;
@@ -118,6 +118,66 @@ test.skipIf(!testDatabaseUrl)("MariaDB-backed public, admin, security, and notif
     expect(decryptSensitiveRecord(encryptedLegacyRows[0]!).nama_anak).toBe("Legacy Integration Child");
 
     const { app } = await import("../src/index");
+    // Exercise the new metric against real MariaDB, including concurrent first
+    // inserts and an independent connection (no in-memory counter can pass).
+    {
+      const { systemSettings } = await import("../src/db/schema");
+      const { BROCHURE_DOWNLOAD_COUNT_KEY, getBrochureDownloadCount } = await import("../src/lib/brochure-downloads");
+      const { saveBrochure, deleteBrochure } = await import("../src/lib/brochure");
+      const [previousCount] = await db.select().from(systemSettings)
+        .where(eq(systemSettings.setting_key, BROCHURE_DOWNLOAD_COUNT_KEY));
+      const brochurePath = resolve(process.env.DATA_DIR!, "spsb-brochure.image");
+      const previousBrochure = await readFile(brochurePath).catch((error: NodeJS.ErrnoException) => {
+        if (error.code === "ENOENT") return null;
+        throw error;
+      });
+      try {
+        await db.delete(systemSettings).where(eq(systemSettings.setting_key, BROCHURE_DOWNLOAD_COUNT_KEY));
+        expect(await getBrochureDownloadCount()).toBe(0);
+        await saveBrochure(Buffer.from([0xff, 0xd8, 0xff, 1]));
+        const downloads = await Promise.all(Array.from({ length: 12 }, () =>
+          app.handle(new Request("http://localhost/api/brochure"))));
+        for (const response of downloads) {
+          expect(response.status).toBe(200);
+          expect(Buffer.from(await response.arrayBuffer())).toEqual(Buffer.from([0xff, 0xd8, 0xff, 1]));
+        }
+        expect(await getBrochureDownloadCount()).toBe(12);
+        const status = await app.handle(new Request("http://localhost/api/brochure/status"));
+        expect(await status.json()).toEqual({ available: true, downloadCount: 12 });
+        await settingsModule.saveSystemSettings(testSettings);
+        await settingsModule.seedSystemSettings();
+        expect(await getBrochureDownloadCount()).toBe(12);
+        await saveBrochure(Buffer.from([0xff, 0xd8, 0xff, 2]));
+        expect(await getBrochureDownloadCount()).toBe(12);
+        const repeated = await app.handle(new Request("http://localhost/api/brochure"));
+        expect(repeated.status).toBe(200);
+        await repeated.arrayBuffer();
+        await deleteBrochure();
+        expect((await app.handle(new Request("http://localhost/api/brochure"))).status).toBe(404);
+        expect(await getBrochureDownloadCount()).toBe(13);
+        const mysql = await import("mysql2/promise");
+        const connection = await mysql.createConnection(testDatabaseUrl!);
+        try {
+          const [rows] = await connection.query<import("mysql2").RowDataPacket[]>(
+            "SELECT setting_value FROM system_settings WHERE setting_key = ?", [BROCHURE_DOWNLOAD_COUNT_KEY]);
+          expect(rows[0]!.setting_value).toBe("13");
+        } finally {
+          await connection.end();
+        }
+      } finally {
+        if (previousCount) {
+          await db.insert(systemSettings).values(previousCount).onDuplicateKeyUpdate({
+            set: { setting_value: previousCount.setting_value, updated_at: previousCount.updated_at },
+          });
+        } else {
+          await db.delete(systemSettings).where(eq(systemSettings.setting_key, BROCHURE_DOWNLOAD_COUNT_KEY));
+        }
+        if (previousBrochure) await writeFile(brochurePath, previousBrochure);
+        else await unlink(brochurePath).catch((error: NodeJS.ErrnoException) => {
+          if (error.code !== "ENOENT") throw error;
+        });
+      }
+    }
     const nonce = crypto.randomUUID().slice(0, 8);
     const proofSecret = `PAYMENT_PROOF_BYTES_ONLY_${nonce}`;
     const requestHeaders = {

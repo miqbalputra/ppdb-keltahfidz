@@ -422,6 +422,7 @@
     const schedule = document.querySelector("#countdown-schedule");
     panel.hidden = false;
     document.body.classList.add("countdown-mode");
+    refreshBrochureDownloadCount();
     if (timestamp === null) {
       document.querySelector("#countdown-clock").hidden = true;
       schedule.textContent = "Jadwal pembukaan belum tersedia. Silakan hubungi panitia.";
@@ -532,6 +533,23 @@
 
   const brochureButton = document.querySelector("#download-brochure");
   const brochureFeedback = document.querySelector("#brochure-feedback");
+  const brochureDownloadCount = document.querySelector("#brochure-download-count");
+
+  async function refreshBrochureDownloadCount() {
+    try {
+      const response = await fetch("/api/brochure/status", { cache: "no-store" });
+      if (!response.ok) throw new Error("Status unavailable");
+      const { downloadCount } = await response.json();
+      if (!Number.isSafeInteger(downloadCount) || downloadCount < 0) throw new Error("Invalid count");
+      brochureDownloadCount.textContent = `Sudah diunduh ${new Intl.NumberFormat("id-ID").format(downloadCount)} kali`;
+      brochureDownloadCount.hidden = false;
+    } catch {
+      // Never substitute a guessed number or turn a completed download into an
+      // error just because refreshing its metric failed.
+      brochureDownloadCount.hidden = true;
+    }
+  }
+
   brochureButton.addEventListener("click", async () => {
     brochureButton.disabled = true;
     brochureFeedback.hidden = false;
@@ -556,6 +574,7 @@
       setTimeout(() => URL.revokeObjectURL(url), 60_000);
       brochureFeedback.hidden = true;
       brochureFeedback.textContent = "";
+      await refreshBrochureDownloadCount();
     } catch {
       brochureFeedback.textContent = "Brosur belum dapat diunduh. Silakan coba lagi.";
     } finally {
