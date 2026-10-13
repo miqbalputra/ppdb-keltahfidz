@@ -534,6 +534,7 @@
   const brochureButton = document.querySelector("#download-brochure");
   const brochureFeedback = document.querySelector("#brochure-feedback");
   const brochureDownloadCount = document.querySelector("#brochure-download-count");
+  const brochureDownloadNumber = document.querySelector("#brochure-download-number");
 
   async function refreshBrochureDownloadCount() {
     try {
@@ -541,7 +542,7 @@
       if (!response.ok) throw new Error("Status unavailable");
       const { downloadCount } = await response.json();
       if (!Number.isSafeInteger(downloadCount) || downloadCount < 0) throw new Error("Invalid count");
-      brochureDownloadCount.textContent = `Sudah diunduh ${new Intl.NumberFormat("id-ID").format(downloadCount)} kali`;
+      brochureDownloadNumber.textContent = new Intl.NumberFormat("id-ID").format(downloadCount);
       brochureDownloadCount.hidden = false;
     } catch {
       // Never substitute a guessed number or turn a completed download into an

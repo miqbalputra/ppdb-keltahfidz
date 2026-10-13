@@ -29,6 +29,16 @@ function browserHarness(openingDateTime: string, start: string, initialCount = 0
     });
     return nodes.get(selector);
   };
+  const metric = node("#brochure-download-count");
+  metric.hidden = true;
+  // Match the real paragraph's text nodes and styled <strong>. Reading the
+  // parent's textContent aggregates descendants, as it does in a browser.
+  metric.childNodes = [
+    { textContent: "Sudah diunduh " }, node("#brochure-download-number"), { textContent: " kali" },
+  ];
+  Object.defineProperty(metric, "textContent", {
+    get: () => metric.childNodes.map((child: { textContent: string }) => child.textContent).join(""),
+  });
   const region = node("#region-stub");
   node("#payment-account-number").textContent = "7355331193";
   const form = node("#waitinglist-form");
@@ -144,7 +154,7 @@ describe("browser opening countdown", () => {
     browser.statusFails();
     await browser.settle();
     expect(browser.node("#brochure-download-count").hidden).toBe(true);
-    expect(browser.node("#brochure-download-count").textContent).toBe("");
+    expect(browser.node("#brochure-download-number").textContent).toBe("");
     browser.brochureIsAvailable();
     await browser.clickBrochure();
     expect(browser.downloadCount()).toBe(1);
