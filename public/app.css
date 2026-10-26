@@ -215,6 +215,9 @@ h1, h2, h3, p { margin-top: 0; }
 .report-filters { flex-wrap: wrap; }
 .filter-reset { min-height: 44px; }
 .button-outline { min-height: 38px; color: var(--green); background: transparent; border-color: #bdc8bc; }
+.button-danger { min-height: 38px; color: #8d352d; background: #fff2ef; border-color: #dfaaa2; }
+.button-danger:hover { background: #fce3df; }
+.button-danger:disabled, .button-outline:disabled { opacity: .6; cursor: wait; }
 .button-outline:hover { background: #eaf0e8; }
 .system-panel, .settings-card { margin-bottom: 22px; background: var(--white); border: 1px solid #e8e5da; }
 .system-panel .table-heading, .settings-card .table-heading { min-height: 72px; }

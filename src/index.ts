@@ -2,7 +2,7 @@ import { randomBytes } from "node:crypto";
 import { chmod, mkdir, readFile, unlink, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { Elysia, t } from "elysia";
-import { count, desc, eq, sql } from "drizzle-orm";
+import { and, count, desc, eq, isNotNull, isNull, sql } from "drizzle-orm";
 import { migrate } from "drizzle-orm/mysql2/migrator";
 import {
   ADMIN_PASSWORD_CONFIGURED,
@@ -146,6 +146,8 @@ function participantListDto(row: typeof calonSantriWaitinglist.$inferSelect) {
     has_proof: Boolean(participant.bukti_transfer_mime),
     konfirmasi_ketentuan_biaya: participant.konfirmasi_ketentuan_biaya,
     created_at: participant.created_at,
+    deleted_at: participant.deleted_at,
+    deleted_by: participant.deleted_by,
   };
 }
 
@@ -575,7 +577,7 @@ export const app = new Elysia({ name: "spsb-waitinglist" })
       kecamatan_nama: calonSantriWaitinglist.kecamatan_nama,
       kabupaten_nama: calonSantriWaitinglist.kabupaten_nama,
       provinsi_nama: calonSantriWaitinglist.provinsi_nama,
-    }).from(calonSantriWaitinglist);
+    }).from(calonSantriWaitinglist).where(isNull(calonSantriWaitinglist.deleted_at));
     return buildWaitinglistReport(storedRows, query);
   }, { query: t.Object(waitinglistFilterProperties()) })
   .get("/api/admin/waitinglist/:id", async ({ params, request, set }) => {
@@ -608,7 +610,53 @@ export const app = new Elysia({ name: "spsb-waitinglist" })
       konfirmasi_ketentuan_biaya: participant.konfirmasi_ketentuan_biaya,
       has_proof: Boolean(participant.bukti_transfer_mime),
       created_at: participant.created_at,
+      deleted_at: participant.deleted_at,
+      deleted_by: participant.deleted_by,
     };
+  }, { params: t.Object({ id: t.String({ pattern: "^[a-f0-9]{32}$" }) }) })
+  .post("/api/admin/waitinglist/:id/archive", async ({ params, request, set }) => {
+    if (!originIsSame(request)) {
+      set.status = 403;
+      return { error: "Permintaan lintas situs ditolak." };
+    }
+    const session = requireAdmin(request, set);
+    if (!session) return { error: "Silakan login sebagai admin." };
+    if (!requireCsrf(request, session, set)) return { error: "Token keamanan tidak valid. Muat ulang halaman." };
+    const [record] = await db.select({ id: calonSantriWaitinglist.id, deleted_at: calonSantriWaitinglist.deleted_at })
+      .from(calonSantriWaitinglist).where(eq(calonSantriWaitinglist.id, params.id)).limit(1);
+    if (!record) {
+      set.status = 404;
+      return { error: "Data pendaftar tidak ditemukan." };
+    }
+    if (record.deleted_at) {
+      set.status = 409;
+      return { error: "Pendaftar sudah berada di arsip." };
+    }
+    await db.update(calonSantriWaitinglist).set({ deleted_at: new Date().toISOString(), deleted_by: session.username })
+      .where(and(eq(calonSantriWaitinglist.id, params.id), isNull(calonSantriWaitinglist.deleted_at)));
+    return { archived: true };
+  }, { params: t.Object({ id: t.String({ pattern: "^[a-f0-9]{32}$" }) }) })
+  .post("/api/admin/waitinglist/:id/restore", async ({ params, request, set }) => {
+    if (!originIsSame(request)) {
+      set.status = 403;
+      return { error: "Permintaan lintas situs ditolak." };
+    }
+    const session = requireAdmin(request, set);
+    if (!session) return { error: "Silakan login sebagai admin." };
+    if (!requireCsrf(request, session, set)) return { error: "Token keamanan tidak valid. Muat ulang halaman." };
+    const [record] = await db.select({ id: calonSantriWaitinglist.id, deleted_at: calonSantriWaitinglist.deleted_at })
+      .from(calonSantriWaitinglist).where(eq(calonSantriWaitinglist.id, params.id)).limit(1);
+    if (!record) {
+      set.status = 404;
+      return { error: "Data pendaftar tidak ditemukan." };
+    }
+    if (!record.deleted_at) {
+      set.status = 409;
+      return { error: "Pendaftar sudah aktif." };
+    }
+    await db.update(calonSantriWaitinglist).set({ deleted_at: null, deleted_by: null })
+      .where(and(eq(calonSantriWaitinglist.id, params.id), isNotNull(calonSantriWaitinglist.deleted_at)));
+    return { restored: true };
   }, { params: t.Object({ id: t.String({ pattern: "^[a-f0-9]{32}$" }) }) })
   .get("/api/admin/waitinglist/:id/proof", async ({ params, request, set }) => {
     if (!requireAdmin(request, set)) return { error: "Silakan login sebagai admin." };
@@ -650,11 +698,16 @@ export const app = new Elysia({ name: "spsb-waitinglist" })
     const pageSize = 25;
     const parsedPage = Number.parseInt(query.page ?? "1", 10);
     const page = Number.isFinite(parsedPage) ? Math.max(1, Math.min(parsedPage, 1_000_000)) : 1;
+    const view = query.view ?? "active";
+    const lifecycleFilter = view === "archived"
+      ? isNotNull(calonSantriWaitinglist.deleted_at)
+      : isNull(calonSantriWaitinglist.deleted_at);
     const filtersActive = hasWaitinglistFilters(query);
     if (!filtersActive) {
       const [totalRows, storedRows] = await Promise.all([
-        db.select({ total: count() }).from(calonSantriWaitinglist),
+        db.select({ total: count() }).from(calonSantriWaitinglist).where(lifecycleFilter),
         db.select().from(calonSantriWaitinglist)
+          .where(lifecycleFilter)
           .orderBy(desc(calonSantriWaitinglist.created_at))
           .limit(pageSize)
           .offset((page - 1) * pageSize),
@@ -669,6 +722,7 @@ export const app = new Elysia({ name: "spsb-waitinglist" })
       };
     }
     const storedRows = await db.select().from(calonSantriWaitinglist)
+      .where(lifecycleFilter)
       .orderBy(desc(calonSantriWaitinglist.created_at));
     const filteredRows = storedRows.filter((row) => matchesEncryptedWaitinglist(row, query));
     const total = filteredRows.length;
@@ -679,12 +733,13 @@ export const app = new Elysia({ name: "spsb-waitinglist" })
     query: t.Object({
       ...waitinglistFilterProperties(),
       page: t.Optional(t.String({ maxLength: 12 })),
+      view: t.Optional(t.Union([t.Literal("active"), t.Literal("archived")])),
     }),
   })
   .get("/api/admin/waitinglist/:id/export.pdf", async ({ params, request, set }) => {
     if (!requireAdmin(request, set)) return { error: "Silakan login sebagai admin." };
     const storedRows = await db.select().from(calonSantriWaitinglist)
-      .where(eq(calonSantriWaitinglist.id, params.id)).limit(1);
+      .where(and(eq(calonSantriWaitinglist.id, params.id), isNull(calonSantriWaitinglist.deleted_at))).limit(1);
     const stored = storedRows[0];
     if (!stored) {
       set.status = 404;
@@ -697,7 +752,7 @@ export const app = new Elysia({ name: "spsb-waitinglist" })
   .get("/api/admin/waitinglist/:id/export.xlsx", async ({ params, request, set }) => {
     if (!requireAdmin(request, set)) return { error: "Silakan login sebagai admin." };
     const storedRows = await db.select().from(calonSantriWaitinglist)
-      .where(eq(calonSantriWaitinglist.id, params.id)).limit(1);
+      .where(and(eq(calonSantriWaitinglist.id, params.id), isNull(calonSantriWaitinglist.deleted_at))).limit(1);
     const stored = storedRows[0];
     if (!stored) {
       set.status = 404;
@@ -719,6 +774,7 @@ export const app = new Elysia({ name: "spsb-waitinglist" })
       return { error: filterError };
     }
     const storedRows = await db.select().from(calonSantriWaitinglist)
+      .where(isNull(calonSantriWaitinglist.deleted_at))
       .orderBy(desc(calonSantriWaitinglist.created_at));
     const rows = storedRows
       .filter((row) => matchesEncryptedWaitinglist(row, query))
@@ -738,6 +794,7 @@ export const app = new Elysia({ name: "spsb-waitinglist" })
       return { error: filterError };
     }
     const storedRows = await db.select().from(calonSantriWaitinglist)
+      .where(isNull(calonSantriWaitinglist.deleted_at))
       .orderBy(desc(calonSantriWaitinglist.created_at));
     const rows = storedRows
       .filter((row) => matchesEncryptedWaitinglist(row, query))

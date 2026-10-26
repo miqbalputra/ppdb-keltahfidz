@@ -116,9 +116,13 @@ describe("Elysia application", () => {
       "/api/admin/export.xlsx",
       `/api/admin/waitinglist/${id}/export.pdf`,
       `/api/admin/waitinglist/${id}/export.xlsx`,
+      `/api/admin/waitinglist/${id}/archive`,
+      `/api/admin/waitinglist/${id}/restore`,
     ];
+    const mutationPaths = new Set([`/api/admin/waitinglist/${id}/archive`, `/api/admin/waitinglist/${id}/restore`]);
     for (const path of paths) {
-      const response = await app.handle(new Request(`http://localhost${path}`));
+      const method = mutationPaths.has(path) ? "POST" : "GET";
+      const response = await app.handle(new Request(`http://localhost${path}`, { method }));
       expect(response.status).toBe(401);
     }
   });

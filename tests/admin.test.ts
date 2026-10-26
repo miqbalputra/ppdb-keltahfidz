@@ -4,7 +4,7 @@ import { runInNewContext } from "node:vm";
 
 const script = await readFile(new URL("../public/admin.js", import.meta.url), "utf8");
 
-function dashboardHarness(includeParticipant = false) {
+function dashboardHarness(includeParticipant = false, archivedParticipant = false) {
   const nodes = new Map<string, any>();
   const makeNode = (selector: string): any => {
     if (!nodes.has(selector)) {
@@ -35,8 +35,12 @@ function dashboardHarness(includeParticipant = false) {
     desa_nama: "Desa A", kecamatan_nama: "Kecamatan B", kabupaten_nama: "Kabupaten C", provinsi_nama: "Jawa Barat",
     konfirmasi_data: 1, konfirmasi_bukti_transfer: 1, konfirmasi_ketentuan_biaya: 1,
     has_proof: true, created_at: "2027-01-01T00:00:00.000Z",
+    deleted_at: archivedParticipant ? "2027-01-02T00:00:00.000Z" : null,
+    deleted_by: archivedParticipant ? "admin" : null,
   };
-  const fetch = async (path: string) => {
+  const requests: Array<{ path: string; method: string }> = [];
+  const fetch = async (path: string, options: RequestInit = {}) => {
+    requests.push({ path, method: options.method ?? "GET" });
     const payload = path === "/api/admin/me"
       ? { authenticated: true, csrfToken: "csrf" }
       : path === "/api/admin/system"
@@ -74,7 +78,7 @@ function dashboardHarness(includeParticipant = false) {
     window: { confirm: () => true, location: { assign: () => {} } },
   });
   const settle = async () => { for (let i = 0; i < 30; i += 1) await Promise.resolve(); };
-  return { node: makeNode, settle, participantId };
+  return { node: makeNode, settle, participantId, requests };
 }
 
 describe("admin settings draft safety", () => {
@@ -90,6 +94,34 @@ describe("admin settings draft safety", () => {
     expect(browser.node("#detail-transfer-consent").textContent).toContain("bukan verifikasi pembayaran panitia");
     expect(browser.node("#detail-proof-link").hidden).toBe(false);
     expect(browser.node("#detail-pdf-link").href).toContain(`${browser.participantId}/export.pdf`);
+  });
+
+  test("archives a participant only after explicit confirmation and refreshes the active list", async () => {
+    const browser = dashboardHarness(true);
+    await browser.settle();
+    await browser.node("created:button").listeners.click();
+    await browser.settle();
+    await browser.node("#archive-participant-button").listeners.click();
+    await browser.settle();
+    expect(browser.requests).toContainEqual({
+      path: `/api/admin/waitinglist/${browser.participantId}/archive`, method: "POST",
+    });
+    expect(browser.node("#participant-dialog").open).toBe(false);
+  });
+
+  test("shows restore instead of delete for an archived participant", async () => {
+    const browser = dashboardHarness(true, true);
+    await browser.settle();
+    await browser.node("created:button").listeners.click();
+    await browser.settle();
+    expect(browser.node("#archive-participant-button").hidden).toBe(true);
+    expect(browser.node("#restore-participant-button").hidden).toBe(false);
+    await browser.node("#restore-participant-button").listeners.click();
+    await browser.settle();
+    expect(browser.requests).toContainEqual({
+      path: `/api/admin/waitinglist/${browser.participantId}/restore`, method: "POST",
+    });
+    expect(browser.node("#participant-dialog").open).toBe(false);
   });
 
   test("refreshing system status never overwrites an unsaved settings edit", async () => {

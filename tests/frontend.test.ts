@@ -42,7 +42,7 @@ describe("frontend accessibility contracts", () => {
       expect(html).toContain('href="/logo-gq.png" type="image/png"');
       expect(html).toContain('class="brand-logo" src="/logo-gq.png"');
       expect(html).toContain('name="description"');
-      expect(html).toContain(`<link rel="stylesheet" href="/app.css?v=${page === "index.html" ? "2027-brochure-minimal-v4" : page === "success.html" ? "2027-countdown-cta" : page === "admin.html" ? "2027-admin-reports-v1" : "2027-brochure-v1"}">`);
+      expect(html).toContain(`<link rel="stylesheet" href="/app.css?v=${page === "index.html" ? "2027-brochure-minimal-v4" : page === "success.html" ? "2027-countdown-cta" : page === "admin.html" ? "2027-admin-archive-v1" : "2027-brochure-v1"}">`);
       const ids = attributes(html, "id");
       const idSet = new Set(ids);
       expect(idSet.size).toBe(ids.length);
@@ -160,7 +160,10 @@ describe("frontend accessibility contracts", () => {
     expect(html).toContain('id="participant-dialog"');
     expect(html).toContain('id="detail-eligibility"');
     expect(html).toContain('id="detail-transfer-consent"');
-    expect(html).toContain('src="/admin.js?v=2027-admin-reports-v1"');
+    expect(html).toContain('id="participant-view"');
+    expect(html).toContain('id="archive-participant-button"');
+    expect(html).toContain('id="restore-participant-button"');
+    expect(html).toContain('src="/admin.js?v=2027-admin-archive-v1"');
   });
 
   test("admin table and export controls are accessible and include every requested filter", async () => {

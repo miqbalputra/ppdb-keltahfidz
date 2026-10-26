@@ -33,6 +33,8 @@ export const calonSantriWaitinglist = mysqlTable(
     konfirmasi_bukti_transfer: tinyint("konfirmasi_bukti_transfer", { unsigned: true }),
     konfirmasi_ketentuan_biaya: tinyint("konfirmasi_ketentuan_biaya", { unsigned: true }),
     created_at: varchar("created_at", { length: 32 }).notNull(),
+    deleted_at: varchar("deleted_at", { length: 32 }),
+    deleted_by: varchar("deleted_by", { length: 120 }),
   },
   (table) => [
     index("idx_waitinglist_created_at").on(table.created_at),

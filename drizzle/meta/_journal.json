@@ -43,6 +43,13 @@
       "when": 1790647943688,
       "tag": "0005_mighty_mordo",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "5",
+      "when": 1792976145810,
+      "tag": "0006_huge_groot",
+      "breakpoints": true
     }
   ]
 }

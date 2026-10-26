@@ -18,6 +18,8 @@
   let totalPages = 1;
   let rowsRequestController = null;
   let reportRequestId = 0;
+  let currentView = "active";
+  let currentParticipantId = "";
   let settingsDirty = false;
   const settingsUpdated = document.querySelector("#settings-updated");
   const participantDialog = document.querySelector("#participant-dialog");
@@ -179,6 +181,7 @@
         genderLabel,
         item.sekolah_asal ? `Sekolah: ${item.sekolah_asal}` : "",
         `${formatAge(item.umur_terhitung_bulan)} · saat mendaftar`,
+        item.deleted_at ? `Diarsipkan ${formatDate(item.deleted_at, true)}` : "",
       ].filter(Boolean).join(" · ");
       child.append(childName, childDetail);
       const feeAccepted = Number(item.konfirmasi_ketentuan_biaya) === 1;
@@ -194,17 +197,19 @@
         proofStatus.textContent = "Bukti transfer terlampir";
         child.append(proofStatus);
       }
-      const exportActions = document.createElement("div");
-      exportActions.className = "individual-export-actions";
-      for (const [format, label] of [["pdf", "PDF"], ["xlsx", "Excel"]]) {
-        const link = document.createElement("a");
-        link.href = `/api/admin/waitinglist/${encodeURIComponent(item.id)}/export.${format}`;
-        link.className = "individual-export-link";
-        link.textContent = label;
-        link.setAttribute("aria-label", `Ekspor data ${item.nama_anak} sebagai ${format === "pdf" ? "PDF" : "Excel"}`);
-        exportActions.append(link);
+      if (currentView === "active") {
+        const exportActions = document.createElement("div");
+        exportActions.className = "individual-export-actions";
+        for (const [format, label] of [["pdf", "PDF"], ["xlsx", "Excel"]]) {
+          const link = document.createElement("a");
+          link.href = `/api/admin/waitinglist/${encodeURIComponent(item.id)}/export.${format}`;
+          link.className = "individual-export-link";
+          link.textContent = label;
+          link.setAttribute("aria-label", `Ekspor data ${item.nama_anak} sebagai ${format === "pdf" ? "PDF" : "Excel"}`);
+          exportActions.append(link);
+        }
+        child.append(exportActions);
       }
-      child.append(exportActions);
       const detailButton = document.createElement("button");
       detailButton.type = "button";
       detailButton.className = "participant-detail-button";
@@ -251,14 +256,16 @@
   function filtersFromForm() {
     const params = new URLSearchParams();
     for (const [key, value] of new FormData(filterForm)) {
+      if (key === "view") continue;
       const normalized = String(value).trim();
       if (normalized && normalized !== "all") params.set(key, normalized);
     }
     return params;
   }
 
-  function filtersQuery(page) {
+  function filtersQuery(page, includeView = false) {
     const params = new URLSearchParams(appliedFilters);
+    if (includeView) params.set("view", currentView);
     if (page !== undefined) params.set("page", String(page));
     return params.toString();
   }
@@ -271,11 +278,13 @@
     document.querySelector(".table-scroll").setAttribute("aria-busy", "true");
     renderTableMessage("Memuat data pendaftar…");
     try {
-      const result = await api(`/api/admin/waitinglist?${filtersQuery(currentPage)}`, { signal: controller.signal });
+      const result = await api(`/api/admin/waitinglist?${filtersQuery(currentPage, true)}`, { signal: controller.signal });
       if (controller.signal.aborted) return;
       renderRows(result.rows);
       totalPages = result.pages;
-      document.querySelector("#table-summary").textContent = `${new Intl.NumberFormat("id-ID").format(result.total)} pendaftar sesuai filter · halaman ${result.page} dari ${result.pages}`;
+      document.querySelector("#table-summary").textContent = `${new Intl.NumberFormat("id-ID").format(result.total)} pendaftar ${currentView === "archived" ? "diarsipkan" : "aktif"} · halaman ${result.page} dari ${result.pages}`;
+      document.querySelector("#export-xlsx-button").hidden = currentView === "archived";
+      document.querySelector("#export-button").hidden = currentView === "archived";
       document.querySelector("#page-indicator").textContent = `${result.page} / ${result.pages}`;
       document.querySelector("#previous-page").disabled = result.page <= 1;
       document.querySelector("#next-page").disabled = result.page >= result.pages;
@@ -319,9 +328,11 @@
       reportPeriod.textContent = report.registrationPeriod.label === "Semua pendaftar"
         ? `Semua tanggal pendaftaran · ${activeFilters ? "sesuai filter aktif" : "semua pendaftar"} · tren 30 hari terakhir`
         : `Periode pendaftaran: ${report.registrationPeriod.label}`;
-      document.querySelector("#report-filter-status").textContent = activeFilters
-        ? `${activeFilters} filter aktif · laporan, tabel, dan ekspor memakai cakupan yang sama.`
-        : "Tanpa filter · ringkasan mencakup semua pendaftar.";
+      document.querySelector("#report-filter-status").textContent = currentView === "archived"
+        ? "Laporan dan ekspor hanya mencakup pendaftar aktif; arsip tidak dihitung."
+        : activeFilters
+          ? `${activeFilters} filter aktif · laporan, tabel, dan ekspor memakai cakupan yang sama.`
+          : "Tanpa filter · ringkasan mencakup semua pendaftar.";
       const firstTrendDate = report.daily[0]?.date;
       const lastTrendDate = report.daily.at(-1)?.date;
       document.querySelector("#report-trend-period").textContent = report.registrationPeriod.label === "Semua pendaftar"
@@ -381,6 +392,7 @@
   }
 
   async function showParticipantDetail(id) {
+    currentParticipantId = id;
     participantDialog.showModal();
     document.querySelector("#participant-detail-status").hidden = false;
     document.querySelector("#participant-detail-status").textContent = "Memuat detail pendaftaran…";
@@ -389,6 +401,15 @@
     try {
       const participant = await api(`/api/admin/waitinglist/${encodeURIComponent(id)}`);
       const setDetail = (selector, value) => { document.querySelector(selector).textContent = value || "Belum dicatat"; };
+      const isArchived = Boolean(participant.deleted_at);
+      document.querySelector("#archive-participant-button").hidden = isArchived;
+      document.querySelector("#restore-participant-button").hidden = !isArchived;
+      document.querySelector("#detail-pdf-link").hidden = isArchived;
+      document.querySelector("#detail-xlsx-link").hidden = isArchived;
+      if (isArchived) {
+        setDetail("#participant-detail-status", `Diarsipkan ${formatDate(participant.deleted_at, true)} oleh ${participant.deleted_by || "admin"}. Data masih tersimpan dan dapat dipulihkan.`);
+        document.querySelector("#participant-detail-status").hidden = false;
+      }
       document.querySelector("#participant-dialog-title").textContent = participant.nama_anak;
       setDetail("#detail-child", participant.nama_anak);
       setDetail("#detail-gender", participant.jenis_kelamin === "putra" ? "Putra" : participant.jenis_kelamin === "putri" ? "Putri" : "Belum dicatat");
@@ -409,7 +430,7 @@
       proof.href = `/api/admin/waitinglist/${encodeURIComponent(id)}/proof`;
       document.querySelector("#detail-pdf-link").href = `/api/admin/waitinglist/${encodeURIComponent(id)}/export.pdf`;
       document.querySelector("#detail-xlsx-link").href = `/api/admin/waitinglist/${encodeURIComponent(id)}/export.xlsx`;
-      document.querySelector("#participant-detail-status").hidden = true;
+      if (!isArchived) document.querySelector("#participant-detail-status").hidden = true;
       document.querySelector("#participant-detail-grid").hidden = false;
       document.querySelector("#participant-detail-actions").hidden = false;
     } catch (error) {
@@ -417,6 +438,35 @@
     }
   }
 
+  async function changeParticipantLifecycle(action) {
+    if (!currentParticipantId) return;
+    const archive = action === "archive";
+    const message = archive
+      ? "Pindahkan pendaftar ini ke arsip? Data dan bukti transfer tidak dihapus dan dapat dipulihkan kapan saja."
+      : "Pulihkan pendaftar ini ke daftar aktif?";
+    if (!window.confirm(message)) return;
+    const button = document.querySelector(archive ? "#archive-participant-button" : "#restore-participant-button");
+    button.disabled = true;
+    try {
+      await api(`/api/admin/waitinglist/${encodeURIComponent(currentParticipantId)}/${action}`, { method: "POST", body: "{}" });
+      participantDialog.close();
+      if (!archive) {
+        currentView = "active";
+        document.querySelector("#participant-view").value = "active";
+      }
+      currentPage = 1;
+      await loadRows();
+      await loadReport();
+      showAlert(dashboardAlert, archive ? "Pendaftar dipindahkan ke arsip dan dapat dipulihkan." : "Pendaftar berhasil dipulihkan.", "success");
+    } catch (error) {
+      showAlert(dashboardAlert, error.message);
+    } finally {
+      button.disabled = false;
+    }
+  }
+
+  document.querySelector("#archive-participant-button").addEventListener("click", () => changeParticipantLifecycle("archive"));
+  document.querySelector("#restore-participant-button").addEventListener("click", () => changeParticipantLifecycle("restore"));
   document.querySelector("#close-participant-dialog").addEventListener("click", () => participantDialog.close());
   participantDialog.addEventListener("click", (event) => {
     if (event.target === participantDialog) participantDialog.close();
@@ -459,6 +509,7 @@
   filterForm.addEventListener("submit", (event) => {
     event.preventDefault();
     currentPage = 1;
+    currentView = String(new FormData(filterForm).get("view") || "active");
     appliedFilters = filtersFromForm();
     loadRows();
     loadReport();
@@ -467,6 +518,7 @@
   document.querySelector("#filter-reset").addEventListener("click", () => {
     filterForm.reset();
     currentPage = 1;
+    currentView = "active";
     appliedFilters = new URLSearchParams();
     loadRows();
     loadReport();

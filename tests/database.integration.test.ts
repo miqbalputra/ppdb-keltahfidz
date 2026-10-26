@@ -428,6 +428,34 @@ test.skipIf(!testDatabaseUrl)("MariaDB-backed public, admin, security, and notif
     participantSheet.eachRow((row) => row.eachCell((cell) => participantValues.push(String(cell.value ?? ""))));
     expect(participantValues.join(" ")).not.toContain(proofSecret);
 
+    const archiveUrl = `http://localhost/api/admin/waitinglist/${successResult.id}/archive`;
+    const restoreUrl = `http://localhost/api/admin/waitinglist/${successResult.id}/restore`;
+    expect((await app.handle(new Request(archiveUrl, { method: "POST", headers: adminHeaders, body: "{}" }))).status).toBe(403);
+    const mutationHeaders = { ...adminHeaders, "x-csrf-token": loginResult.csrfToken };
+    expect((await app.handle(new Request(archiveUrl, { method: "POST", headers: { ...mutationHeaders, origin: "https://bad.example" }, body: "{}" }))).status).toBe(403);
+    const archived = await app.handle(new Request(archiveUrl, { method: "POST", headers: mutationHeaders, body: "{}" }));
+    expect(archived.status).toBe(200);
+    expect(await archived.json()).toEqual({ archived: true });
+    const archivedRow = await db.select().from(calonSantriWaitinglist).where(eq(calonSantriWaitinglist.id, successResult.id));
+    expect(archivedRow[0]?.deleted_at).toBeTruthy();
+    expect(archivedRow[0]?.deleted_by).toBe("integration-admin");
+    expect(archivedRow[0]?.nama_anak).not.toContain("Integration Child");
+    const activeAfterArchive = await app.handle(new Request(`http://localhost/api/admin/waitinglist?${query}`, { headers: adminHeaders }));
+    expect((await activeAfterArchive.json() as { total: number }).total).toBe(1);
+    const archiveList = await app.handle(new Request(`http://localhost/api/admin/waitinglist?${new URLSearchParams({ q: nonce, view: "archived" })}`, { headers: adminHeaders }));
+    expect(await archiveList.json()).toMatchObject({ total: 1, rows: [{ id: successResult.id, deleted_by: "integration-admin" }] });
+    const reportAfterArchive = await app.handle(new Request(`http://localhost/api/admin/report?${exportQuery}`, { headers: adminHeaders }));
+    expect((await reportAfterArchive.json() as { total: number }).total).toBe(1);
+    expect((await app.handle(new Request(`http://localhost/api/admin/waitinglist/${successResult.id}/export.pdf`, { headers: adminHeaders }))).status).toBe(404);
+    const restored = await app.handle(new Request(restoreUrl, { method: "POST", headers: mutationHeaders, body: "{}" }));
+    expect(restored.status).toBe(200);
+    expect(await restored.json()).toEqual({ restored: true });
+    const restoredRow = await db.select().from(calonSantriWaitinglist).where(eq(calonSantriWaitinglist.id, successResult.id));
+    expect(restoredRow[0]?.deleted_at).toBeNull();
+    expect(restoredRow[0]?.deleted_by).toBeNull();
+    const activeAfterRestore = await app.handle(new Request(`http://localhost/api/admin/waitinglist?${query}`, { headers: adminHeaders }));
+    expect((await activeAfterRestore.json() as { total: number }).total).toBe(2);
+
     const newGroupUrl = `https://chat.whatsapp.com/integration-${nonce}`;
     const updateSettings = await app.handle(new Request("http://localhost/api/admin/settings", {
       method: "PUT",
