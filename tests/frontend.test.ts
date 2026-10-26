@@ -42,7 +42,7 @@ describe("frontend accessibility contracts", () => {
       expect(html).toContain('href="/logo-gq.png" type="image/png"');
       expect(html).toContain('class="brand-logo" src="/logo-gq.png"');
       expect(html).toContain('name="description"');
-      expect(html).toContain(`<link rel="stylesheet" href="/app.css?v=${page === "index.html" ? "2027-brochure-minimal-v4" : page === "success.html" ? "2027-countdown-cta" : page === "admin.html" ? "2027-admin-archive-v1" : "2027-brochure-v1"}">`);
+      expect(html).toContain(`<link rel="stylesheet" href="/app.css?v=${page === "index.html" ? "2027-brochure-minimal-v4" : page === "success.html" ? "2027-countdown-cta" : page === "admin.html" ? "2027-admin-archive-v3" : "2027-brochure-v1"}">`);
       const ids = attributes(html, "id");
       const idSet = new Set(ids);
       expect(idSet.size).toBe(ids.length);
@@ -163,7 +163,11 @@ describe("frontend accessibility contracts", () => {
     expect(html).toContain('id="participant-view"');
     expect(html).toContain('id="archive-participant-button"');
     expect(html).toContain('id="restore-participant-button"');
-    expect(html).toContain('src="/admin.js?v=2027-admin-archive-v1"');
+    expect(html).toContain('aria-labelledby="waitinglist-title"');
+    expect(html).toContain('aria-labelledby="settings-title"');
+    expect(html).toContain('type="button">Arsipkan pendaftar</button>');
+    expect(html).toContain('<option value="archived">Arsip (nonaktif)</option>');
+    expect(html).toContain('src="/admin.js?v=2027-admin-archive-v4"');
   });
 
   test("admin table and export controls are accessible and include every requested filter", async () => {

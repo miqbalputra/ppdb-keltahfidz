@@ -42,6 +42,24 @@ export function validateWaitinglistFilterQuery(query: WaitinglistFilterQuery): s
   return null;
 }
 
+export function registrationCreatedAtBounds(query: WaitinglistFilterQuery): {
+  startInclusive?: string;
+  endExclusive?: string;
+} {
+  const nextDate = (date: string): string => {
+    const [year, month, day] = date.split("-").map(Number);
+    return new Date(Date.UTC(year!, month! - 1, day! + 1)).toISOString().slice(0, 10);
+  };
+  return {
+    startInclusive: query.tanggal_daftar_mulai
+      ? new Date(`${query.tanggal_daftar_mulai}T00:00:00+07:00`).toISOString()
+      : undefined,
+    endExclusive: query.tanggal_daftar_sampai
+      ? new Date(`${nextDate(query.tanggal_daftar_sampai)}T00:00:00+07:00`).toISOString()
+      : undefined,
+  };
+}
+
 export function hasWaitinglistFilters(query: WaitinglistFilterQuery): boolean {
   return Boolean(
     query.q?.trim()

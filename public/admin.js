@@ -18,6 +18,8 @@
   let totalPages = 1;
   let rowsRequestController = null;
   let reportRequestId = 0;
+  let reportRequestController = null;
+  let participantRequestId = 0;
   let currentView = "active";
   let currentParticipantId = "";
   let settingsDirty = false;
@@ -44,11 +46,18 @@
     const contentType = response.headers.get("Content-Type") || "";
     const payload = contentType.includes("application/json") ? await response.json() : null;
     if (response.status === 401 && !path.includes("/api/admin/login")) {
+      const dashboardWasVisible = !dashboard.hidden;
       csrfToken = "";
-      dashboard.hidden = true;
-      loginCard.hidden = false;
-      showAlert(loginAlert, "Sesi admin berakhir. Silakan masuk kembali.");
-      loginCard.querySelector("h1").focus();
+      if (dashboardWasVisible) {
+        rowsRequestController?.abort();
+        reportRequestController?.abort();
+        participantRequestId += 1;
+        if (participantDialog.open) participantDialog.close();
+        dashboard.hidden = true;
+        loginCard.hidden = false;
+        showAlert(loginAlert, "Sesi admin berakhir. Silakan masuk kembali.");
+        loginCard.querySelector("h1").focus();
+      }
     }
     if (!response.ok) throw new Error(payload?.error || "Permintaan tidak berhasil.");
     return payload;
@@ -312,10 +321,19 @@
 
   async function loadReport() {
     const requestId = ++reportRequestId;
+    reportRequestController?.abort();
+    const controller = new AbortController();
+    reportRequestController = controller;
+    const reportPanel = document.querySelector("#reports-panel");
     const reportPeriod = document.querySelector("#report-period-label");
+    reportPanel.setAttribute("aria-busy", "true");
     reportPeriod.textContent = "Memuat laporan…";
+    ["#report-total", "#report-putra", "#report-putri", "#report-eligible", "#report-gender-unrecorded", "#report-not-eligible"]
+      .forEach((selector) => { document.querySelector(selector).textContent = "Memuat…"; });
+    renderDailyReport([]);
+    renderAreaReport([]);
     try {
-      const report = await api(`/api/admin/report?${filtersQuery()}`);
+      const report = await api(`/api/admin/report?${filtersQuery()}`, { signal: controller.signal });
       if (requestId !== reportRequestId) return;
       const number = (value) => new Intl.NumberFormat("id-ID").format(value);
       document.querySelector("#report-total").textContent = number(report.total);
@@ -341,7 +359,7 @@
       renderDailyReport(report.daily);
       renderAreaReport(report.topDistricts);
     } catch (error) {
-      if (requestId !== reportRequestId) return;
+      if (controller.signal.aborted || requestId !== reportRequestId) return;
       reportPeriod.textContent = "Laporan belum dapat dimuat.";
       showAlert(dashboardAlert, error.message);
       ["#report-total", "#report-putra", "#report-putri", "#report-eligible", "#report-gender-unrecorded", "#report-not-eligible"]
@@ -350,6 +368,8 @@
       document.querySelector("#report-trend-period").textContent = "—";
       renderDailyReport([]);
       renderAreaReport([]);
+    } finally {
+      if (requestId === reportRequestId) reportPanel.removeAttribute("aria-busy");
     }
   }
 
@@ -392,14 +412,17 @@
   }
 
   async function showParticipantDetail(id) {
+    const requestId = ++participantRequestId;
     currentParticipantId = id;
     participantDialog.showModal();
+    participantDialog.setAttribute("aria-busy", "true");
     document.querySelector("#participant-detail-status").hidden = false;
     document.querySelector("#participant-detail-status").textContent = "Memuat detail pendaftaran…";
     document.querySelector("#participant-detail-grid").hidden = true;
     document.querySelector("#participant-detail-actions").hidden = true;
     try {
       const participant = await api(`/api/admin/waitinglist/${encodeURIComponent(id)}`);
+      if (requestId !== participantRequestId || !participantDialog.open) return;
       const setDetail = (selector, value) => { document.querySelector(selector).textContent = value || "Belum dicatat"; };
       const isArchived = Boolean(participant.deleted_at);
       document.querySelector("#archive-participant-button").hidden = isArchived;
@@ -434,7 +457,11 @@
       document.querySelector("#participant-detail-grid").hidden = false;
       document.querySelector("#participant-detail-actions").hidden = false;
     } catch (error) {
-      document.querySelector("#participant-detail-status").textContent = error.message;
+      if (requestId === participantRequestId && participantDialog.open) {
+        document.querySelector("#participant-detail-status").textContent = error.message;
+      }
+    } finally {
+      if (requestId === participantRequestId) participantDialog.removeAttribute("aria-busy");
     }
   }
 
@@ -506,8 +533,36 @@
     settingsUpdated.textContent = "Perubahan lokal belum disimpan";
   });
 
+  window.addEventListener("beforeunload", (event) => {
+    if (!settingsDirty) return;
+    event.preventDefault();
+    event.returnValue = "";
+  });
+
+  function validateDateRanges() {
+    const ranges = [
+      ["tanggal_daftar_mulai", "tanggal_daftar_sampai", "tanggal pendaftaran"],
+      ["tanggal_lahir_mulai", "tanggal_lahir_sampai", "tanggal lahir"],
+    ];
+    let valid = true;
+    for (const [startName, endName, label] of ranges) {
+      const start = filterForm.elements[startName];
+      const end = filterForm.elements[endName];
+      const reversed = Boolean(start.value && end.value && start.value > end.value);
+      end.setCustomValidity(reversed ? `Tanggal akhir ${label} harus sama atau setelah tanggal awal.` : "");
+      if (reversed) valid = false;
+    }
+    return valid;
+  }
+
+  filterForm.addEventListener("input", validateDateRanges);
+  filterForm.addEventListener("change", validateDateRanges);
   filterForm.addEventListener("submit", (event) => {
     event.preventDefault();
+    if (!validateDateRanges()) {
+      filterForm.reportValidity();
+      return;
+    }
     currentPage = 1;
     currentView = String(new FormData(filterForm).get("view") || "active");
     appliedFilters = filtersFromForm();
@@ -517,6 +572,7 @@
 
   document.querySelector("#filter-reset").addEventListener("click", () => {
     filterForm.reset();
+    validateDateRanges();
     currentPage = 1;
     currentView = "active";
     appliedFilters = new URLSearchParams();
@@ -526,6 +582,18 @@
 
   document.querySelector("#refresh-report").addEventListener("click", loadReport);
 
+  function settingsPayloadFromForm() {
+    const formData = new FormData(settingsForm);
+    return {
+      cutoffDate: formData.get("cutoffDate"),
+      minAgeYears: Number(formData.get("minAgeYears")),
+      minAgeMonths: Number(formData.get("minAgeMonths")),
+      whatsappGroupUrl: formData.get("whatsappGroupUrl"),
+      openingCountdownEnabled: formData.get("openingCountdownEnabled") === "on",
+      openingDateTime: formData.get("openingDateTime"),
+    };
+  }
+
   settingsForm.addEventListener("submit", async (event) => {
     event.preventDefault();
     showAlert(settingsAlert, "");
@@ -533,22 +601,21 @@
     saveButton.disabled = true;
     settingsForm.setAttribute("aria-busy", "true");
     saveButton.textContent = "Menyimpan…";
-    const formData = new FormData(settingsForm);
+    const submittedSettings = settingsPayloadFromForm();
     try {
       const saved = await api("/api/admin/settings", {
         method: "PUT",
-        body: JSON.stringify({
-          cutoffDate: formData.get("cutoffDate"),
-          minAgeYears: Number(formData.get("minAgeYears")),
-          minAgeMonths: Number(formData.get("minAgeMonths")),
-          whatsappGroupUrl: formData.get("whatsappGroupUrl"),
-          openingCountdownEnabled: formData.get("openingCountdownEnabled") === "on",
-          openingDateTime: formData.get("openingDateTime"),
-        }),
+        body: JSON.stringify(submittedSettings),
       });
-      settingsDirty = false;
-      applySettings(saved.settings, true);
-      showAlert(settingsAlert, "Pengaturan berhasil disimpan.", "success");
+      const newerDraftExists = JSON.stringify(settingsPayloadFromForm()) !== JSON.stringify(submittedSettings);
+      settingsDirty = newerDraftExists;
+      if (newerDraftExists) {
+        settingsUpdated.textContent = "Perubahan lokal belum disimpan";
+        showAlert(settingsAlert, "Pengaturan yang dikirim tersimpan, tetapi perubahan yang dibuat setelahnya belum disimpan.", "success");
+      } else {
+        applySettings(saved.settings, true);
+        showAlert(settingsAlert, "Pengaturan berhasil disimpan.", "success");
+      }
       await loadSystem();
       await loadRows();
     } catch (error) {
@@ -620,9 +687,11 @@
     window.location.assign(`/api/admin/export.csv?${filtersQuery()}`);
   });
   document.querySelector("#logout-button").addEventListener("click", async () => {
+    if (settingsDirty && !window.confirm("Perubahan pengaturan belum disimpan. Tetap keluar dan buang perubahan?")) return;
     try {
       await api("/api/admin/logout", { method: "POST", body: "{}" });
       csrfToken = "";
+      settingsDirty = false;
       dashboard.hidden = true;
       loginCard.hidden = false;
       loginCard.querySelector("h1").focus();

@@ -60,6 +60,20 @@ describe("waiting-list filters", () => {
     })).toBe(true);
   });
 
+  test("converts Jakarta registration dates into inclusive-start/exclusive-end UTC database bounds", () => {
+    expect(filtersModule.registrationCreatedAtBounds({
+      tanggal_daftar_mulai: "2027-02-02",
+      tanggal_daftar_sampai: "2027-02-02",
+    })).toEqual({
+      startInclusive: "2027-02-01T17:00:00.000Z",
+      endExclusive: "2027-02-02T17:00:00.000Z",
+    });
+    expect(filtersModule.registrationCreatedAtBounds({ tanggal_daftar_mulai: "2027-02-02" }))
+      .toEqual({ startInclusive: "2027-02-01T17:00:00.000Z", endExclusive: undefined });
+    expect(filtersModule.registrationCreatedAtBounds({ tanggal_daftar_sampai: "2027-02-02" }))
+      .toEqual({ startInclusive: undefined, endExclusive: "2027-02-02T17:00:00.000Z" });
+  });
+
   test("filters registration dates by the school's Jakarta calendar day", () => {
     const row = encryptedRow({ created_at: "2027-02-01T20:00:00.000Z" });
     expect(filtersModule.matchesEncryptedWaitinglist(row, {

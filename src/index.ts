@@ -2,7 +2,7 @@ import { randomBytes } from "node:crypto";
 import { chmod, mkdir, readFile, unlink, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { Elysia, t } from "elysia";
-import { and, count, desc, eq, isNotNull, isNull, sql } from "drizzle-orm";
+import { and, count, desc, eq, gte, isNotNull, isNull, lt, sql } from "drizzle-orm";
 import { migrate } from "drizzle-orm/mysql2/migrator";
 import {
   ADMIN_PASSWORD_CONFIGURED,
@@ -57,6 +57,7 @@ import {
 import {
   hasWaitinglistFilters,
   matchesEncryptedWaitinglist,
+  registrationCreatedAtBounds,
   validateWaitinglistFilterQuery,
   type WaitinglistFilterQuery,
 } from "./lib/waitinglist-filters";
@@ -563,6 +564,10 @@ export const app = new Elysia({ name: "spsb-waitinglist" })
       set.status = 400;
       return { error: filterError };
     }
+    const dateBounds = registrationCreatedAtBounds(query);
+    const reportConditions = [isNull(calonSantriWaitinglist.deleted_at)];
+    if (dateBounds.startInclusive) reportConditions.push(gte(calonSantriWaitinglist.created_at, dateBounds.startInclusive));
+    if (dateBounds.endExclusive) reportConditions.push(lt(calonSantriWaitinglist.created_at, dateBounds.endExclusive));
     const storedRows = await db.select({
       id: calonSantriWaitinglist.id,
       nama_anak: calonSantriWaitinglist.nama_anak,
@@ -577,7 +582,7 @@ export const app = new Elysia({ name: "spsb-waitinglist" })
       kecamatan_nama: calonSantriWaitinglist.kecamatan_nama,
       kabupaten_nama: calonSantriWaitinglist.kabupaten_nama,
       provinsi_nama: calonSantriWaitinglist.provinsi_nama,
-    }).from(calonSantriWaitinglist).where(isNull(calonSantriWaitinglist.deleted_at));
+    }).from(calonSantriWaitinglist).where(and(...reportConditions));
     return buildWaitinglistReport(storedRows, query);
   }, { query: t.Object(waitinglistFilterProperties()) })
   .get("/api/admin/waitinglist/:id", async ({ params, request, set }) => {
@@ -721,8 +726,12 @@ export const app = new Elysia({ name: "spsb-waitinglist" })
         pages: Math.max(1, Math.ceil(total / pageSize)),
       };
     }
+    const dateBounds = registrationCreatedAtBounds(query);
+    const listConditions = [lifecycleFilter];
+    if (dateBounds.startInclusive) listConditions.push(gte(calonSantriWaitinglist.created_at, dateBounds.startInclusive));
+    if (dateBounds.endExclusive) listConditions.push(lt(calonSantriWaitinglist.created_at, dateBounds.endExclusive));
     const storedRows = await db.select().from(calonSantriWaitinglist)
-      .where(lifecycleFilter)
+      .where(and(...listConditions))
       .orderBy(desc(calonSantriWaitinglist.created_at));
     const filteredRows = storedRows.filter((row) => matchesEncryptedWaitinglist(row, query));
     const total = filteredRows.length;
@@ -773,8 +782,12 @@ export const app = new Elysia({ name: "spsb-waitinglist" })
       set.status = 400;
       return { error: filterError };
     }
+    const dateBounds = registrationCreatedAtBounds(query);
+    const exportConditions = [isNull(calonSantriWaitinglist.deleted_at)];
+    if (dateBounds.startInclusive) exportConditions.push(gte(calonSantriWaitinglist.created_at, dateBounds.startInclusive));
+    if (dateBounds.endExclusive) exportConditions.push(lt(calonSantriWaitinglist.created_at, dateBounds.endExclusive));
     const storedRows = await db.select().from(calonSantriWaitinglist)
-      .where(isNull(calonSantriWaitinglist.deleted_at))
+      .where(and(...exportConditions))
       .orderBy(desc(calonSantriWaitinglist.created_at));
     const rows = storedRows
       .filter((row) => matchesEncryptedWaitinglist(row, query))
@@ -793,8 +806,12 @@ export const app = new Elysia({ name: "spsb-waitinglist" })
       set.status = 400;
       return { error: filterError };
     }
+    const dateBounds = registrationCreatedAtBounds(query);
+    const exportConditions = [isNull(calonSantriWaitinglist.deleted_at)];
+    if (dateBounds.startInclusive) exportConditions.push(gte(calonSantriWaitinglist.created_at, dateBounds.startInclusive));
+    if (dateBounds.endExclusive) exportConditions.push(lt(calonSantriWaitinglist.created_at, dateBounds.endExclusive));
     const storedRows = await db.select().from(calonSantriWaitinglist)
-      .where(isNull(calonSantriWaitinglist.deleted_at))
+      .where(and(...exportConditions))
       .orderBy(desc(calonSantriWaitinglist.created_at));
     const rows = storedRows
       .filter((row) => matchesEncryptedWaitinglist(row, query))
