@@ -71,8 +71,9 @@ Dashboard di `/admin` mencakup:
 
 - Login admin dengan sesi bertanda tangan, cookie HttpOnly, dan perlindungan CSRF.
 - Monitoring status aplikasi, koneksi MariaDB, runtime Bun, webhook n8n, dan Turnstile.
-- Ringkasan total pendaftar, jumlah yang memenuhi kriteria, dan pendaftar dalam 24 jam terakhir.
-- Pencarian, filter, paginasi, serta ekspor CSV data pendaftar.
+- Laporan operasional sesuai filter: total pendaftar, tren harian, komposisi Putra/Putri, ringkasan wilayah, serta snapshot kelayakan saat pendaftaran (bukan hitung ulang aturan usia saat ini). Tanpa filter tanggal, cakupan angka adalah semua pendaftar; grafik menampilkan 30 hari terakhir.
+- Pencarian, filter tanggal/status/jenis kelamin/kecamatan, reset filter, paginasi, ekspor CSV/Excel yang memakai cakupan filter sama, dan dialog detail peserta read-only.
+- Tabel hanya memuat kontak minimum; nomor WhatsApp/email dimuat lewat endpoint detail admin yang terautentikasi. Laporan agregat tidak mengembalikan identitas peserta. Bukti transfer tampil sebagai lampiran yang dikirim pengguna, bukan bukti pembayaran terverifikasi.
 - Pengaturan tanggal acuan usia, usia minimum, link grup WhatsApp, dan jadwal halaman “Segera Dibuka”. Perubahan disimpan di MariaDB.
 - Unggah, ganti, atau hapus brosur SPSB dalam format JPG/PNG (maksimal 10 MB). Tombol Download Brosur selalu terlihat pada halaman countdown; sebelum diunggah atau setelah dihapus, pengunjung mendapat pesan “Brosur belum tersedia”. Gambar tersimpan sebagai file di volume persisten `DATA_DIR`. Setelah pembaruan dari versi PDF, unggah brosur gambar agar kembali tersedia.
 
@@ -128,7 +129,9 @@ Dropdown wilayah menggunakan proxy backend ke [EMSIFA API Wilayah Indonesia v2](
 - `POST /api/waitinglist` (endpoint internal kompatibilitas untuk menyimpan pendaftaran SPSB)
 - `POST /api/admin/login`, `POST /api/admin/logout`
 - `GET /api/admin/system`, `GET /api/admin/settings`, `PUT /api/admin/settings`
-- `GET /api/admin/waitinglist`, `GET /api/admin/export.csv`
+- `GET /api/admin/report` — agregat laporan pendaftaran sesuai filter; tidak mengirim identitas peserta.
+- `GET /api/admin/waitinglist`, `GET /api/admin/waitinglist/:id` — daftar berhalaman dengan payload minimum dan detail peserta read-only khusus admin.
+- `GET /api/admin/export.csv`
 - `GET /api/admin/waitinglist/:id/proof` — unduh bukti transfer, khusus admin terautentikasi.
 - `GET /healthz` — liveness aplikasi; `GET /readyz` — kesiapan koneksi database.
 

@@ -311,6 +311,8 @@ test.skipIf(!testDatabaseUrl)("MariaDB-backed public, admin, security, and notif
       database: { status: "online" },
       integrations: { n8nConfigured: true, turnstileEnabled: true },
     });
+    expect(await (await app.handle(new Request("http://localhost/api/admin/report"))).status).toBe(401);
+    expect(await (await app.handle(new Request(`http://localhost/api/admin/waitinglist/${successResult.id}`))).status).toBe(401);
 
     const registrationDate = new Date(Date.parse(storedRows[0]!.created_at) + 7 * 60 * 60 * 1000).toISOString().slice(0, 10);
     const query = new URLSearchParams({
@@ -327,9 +329,34 @@ test.skipIf(!testDatabaseUrl)("MariaDB-backed public, admin, security, and notif
     exportQuery.delete("page");
     const list = await app.handle(new Request(`http://localhost/api/admin/waitinglist?${query}`, { headers: adminHeaders }));
     expect(list.status).toBe(200);
-    const listResult = await list.json() as { rows: Array<{ id: string; nama_anak: string }>; total: number };
+    const listResult = await list.json() as { rows: Array<Record<string, unknown> & { id: string; nama_anak: string }>; total: number };
     expect(listResult.total).toBe(2);
     expect(listResult.rows.map((row) => row.id)).toContain(successResult.id);
+    expect(listResult.rows[0]).not.toHaveProperty("email");
+    expect(listResult.rows[0]).not.toHaveProperty("no_hp_wa");
+    expect(listResult.rows[0]).not.toHaveProperty("tanggal_lahir_anak");
+    const reportResponse = await app.handle(new Request(`http://localhost/api/admin/report?${exportQuery}`, { headers: adminHeaders }));
+    expect(reportResponse.status).toBe(200);
+    const reportBody = await reportResponse.text();
+    expect(reportBody).not.toContain(basePayload.email);
+    expect(reportBody).not.toContain(basePayload.no_hp_wa);
+    expect(reportBody).not.toContain(successResult.id);
+    expect(JSON.parse(reportBody)).toMatchObject({
+      total: 2,
+      gender: { putra: 2, putri: 0 },
+      eligibilityAtSubmission: { eligible: 2, notEligible: 0 },
+      topDistricts: [{ district: "Sukasari", regency: "Kota Bandung", province: "Jawa Barat", total: 2 }],
+    });
+    const detailResponse = await app.handle(new Request(`http://localhost/api/admin/waitinglist/${successResult.id}`, { headers: adminHeaders }));
+    expect(detailResponse.status).toBe(200);
+    expect(await detailResponse.json()).toMatchObject({
+      id: successResult.id,
+      nama_anak: basePayload.nama_anak,
+      email: basePayload.email,
+      no_hp_wa: "6281234567890",
+      status_eligibility: "eligible",
+      has_proof: true,
+    });
 
     const noGenderMatch = await app.handle(new Request(`http://localhost/api/admin/waitinglist?${new URLSearchParams({ q: nonce, jenis_kelamin: "putri", page: "1" })}`, { headers: adminHeaders }));
     expect(noGenderMatch.status).toBe(200);

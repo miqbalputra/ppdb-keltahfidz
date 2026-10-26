@@ -2,7 +2,7 @@ import { randomBytes } from "node:crypto";
 import { chmod, mkdir, readFile, unlink, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { Elysia, t } from "elysia";
-import { count, desc, eq, gt, sql } from "drizzle-orm";
+import { count, desc, eq, sql } from "drizzle-orm";
 import { migrate } from "drizzle-orm/mysql2/migrator";
 import {
   ADMIN_PASSWORD_CONFIGURED,
@@ -39,13 +39,13 @@ import {
 } from "./lib/auth";
 import { getRegions } from "./lib/regions";
 import {
-  decryptField,
   decryptPaymentProof,
   decryptSensitiveRecord,
   encryptPaymentProof,
   encryptSensitiveRecord,
 } from "./lib/encryption";
 import { detectPaymentProofMime } from "./lib/payment-proof";
+import { buildWaitinglistReport } from "./lib/waitinglist-report";
 import { brochureStatus, deleteBrochure, detectBrochureMime, readBrochure, saveBrochure, validateBrochure } from "./lib/brochure";
 import { getBrochureDownloadCount, recordBrochureDownload } from "./lib/brochure-downloads";
 import {
@@ -127,6 +127,25 @@ function waitinglistFilterProperties() {
     tanggal_daftar_sampai: date(),
     tanggal_lahir_mulai: date(),
     tanggal_lahir_sampai: date(),
+  };
+}
+
+function participantListDto(row: typeof calonSantriWaitinglist.$inferSelect) {
+  const participant = decryptSensitiveRecord(row);
+  return {
+    id: participant.id,
+    nama_anak: participant.nama_anak,
+    nama_ortu: participant.nama_ortu,
+    status_ortu: participant.status_ortu,
+    jenis_kelamin: participant.jenis_kelamin,
+    sekolah_asal: participant.sekolah_asal,
+    umur_terhitung_bulan: participant.umur_terhitung_bulan,
+    status_eligibility: participant.status_eligibility,
+    desa_nama: participant.desa_nama,
+    kecamatan_nama: participant.kecamatan_nama,
+    has_proof: Boolean(participant.bukti_transfer_mime),
+    konfirmasi_ketentuan_biaya: participant.konfirmasi_ketentuan_biaya,
+    created_at: participant.created_at,
   };
 }
 
@@ -445,29 +464,14 @@ export const app = new Elysia({ name: "spsb-waitinglist" })
     const base = {
       app: { status: "online", runtime: `Bun ${Bun.version}`, uptimeSeconds: Math.floor(process.uptime()) },
       database: { status: "offline" as "offline" | "online" },
-      metrics: { total: 0, eligible: 0, last24Hours: 0 },
       integrations: { n8nConfigured: Boolean(N8N_WEBHOOK_URL), turnstileEnabled: TURNSTILE_ENABLED },
       settings: null as SystemSettings | null,
       settingsUpdatedAt: null as string | null,
     };
     try {
       const settings = await getSystemSettings();
-      const cutoffTime = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-      const [totalRows, recentRows, eligibilityRows] = await Promise.all([
-        db.select({ total: count() }).from(calonSantriWaitinglist),
-        db.select({ total: count() }).from(calonSantriWaitinglist)
-          .where(gt(calonSantriWaitinglist.created_at, cutoffTime)),
-        db.select({ id: calonSantriWaitinglist.id, status: calonSantriWaitinglist.status_eligibility })
-          .from(calonSantriWaitinglist),
-      ]);
+      await db.execute(sql`SELECT 1`);
       base.database.status = "online";
-      base.metrics = {
-        total: totalRows[0]?.total ?? 0,
-        eligible: eligibilityRows.reduce((total, row) => (
-          total + (decryptField(row.status, "status_eligibility", row.id) === "eligible" ? 1 : 0)
-        ), 0),
-        last24Hours: recentRows[0]?.total ?? 0,
-      };
       base.settings = settings;
       base.settingsUpdatedAt = await getSettingUpdatedAt();
     } catch {
@@ -550,6 +554,62 @@ export const app = new Elysia({ name: "spsb-waitinglist" })
       return { error: "Pengaturan belum dapat disimpan. Silakan coba kembali." };
     }
   }, { body: adminSettingsBody })
+  .get("/api/admin/report", async ({ query, request, set }) => {
+    if (!requireAdmin(request, set)) return { error: "Silakan login sebagai admin." };
+    const filterError = validateWaitinglistFilterQuery(query);
+    if (filterError) {
+      set.status = 400;
+      return { error: filterError };
+    }
+    const storedRows = await db.select({
+      id: calonSantriWaitinglist.id,
+      nama_anak: calonSantriWaitinglist.nama_anak,
+      nama_ortu: calonSantriWaitinglist.nama_ortu,
+      email: calonSantriWaitinglist.email,
+      no_hp_wa: calonSantriWaitinglist.no_hp_wa,
+      desa_nama: calonSantriWaitinglist.desa_nama,
+      jenis_kelamin: calonSantriWaitinglist.jenis_kelamin,
+      tanggal_lahir_anak: calonSantriWaitinglist.tanggal_lahir_anak,
+      created_at: calonSantriWaitinglist.created_at,
+      status_eligibility: calonSantriWaitinglist.status_eligibility,
+      kecamatan_nama: calonSantriWaitinglist.kecamatan_nama,
+      kabupaten_nama: calonSantriWaitinglist.kabupaten_nama,
+      provinsi_nama: calonSantriWaitinglist.provinsi_nama,
+    }).from(calonSantriWaitinglist);
+    return buildWaitinglistReport(storedRows, query);
+  }, { query: t.Object(waitinglistFilterProperties()) })
+  .get("/api/admin/waitinglist/:id", async ({ params, request, set }) => {
+    if (!requireAdmin(request, set)) return { error: "Silakan login sebagai admin." };
+    const [stored] = await db.select().from(calonSantriWaitinglist)
+      .where(eq(calonSantriWaitinglist.id, params.id)).limit(1);
+    if (!stored) {
+      set.status = 404;
+      return { error: "Data pendaftar tidak ditemukan." };
+    }
+    const participant = decryptSensitiveRecord(stored);
+    return {
+      id: participant.id,
+      nama_anak: participant.nama_anak,
+      jenis_kelamin: participant.jenis_kelamin,
+      sekolah_asal: participant.sekolah_asal,
+      tanggal_lahir_anak: participant.tanggal_lahir_anak,
+      umur_terhitung_bulan: participant.umur_terhitung_bulan,
+      status_eligibility: participant.status_eligibility,
+      nama_ortu: participant.nama_ortu,
+      status_ortu: participant.status_ortu,
+      no_hp_wa: participant.no_hp_wa,
+      email: participant.email,
+      provinsi_nama: participant.provinsi_nama,
+      kabupaten_nama: participant.kabupaten_nama,
+      kecamatan_nama: participant.kecamatan_nama,
+      desa_nama: participant.desa_nama,
+      konfirmasi_data: participant.konfirmasi_data,
+      konfirmasi_bukti_transfer: participant.konfirmasi_bukti_transfer,
+      konfirmasi_ketentuan_biaya: participant.konfirmasi_ketentuan_biaya,
+      has_proof: Boolean(participant.bukti_transfer_mime),
+      created_at: participant.created_at,
+    };
+  }, { params: t.Object({ id: t.String({ pattern: "^[a-f0-9]{32}$" }) }) })
   .get("/api/admin/waitinglist/:id/proof", async ({ params, request, set }) => {
     if (!requireAdmin(request, set)) return { error: "Silakan login sebagai admin." };
     const [row] = await db.select({ mime: calonSantriWaitinglist.bukti_transfer_mime })
@@ -601,7 +661,7 @@ export const app = new Elysia({ name: "spsb-waitinglist" })
       ]);
       const total = totalRows[0]?.total ?? 0;
       return {
-        rows: storedRows.map((row) => decryptSensitiveRecord(row)),
+        rows: storedRows.map(participantListDto),
         total,
         page,
         pageSize,
@@ -613,7 +673,7 @@ export const app = new Elysia({ name: "spsb-waitinglist" })
     const filteredRows = storedRows.filter((row) => matchesEncryptedWaitinglist(row, query));
     const total = filteredRows.length;
     const rows = filteredRows.slice((page - 1) * pageSize, page * pageSize)
-      .map((row) => decryptSensitiveRecord(row));
+      .map(participantListDto);
     return { rows, total, page, pageSize, pages: Math.max(1, Math.ceil(total / pageSize)) };
   }, {
     query: t.Object({

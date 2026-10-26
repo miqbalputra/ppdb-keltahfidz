@@ -42,7 +42,7 @@ describe("frontend accessibility contracts", () => {
       expect(html).toContain('href="/logo-gq.png" type="image/png"');
       expect(html).toContain('class="brand-logo" src="/logo-gq.png"');
       expect(html).toContain('name="description"');
-      expect(html).toContain(`<link rel="stylesheet" href="/app.css?v=${page === "index.html" ? "2027-brochure-minimal-v4" : page === "success.html" ? "2027-countdown-cta" : "2027-brochure-v1"}">`);
+      expect(html).toContain(`<link rel="stylesheet" href="/app.css?v=${page === "index.html" ? "2027-brochure-minimal-v4" : page === "success.html" ? "2027-countdown-cta" : page === "admin.html" ? "2027-admin-reports-v1" : "2027-brochure-v1"}">`);
       const ids = attributes(html, "id");
       const idSet = new Set(ids);
       expect(idSet.size).toBe(ids.length);
@@ -145,6 +145,22 @@ describe("frontend accessibility contracts", () => {
     expect(html).toContain("PENDAFTARAN SPSB 2027 TERKIRIM");
     expect(html).toContain("bukan pengumuman hasil seleksi");
     expect(html).not.toContain("Data waitinglist");
+  });
+
+  test("admin prioritizes filtered reports and participant work before configuration and monitoring", async () => {
+    const html = await pageSource("admin.html");
+    const positions = ["reports-panel", "waitinglist-panel", "settings-panel", "brochure-panel", "system-panel"]
+      .map((id) => html.indexOf(`id="${id}"`));
+    expect(positions.every((position) => position >= 0)).toBe(true);
+    expect(positions).toEqual([...positions].sort((a, b) => a - b));
+    expect(html).toContain('id="filter-reset"');
+    expect(html).toContain('id="report-total"');
+    expect(html).toContain('id="daily-report"');
+    expect(html).toContain('id="area-report"');
+    expect(html).toContain('id="participant-dialog"');
+    expect(html).toContain('id="detail-eligibility"');
+    expect(html).toContain('id="detail-transfer-consent"');
+    expect(html).toContain('src="/admin.js?v=2027-admin-reports-v1"');
   });
 
   test("admin table and export controls are accessible and include every requested filter", async () => {
