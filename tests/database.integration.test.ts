@@ -347,6 +347,29 @@ test.skipIf(!testDatabaseUrl)("MariaDB-backed public, admin, security, and notif
       eligibilityAtSubmission: { eligible: 2, notEligible: 0 },
       topDistricts: [{ district: "Sukasari", regency: "Kota Bandung", province: "Jawa Barat", total: 2 }],
     });
+    for (const sort of ['newest', 'oldest', 'name', 'age']) {
+      for (const pageSize of ['25', '50', '100']) {
+        const params = new URLSearchParams(exportQuery);
+        params.set('sort', sort); params.set('page_size', pageSize); params.set('page', '999');
+        const response = await app.handle(new Request(`http://localhost/api/admin/waitinglist?${params}`, { headers: adminHeaders }));
+        expect(response.status).toBe(200);
+        expect(await response.json()).toMatchObject({ total: 2, page: 1, pageSize: Number(pageSize), pages: 1 });
+      }
+    }
+    const optionsResponse = await app.handle(new Request('http://localhost/api/admin/filter-options', { headers: adminHeaders }));
+    expect(optionsResponse.status).toBe(200);
+    const optionsBody = await optionsResponse.text();
+    expect(optionsBody).toContain('Jawa Barat'); expect(optionsBody).not.toContain(basePayload.email);
+    for (const path of ['/api/admin/report.xlsx', '/api/admin/filter-options']) {
+      expect((await app.handle(new Request(`http://localhost${path}`))).status).toBe(401);
+    }
+    expect((await app.handle(new Request('http://localhost/api/admin/waitinglist?page_size=1000', { headers: adminHeaders }))).status).toBe(400);
+    const aggregateResponse = await app.handle(new Request(`http://localhost/api/admin/report.xlsx?${exportQuery}`, { headers: adminHeaders }));
+    expect(aggregateResponse.status).toBe(200);
+    expect(aggregateResponse.headers.get('cache-control')).toContain('no-store');
+    const aggregateWorkbook = new ExcelJS.Workbook();
+    await aggregateWorkbook.xlsx.load(Buffer.from(await aggregateResponse.arrayBuffer()) as never);
+    expect(aggregateWorkbook.getWorksheet('Ringkasan')!.getCell('B2').value).toBe(2);
     const detailResponse = await app.handle(new Request(`http://localhost/api/admin/waitinglist/${successResult.id}`, { headers: adminHeaders }));
     expect(detailResponse.status).toBe(200);
     expect(await detailResponse.json()).toMatchObject({
@@ -447,6 +470,17 @@ test.skipIf(!testDatabaseUrl)("MariaDB-backed public, admin, security, and notif
     const reportAfterArchive = await app.handle(new Request(`http://localhost/api/admin/report?${exportQuery}`, { headers: adminHeaders }));
     expect((await reportAfterArchive.json() as { total: number }).total).toBe(1);
     expect((await app.handle(new Request(`http://localhost/api/admin/waitinglist/${successResult.id}/export.pdf`, { headers: adminHeaders }))).status).toBe(404);
+    const archivedQuery = new URLSearchParams(exportQuery); archivedQuery.set('view', 'archived');
+    const archivedReport = await app.handle(new Request(`http://localhost/api/admin/report?${archivedQuery}`, { headers: adminHeaders }));
+    expect(await archivedReport.json()).toMatchObject({ total: 1, scope: 'Arsip' });
+    const archivedExport = await app.handle(new Request(`http://localhost/api/admin/export.xlsx?${archivedQuery}`, { headers: adminHeaders }));
+    expect(archivedExport.headers.get('content-disposition')).toContain('-arsip.xlsx');
+    const archiveWorkbook = new ExcelJS.Workbook();
+    await archiveWorkbook.xlsx.load(Buffer.from(await archivedExport.arrayBuffer()) as never);
+    expect(archiveWorkbook.getWorksheet('Data Pendaftar')!.rowCount).toBe(2);
+    const archivedCsvResponse = await app.handle(new Request(`http://localhost/api/admin/export.csv?${archivedQuery}`, { headers: adminHeaders }));
+    const archivedCsv = await archivedCsvResponse.text();
+    expect(archivedCsv.split('\r\n')).toHaveLength(2); expect(archivedCsv).toContain(successResult.id); expect(archivedCsv).toContain('integration-admin');
     const restored = await app.handle(new Request(restoreUrl, { method: "POST", headers: mutationHeaders, body: "{}" }));
     expect(restored.status).toBe(200);
     expect(await restored.json()).toEqual({ restored: true });

@@ -22,6 +22,8 @@ export interface ParticipantExportRecord {
   konfirmasi_bukti_transfer: number | null;
   konfirmasi_ketentuan_biaya: number | null;
   created_at: string;
+  deleted_at?: string | null;
+  deleted_by?: string | null;
 }
 
 interface ExportField {
@@ -31,6 +33,7 @@ interface ExportField {
 }
 
 const ageLabel = (months: number): string => {
+  if (!Number.isFinite(months) || months < 0) return 'Belum tercatat';
   const years = Math.floor(months / 12);
   const remainingMonths = months % 12;
   return remainingMonths ? `${years} tahun ${remainingMonths} bulan` : `${years} tahun`;
@@ -43,7 +46,7 @@ const dateLabel = (isoDate: string): string => {
 
 const eligibilityLabel = (status: string): string => status === "eligible"
   ? "Memenuhi kriteria"
-  : "Belum memenuhi kriteria";
+  : status === 'not_eligible' ? "Belum memenuhi kriteria" : 'Belum tercatat';
 
 const registrationDateLabel = (isoTimestamp: string): string => {
   const date = new Date(isoTimestamp);
@@ -86,6 +89,9 @@ const fields: ExportField[] = [
   { key: "bukti_transfer_mime", label: "Status bukti transfer", value: (record) => record.bukti_transfer_mime ? "Berkas terunggah (diunduh terpisah)" : "Belum ada berkas" },
   { key: "konfirmasi_ketentuan_biaya", label: "Persetujuan ketentuan biaya", value: (record) => record.konfirmasi_ketentuan_biaya === 1 ? "Disetujui" : "Belum dicatat" },
   { key: "created_at", label: "Tanggal pendaftaran", value: (record) => registrationDateLabel(record.created_at) },
+  { key: 'deleted_at', label: 'Status data', value: record => record.deleted_at ? 'Arsip' : 'Aktif' },
+  { key: 'deleted_at', label: 'Waktu arsip', value: record => record.deleted_at ? registrationDateLabel(record.deleted_at) : '' },
+  { key: 'deleted_by', label: 'Diarsipkan oleh', value: record => record.deleted_by || '' },
 ];
 
 function valuesFor(record: ParticipantExportRecord): string[] {

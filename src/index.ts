@@ -46,6 +46,7 @@ import {
 } from "./lib/encryption";
 import { detectPaymentProofMime } from "./lib/payment-proof";
 import { buildWaitinglistReport } from "./lib/waitinglist-report";
+import { generateReportXlsx } from "./lib/report-export";
 import { brochureStatus, deleteBrochure, detectBrochureMime, readBrochure, saveBrochure, validateBrochure } from "./lib/brochure";
 import { getBrochureDownloadCount, recordBrochureDownload } from "./lib/brochure-downloads";
 import {
@@ -56,6 +57,7 @@ import {
 } from "./lib/participant-export";
 import {
   hasWaitinglistFilters,
+  sortWaitinglist,
   matchesEncryptedWaitinglist,
   registrationCreatedAtBounds,
   validateWaitinglistFilterQuery,
@@ -121,6 +123,15 @@ function waitinglistFilterProperties() {
   }));
   return {
     q: t.Optional(t.String({ maxLength: 120 })),
+    view: t.Optional(t.Union([t.Literal('active'), t.Literal('archived')])),
+    sort: t.Optional(t.Union([t.Literal('newest'), t.Literal('oldest'), t.Literal('name'), t.Literal('age')])),
+    page_size: t.Optional(t.Union([t.Literal('25'), t.Literal('50'), t.Literal('100')])),
+    trend: t.Optional(t.Union([t.Literal('auto'), t.Literal('daily'), t.Literal('weekly'), t.Literal('monthly')])),
+    provinsi: t.Optional(t.String({ maxLength: 120 })),
+    kabupaten: t.Optional(t.String({ maxLength: 120 })),
+    sekolah: t.Optional(t.String({ maxLength: 120 })),
+    missing: t.Optional(t.Union(['all', 'any', 'gender', 'school', 'proof', 'consent'].map(value => t.Literal(value)))),
+    age_group: t.Optional(t.Union(['all', 'under6', '6to7', '7to8', '8plus', 'unknown'].map(value => t.Literal(value)))),
     status: t.Optional(t.Union([t.Literal("all"), t.Literal("eligible"), t.Literal("not_eligible")])),
     kecamatan: t.Optional(t.String({ maxLength: 120 })),
     jenis_kelamin: t.Optional(t.Union([t.Literal("all"), t.Literal("putra"), t.Literal("putri")])),
@@ -129,6 +140,19 @@ function waitinglistFilterProperties() {
     tanggal_lahir_mulai: date(),
     tanggal_lahir_sampai: date(),
   };
+}
+
+function lifecycleCondition(query: WaitinglistFilterQuery) {
+  return query.view === 'archived' ? isNotNull(calonSantriWaitinglist.deleted_at) : isNull(calonSantriWaitinglist.deleted_at);
+}
+
+async function adminDataset(query: WaitinglistFilterQuery) {
+  const bounds = registrationCreatedAtBounds(query);
+  const conditions = [lifecycleCondition(query)];
+  if (bounds.startInclusive) conditions.push(gte(calonSantriWaitinglist.created_at, bounds.startInclusive));
+  if (bounds.endExclusive) conditions.push(lt(calonSantriWaitinglist.created_at, bounds.endExclusive));
+  const rows = await db.select().from(calonSantriWaitinglist).where(and(...conditions));
+  return sortWaitinglist(rows.filter(row => matchesEncryptedWaitinglist(row, query)), query.sort);
 }
 
 function participantListDto(row: typeof calonSantriWaitinglist.$inferSelect) {
@@ -144,6 +168,8 @@ function participantListDto(row: typeof calonSantriWaitinglist.$inferSelect) {
     status_eligibility: participant.status_eligibility,
     desa_nama: participant.desa_nama,
     kecamatan_nama: participant.kecamatan_nama,
+    kabupaten_nama: participant.kabupaten_nama,
+    provinsi_nama: participant.provinsi_nama,
     has_proof: Boolean(participant.bukti_transfer_mime),
     konfirmasi_ketentuan_biaya: participant.konfirmasi_ketentuan_biaya,
     created_at: participant.created_at,
@@ -283,6 +309,7 @@ export const app = new Elysia({ name: "spsb-waitinglist" })
   .get("/app.css", () => Bun.file(join(PUBLIC_DIR, "app.css")))
   .get("/app.js", () => Bun.file(join(PUBLIC_DIR, "app.js")))
   .get("/admin.js", () => Bun.file(join(PUBLIC_DIR, "admin.js")))
+  .get("/admin.css", () => Bun.file(join(PUBLIC_DIR, "admin.css")))
   .get("/success.js", () => Bun.file(join(PUBLIC_DIR, "success.js")))
   .get("/favicon.svg", () => Bun.file(join(PUBLIC_DIR, "favicon.svg")))
   .get("/logo-gq.png", () => Bun.file(join(PUBLIC_DIR, "logo-gq.png")))
@@ -564,26 +591,23 @@ export const app = new Elysia({ name: "spsb-waitinglist" })
       set.status = 400;
       return { error: filterError };
     }
-    const dateBounds = registrationCreatedAtBounds(query);
-    const reportConditions = [isNull(calonSantriWaitinglist.deleted_at)];
-    if (dateBounds.startInclusive) reportConditions.push(gte(calonSantriWaitinglist.created_at, dateBounds.startInclusive));
-    if (dateBounds.endExclusive) reportConditions.push(lt(calonSantriWaitinglist.created_at, dateBounds.endExclusive));
-    const storedRows = await db.select({
-      id: calonSantriWaitinglist.id,
-      nama_anak: calonSantriWaitinglist.nama_anak,
-      nama_ortu: calonSantriWaitinglist.nama_ortu,
-      email: calonSantriWaitinglist.email,
-      no_hp_wa: calonSantriWaitinglist.no_hp_wa,
-      desa_nama: calonSantriWaitinglist.desa_nama,
-      jenis_kelamin: calonSantriWaitinglist.jenis_kelamin,
-      tanggal_lahir_anak: calonSantriWaitinglist.tanggal_lahir_anak,
-      created_at: calonSantriWaitinglist.created_at,
-      status_eligibility: calonSantriWaitinglist.status_eligibility,
-      kecamatan_nama: calonSantriWaitinglist.kecamatan_nama,
-      kabupaten_nama: calonSantriWaitinglist.kabupaten_nama,
-      provinsi_nama: calonSantriWaitinglist.provinsi_nama,
-    }).from(calonSantriWaitinglist).where(and(...reportConditions));
-    return buildWaitinglistReport(storedRows, query);
+    return buildWaitinglistReport(await adminDataset(query), query);
+  }, { query: t.Object(waitinglistFilterProperties()) })
+  .get('/api/admin/report.xlsx', async ({ query, request, set }) => {
+    if (!requireAdmin(request, set)) return { error: 'Silakan login sebagai admin.' };
+    const error = validateWaitinglistFilterQuery(query);
+    if (error) { set.status = 400; return { error }; }
+    const report = buildWaitinglistReport(await adminDataset(query), query);
+    return exportAttachment(await generateReportXlsx(report, query), 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', `laporan-spsb-${query.view ?? 'active'}.xlsx`);
+  }, { query: t.Object(waitinglistFilterProperties()) })
+  .get('/api/admin/filter-options', async ({ request, query, set }) => {
+    if (!requireAdmin(request, set)) return { error: 'Silakan login sebagai admin.' };
+    const rows = (await adminDataset({ view: query.view })).map(row => decryptSensitiveRecord(row));
+    return {
+      provinces: [...new Set(rows.map(row => row.provinsi_nama))].filter(Boolean).sort(),
+      regions: [...new Map(rows.map(row => [`${row.provinsi_nama}\u0000${row.kabupaten_nama}\u0000${row.kecamatan_nama}`, { province: row.provinsi_nama, regency: row.kabupaten_nama, district: row.kecamatan_nama }])).values()],
+      schools: [...new Set(rows.map(row => row.sekolah_asal?.trim()).filter(Boolean))].sort(),
+    };
   }, { query: t.Object(waitinglistFilterProperties()) })
   .get("/api/admin/waitinglist/:id", async ({ params, request, set }) => {
     if (!requireAdmin(request, set)) return { error: "Silakan login sebagai admin." };
@@ -700,24 +724,21 @@ export const app = new Elysia({ name: "spsb-waitinglist" })
       set.status = 400;
       return { error: filterError };
     }
-    const pageSize = 25;
+    const pageSize = Number(query.page_size ?? '25');
     const parsedPage = Number.parseInt(query.page ?? "1", 10);
-    const page = Number.isFinite(parsedPage) ? Math.max(1, Math.min(parsedPage, 1_000_000)) : 1;
+    let page = Number.isFinite(parsedPage) ? Math.max(1, Math.min(parsedPage, 1_000_000)) : 1;
     const view = query.view ?? "active";
     const lifecycleFilter = view === "archived"
       ? isNotNull(calonSantriWaitinglist.deleted_at)
       : isNull(calonSantriWaitinglist.deleted_at);
     const filtersActive = hasWaitinglistFilters(query);
-    if (!filtersActive) {
-      const [totalRows, storedRows] = await Promise.all([
-        db.select({ total: count() }).from(calonSantriWaitinglist).where(lifecycleFilter),
-        db.select().from(calonSantriWaitinglist)
-          .where(lifecycleFilter)
-          .orderBy(desc(calonSantriWaitinglist.created_at))
-          .limit(pageSize)
-          .offset((page - 1) * pageSize),
-      ]);
+    if (!filtersActive && (!query.sort || query.sort === 'newest')) {
+      const totalRows = await db.select({ total: count() }).from(calonSantriWaitinglist).where(lifecycleFilter);
       const total = totalRows[0]?.total ?? 0;
+      page = Math.min(page, Math.max(1, Math.ceil(total / pageSize)));
+      const storedRows = await db.select().from(calonSantriWaitinglist)
+        .where(lifecycleFilter).orderBy(desc(calonSantriWaitinglist.created_at), calonSantriWaitinglist.id)
+        .limit(pageSize).offset((page - 1) * pageSize);
       return {
         rows: storedRows.map(participantListDto),
         total,
@@ -726,15 +747,9 @@ export const app = new Elysia({ name: "spsb-waitinglist" })
         pages: Math.max(1, Math.ceil(total / pageSize)),
       };
     }
-    const dateBounds = registrationCreatedAtBounds(query);
-    const listConditions = [lifecycleFilter];
-    if (dateBounds.startInclusive) listConditions.push(gte(calonSantriWaitinglist.created_at, dateBounds.startInclusive));
-    if (dateBounds.endExclusive) listConditions.push(lt(calonSantriWaitinglist.created_at, dateBounds.endExclusive));
-    const storedRows = await db.select().from(calonSantriWaitinglist)
-      .where(and(...listConditions))
-      .orderBy(desc(calonSantriWaitinglist.created_at));
-    const filteredRows = storedRows.filter((row) => matchesEncryptedWaitinglist(row, query));
+    const filteredRows = await adminDataset(query);
     const total = filteredRows.length;
+    page = Math.min(page, Math.max(1, Math.ceil(total / pageSize)));
     const rows = filteredRows.slice((page - 1) * pageSize, page * pageSize)
       .map(participantListDto);
     return { rows, total, page, pageSize, pages: Math.max(1, Math.ceil(total / pageSize)) };
@@ -782,21 +797,12 @@ export const app = new Elysia({ name: "spsb-waitinglist" })
       set.status = 400;
       return { error: filterError };
     }
-    const dateBounds = registrationCreatedAtBounds(query);
-    const exportConditions = [isNull(calonSantriWaitinglist.deleted_at)];
-    if (dateBounds.startInclusive) exportConditions.push(gte(calonSantriWaitinglist.created_at, dateBounds.startInclusive));
-    if (dateBounds.endExclusive) exportConditions.push(lt(calonSantriWaitinglist.created_at, dateBounds.endExclusive));
-    const storedRows = await db.select().from(calonSantriWaitinglist)
-      .where(and(...exportConditions))
-      .orderBy(desc(calonSantriWaitinglist.created_at));
-    const rows = storedRows
-      .filter((row) => matchesEncryptedWaitinglist(row, query))
-      .map((row) => decryptSensitiveRecord(row));
+    const rows = (await adminDataset(query)).map(row => decryptSensitiveRecord(row));
     const bytes = await generateParticipantsXlsx(rows);
     return exportAttachment(
       bytes,
       "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-      "waitinglist-spsb-2027.xlsx",
+      `waitinglist-spsb-2027${query.view === 'archived' ? '-arsip' : ''}.xlsx`,
     );
   }, { query: t.Object(waitinglistFilterProperties()) })
   .get("/api/admin/export.csv", async ({ query, request, set }) => {
@@ -806,35 +812,31 @@ export const app = new Elysia({ name: "spsb-waitinglist" })
       set.status = 400;
       return { error: filterError };
     }
-    const dateBounds = registrationCreatedAtBounds(query);
-    const exportConditions = [isNull(calonSantriWaitinglist.deleted_at)];
-    if (dateBounds.startInclusive) exportConditions.push(gte(calonSantriWaitinglist.created_at, dateBounds.startInclusive));
-    if (dateBounds.endExclusive) exportConditions.push(lt(calonSantriWaitinglist.created_at, dateBounds.endExclusive));
-    const storedRows = await db.select().from(calonSantriWaitinglist)
-      .where(and(...exportConditions))
-      .orderBy(desc(calonSantriWaitinglist.created_at));
-    const rows = storedRows
-      .filter((row) => matchesEncryptedWaitinglist(row, query))
-      .map((row) => decryptSensitiveRecord(row));
+    const rows = (await adminDataset(query)).map(row => decryptSensitiveRecord(row));
     const output: string[][] = [[
       "ID", "Nama Anak", "Jenis Kelamin", "Sekolah Asal", "Tanggal Lahir", "Umur Tercatat Saat Daftar (bulan)",
       "Status Kelayakan", "Persetujuan Ketentuan Biaya", "Nama Orang Tua", "Status Orang Tua", "Provinsi", "Kabupaten/Kota",
       "Kecamatan", "Desa/Kelurahan", "WhatsApp", "Email", "Tanggal Submit",
+      'Persetujuan Data', 'Konfirmasi Lampiran', 'Metadata Lampiran', 'Status Data', 'Waktu Arsip', 'Diarsipkan Oleh',
     ]];
     for (const row of rows) {
       output.push([
         csvSafe(row.id), csvSafe(row.nama_anak),
         csvSafe(row.jenis_kelamin === "putra" ? "Putra" : row.jenis_kelamin === "putri" ? "Putri" : "Belum dicatat"),
-        csvSafe(row.sekolah_asal || ""), csvSafe(row.tanggal_lahir_anak), String(row.umur_terhitung_bulan), csvSafe(row.status_eligibility),
+        csvSafe(row.sekolah_asal || ""), csvSafe(row.tanggal_lahir_anak), Number.isFinite(row.umur_terhitung_bulan) ? String(row.umur_terhitung_bulan) : 'Belum tercatat', csvSafe(row.status_eligibility),
         csvSafe(row.konfirmasi_ketentuan_biaya === 1 ? "Setuju" : "Belum dicatat"), csvSafe(row.nama_ortu),
         csvSafe(row.status_ortu), csvSafe(row.provinsi_nama), csvSafe(row.kabupaten_nama),
         csvSafe(row.kecamatan_nama), csvSafe(row.desa_nama), csvSafe(row.no_hp_wa),
         csvSafe(row.email), csvSafe(row.created_at),
+        row.konfirmasi_data === 1 ? 'Setuju' : 'Belum dicatat',
+        row.konfirmasi_bukti_transfer === 1 ? 'Dikonfirmasi' : 'Belum dicatat',
+        row.bukti_transfer_mime ? 'Tercatat (belum diverifikasi)' : 'Belum dicatat',
+        row.deleted_at ? 'Arsip' : 'Aktif', csvSafe(row.deleted_at || ''), csvSafe(row.deleted_by || ''),
       ]);
     }
     const csv = `\uFEFF${output.map((line) => line.map((value) => `"${value.replaceAll('"', '""')}"`).join(",")).join("\r\n")}`;
     set.headers["Content-Type"] = "text/csv; charset=utf-8";
-    set.headers["Content-Disposition"] = 'attachment; filename="waitinglist-spsb-2027.csv"';
+    set.headers["Content-Disposition"] = `attachment; filename="waitinglist-spsb-2027${query.view === 'archived' ? '-arsip' : ''}.csv"`;
     set.headers["Cache-Control"] = "no-store, max-age=0";
     set.headers.Pragma = "no-cache";
     return csv;

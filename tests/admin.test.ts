@@ -117,9 +117,9 @@ function dashboardHarness(
   };
   const windowListeners: Record<string, (event: any) => void> = {};
   runInNewContext(script, {
-    document: { querySelector: makeNode, createElement: (tag: string) => makeNode(`created:${tag}`) },
+    document: { querySelector: makeNode, querySelectorAll: () => [], createElement: (tag: string) => makeNode(`created:${tag}`) },
     fetch, FormData: TestFormData, AbortController, URLSearchParams, Intl,
-    window: { confirm: () => true, addEventListener: (event: string, callback: (event: any) => void) => { windowListeners[event] = callback; }, location: { assign: () => {} } },
+    window: { confirm: () => true, addEventListener: (event: string, callback: (event: any) => void) => { windowListeners[event] = callback; }, location: { hash: '#pengaturan', assign: () => {} } },
   });
   const settle = async () => { for (let i = 0; i < 30; i += 1) await Promise.resolve(); };
   return {

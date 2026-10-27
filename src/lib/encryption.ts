@@ -104,14 +104,27 @@ export function encryptSensitiveRecord<T extends Record<string, unknown>>(record
   return output as T;
 }
 
+// Cached by row object, not ID: values live only as long as a request's rows.
+// Keep ciphertext in datasets to avoid interpreting clear text beginning "enc:" twice.
+const fieldCache = new WeakMap<object, Map<string, { input: string; output: string }>>();
+export function readStoredField(record: object & { id: string }, field: string): string {
+  const input = String((record as Record<string, unknown>)[field] ?? '');
+  let cache = fieldCache.get(record);
+  if (!cache) { cache = new Map(); fieldCache.set(record, cache); }
+  const cached = cache.get(field);
+  if (cached?.input === input) return cached.output;
+  const output = decryptField(input, field, record.id);
+  cache.set(field, { input, output });
+  return output;
+}
+
 export function decryptSensitiveRecord<T extends Record<string, unknown>>(record: T): DecryptedRow<T> {
   const output = { ...record } as Record<string, unknown>;
-  const recordId = String(output.id ?? "");
   for (const field of ENCRYPTED_FIELDS) {
-    const value = output[field];
-    if (value !== undefined && value !== null) output[field] = decryptField(String(value), field, recordId);
+    if (record[field] !== undefined && record[field] !== null) output[field] = readStoredField(record as T & { id: string }, field);
   }
-  output.umur_terhitung_bulan = Number(output.umur_terhitung_bulan);
+  const age = String(output.umur_terhitung_bulan ?? '').trim();
+  output.umur_terhitung_bulan = age ? Number(age) : NaN;
   return output as DecryptedRow<T>;
 }
 
