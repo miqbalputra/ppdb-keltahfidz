@@ -787,6 +787,11 @@
   function renderFilterChips() {
     const container = document.querySelector('#filter-chips');
     container.replaceChildren();
+    const basicFilterKeys = new Set(['q', 'view', 'status', 'jenis_kelamin', 'kecamatan', 'sort', 'page_size', 'trend']);
+    const activeAdditionalFilters = [...appliedFilters.keys()].filter(key => !basicFilterKeys.has(key)).length;
+    const additionalCount = document.querySelector('#filter-options-count');
+    additionalCount.textContent = activeAdditionalFilters ? `${activeAdditionalFilters} aktif` : 'Opsional';
+    additionalCount.classList.toggle('is-active', activeAdditionalFilters > 0);
     for (const [key, value] of appliedFilters) {
       if (['sort', 'page_size', 'trend'].includes(key)) continue;
       const chip = document.createElement('span');

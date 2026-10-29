@@ -9,8 +9,8 @@
   <title>Dashboard Panitia — SPSB 2027</title>
   <link rel="icon" href="/logo-gq.png" type="image/png">
   <link rel="stylesheet" href="/app.css?v=2027-admin-archive-v3">
-  <link rel="stylesheet" href="/admin.css?v=2027-workspace-2">
-  <script src="/admin.js?v=2027-workspace-2" defer></script>
+  <link rel="stylesheet" href="/admin.css?v=2027-workspace-3">
+  <script src="/admin.js?v=2027-workspace-3" defer></script>
 </head>
 <body class="admin-page">
   <a class="skip-link" href="#main-content">Lewati ke konten utama</a>
@@ -30,27 +30,58 @@
     </section>
 
     <section class="dashboard" id="dashboard" hidden>
-      <div class="dashboard-heading"><div><span class="section-kicker">RUANG KERJA PANITIA</span><h1 tabindex="-1">Dashboard <em>SPSB.</em></h1><p>Lihat laporan pendaftaran dan kelola data calon santri SPSB.</p></div><div class="session-actions"><span id="staff-name-label"></span><button class="button button-outline" id="change-password-button" type="button">Ganti password</button><button class="button button-outline" id="logout-button" type="button">Keluar <span aria-hidden="true">↗</span></button></div></div>
+      <div class="dashboard-heading"><div><span class="section-kicker">RUANG KERJA PANITIA</span><h1 tabindex="-1">Dashboard <em>SPSB.</em></h1><p>Lihat laporan pendaftaran dan kelola data calon santri SPSB.</p></div><div class="session-actions"><span id="staff-name-label"></span><button class="button button-outline" id="change-password-button" type="button">Ganti password</button><button class="button button-outline" id="logout-button" type="button">Keluar</button></div></div>
       <div class="dashboard-alert form-alert" id="dashboard-alert" role="alert" aria-live="assertive" aria-atomic="true" hidden></div>
       <nav class="dashboard-nav" aria-label="Navigasi dashboard"><span class="nav-caption" id="staff-role-label">SPSB 2027 · PETUGAS</span><a href="#ringkasan" id="ringkasan" data-page="ringkasan">Ringkasan</a><a href="#peserta" id="peserta" data-page="peserta">Data peserta</a><a href="#pembayaran" id="pembayaran" data-page="pembayaran">Pembayaran</a><a href="#analitik" id="analitik" data-page="analitik">Analitik &amp; laporan</a><a href="#arsip" id="arsip" data-page="arsip">Arsip</a><a href="#akun" id="akun" data-page="akun">Akun petugas</a><a href="#pengaturan" id="pengaturan" data-page="pengaturan">Pengaturan</a><small>Ruang kerja terbatas<br>Data pribadi dilindungi</small></nav>
       <section class="workspace-filters" aria-label="Cakupan data bersama">
-        <div class="filter-toolbar"><strong id="scope-label">DATA AKTIF</strong><span>Filter berlaku untuk ringkasan, tabel, dan laporan</span><button class="button button-outline" id="retry-data" type="button">Muat ulang data</button></div>
-        <form id="filter-form" class="filters report-filters" aria-label="Filter laporan dan data pendaftar"><label class="search-field"><span class="sr-only">Cari ID, nama peserta, orang tua, email, WhatsApp, sekolah, atau wilayah</span><span aria-hidden="true">⌕</span><input name="q" type="search" placeholder="Cari ID, nama, kontak, sekolah…"></label><label class="filter-select"><span class="sr-only">Tampilkan pendaftar aktif atau arsip</span><select name="view" id="participant-view"><option value="active">Data aktif</option><option value="archived">Arsip (nonaktif)</option><option value="all">Aktif dan arsip</option></select></label><label class="filter-select"><span class="sr-only">Filter status kelayakan saat mendaftar</span><select name="status"><option value="all">Semua status saat daftar</option><option value="eligible">Memenuhi saat daftar</option><option value="not_eligible">Belum memenuhi saat daftar</option></select></label><label class="filter-select filter-gender"><span class="sr-only">Filter jenis kelamin</span><select name="jenis_kelamin"><option value="all">Semua jenis kelamin</option><option value="putra">Putra</option><option value="putri">Putri</option></select></label><label class="filter-input"><span class="sr-only">Filter kecamatan</span><input type="text" name="kecamatan" placeholder="Kecamatan" list="district-options"><datalist id="district-options"></datalist></label><details class="date-filter-details"><summary>Rentang tanggal daftar &amp; lahir</summary><div class="date-filter-fields"><label class="filter-date"><span>Tanggal pendaftaran dari</span><input type="date" name="tanggal_daftar_mulai" aria-label="Tanggal pendaftaran dari"></label><label class="filter-date"><span>Tanggal pendaftaran sampai</span><input type="date" name="tanggal_daftar_sampai" aria-label="Tanggal pendaftaran sampai"></label><label class="filter-date"><span>Tanggal lahir dari</span><input type="date" name="tanggal_lahir_mulai" aria-label="Tanggal lahir dari"></label><label class="filter-date"><span>Tanggal lahir sampai</span><input type="date" name="tanggal_lahir_sampai" aria-label="Tanggal lahir sampai"></label></div></details><button class="button button-filter" type="submit">Terapkan</button><button class="button button-outline filter-reset" id="filter-reset" type="button">Reset</button></form>
-        <details class="advanced-filter-details"><summary>Filter lanjutan: wilayah, sekolah, usia &amp; kelengkapan</summary><div class="advanced-filters">
-          <label class="field"><span>Provinsi</span><input type="text" name="provinsi" form="filter-form" list="province-options" placeholder="Semua provinsi"><datalist id="province-options"></datalist></label>
-          <label class="field"><span>Kabupaten/kota</span><input type="text" name="kabupaten" form="filter-form" list="regency-options" placeholder="Semua kabupaten"><datalist id="regency-options"></datalist></label>
-          <label class="field"><span>Sekolah asal</span><input type="text" name="sekolah" form="filter-form" list="school-options" placeholder="Semua sekolah"><datalist id="school-options"></datalist></label>
-          <label class="field"><span>Kelengkapan pencatatan</span><select name="missing" form="filter-form"><option value="all">Semua data</option><option value="any">Ada data belum tercatat</option><option value="gender">Jenis kelamin belum tercatat</option><option value="school">Sekolah belum tercatat</option><option value="proof">Metadata lampiran belum tercatat</option><option value="consent">Persetujuan belum lengkap</option></select></label>
-          <label class="field"><span>Usia tercatat saat daftar</span><select name="age_group" form="filter-form"><option value="all">Semua usia</option><option value="under6">Di bawah 6 tahun</option><option value="6to7">6–kurang dari 7 tahun</option><option value="7to8">7–kurang dari 8 tahun</option><option value="8plus">8 tahun atau lebih</option><option value="unknown">Belum tercatat</option></select></label>
-          <label class="field"><span>Periode cepat (WIB)</span><select id="period-preset"><option value="">Pilih periode</option><option value="7">7 hari terakhir</option><option value="30">30 hari terakhir</option><option value="90">90 hari terakhir</option></select></label>
-        </div></details>
-        <details class="advanced-filter-details"><summary>Filter pembayaran: status, pemeriksa &amp; tanggal</summary><div class="advanced-filters payment-filters">
-<label class="field"><span>Status pembayaran</span><select name="payment_status" form="filter-form"><option value="all">Semua pembayaran</option><option value="pending">Belum diperiksa</option><option value="verified">Terverifikasi</option><option value="needs_correction">Perlu perbaikan</option></select></label>
-<label class="field"><span>Pemeriksa</span><input name="payment_reviewer" type="text" form="filter-form" list="reviewer-options" placeholder="Semua petugas"><datalist id="reviewer-options"></datalist></label>
-<label class="field"><span>Tanggal bayar dari</span><input name="tanggal_bayar_mulai" type="date" form="filter-form"></label>
-<label class="field"><span>Tanggal bayar sampai</span><input name="tanggal_bayar_sampai" type="date" form="filter-form"></label>
-</div></details><div class="filter-chips" id="filter-chips" role="group" aria-label="Filter terapan"></div>
-        <p class="report-filter-status" id="report-filter-status" aria-live="polite">Tanpa filter — ringkasan mencakup semua pendaftar.</p>
+        <div class="filter-toolbar"><strong id="scope-label">DATA AKTIF</strong><span>Filter akan diterapkan ke ringkasan, daftar, dan unduhan.</span><button class="button button-outline" id="retry-data" type="button">Muat ulang data</button></div>
+        <form id="filter-form" class="filters report-filters" aria-label="Filter laporan dan data pendaftar">
+          <div class="filter-primary-grid">
+            <label class="search-field"><span class="sr-only">Cari ID, nama peserta, orang tua, email, WhatsApp, sekolah, atau wilayah</span><span aria-hidden="true">⌕</span><input name="q" type="search" placeholder="Cari ID, nama, kontak, sekolah…"></label>
+            <label class="filter-select"><span class="sr-only">Tampilkan pendaftar aktif atau arsip</span><select name="view" id="participant-view"><option value="active">Data aktif</option><option value="archived">Arsip (nonaktif)</option><option value="all">Aktif dan arsip</option></select></label>
+            <label class="filter-select"><span class="sr-only">Filter status kelayakan saat mendaftar</span><select name="status"><option value="all">Semua kelayakan</option><option value="eligible">Memenuhi saat daftar</option><option value="not_eligible">Belum memenuhi saat daftar</option></select></label>
+            <label class="filter-select filter-gender"><span class="sr-only">Filter jenis kelamin</span><select name="jenis_kelamin"><option value="all">Semua jenis kelamin</option><option value="putra">Putra</option><option value="putri">Putri</option></select></label>
+            <label class="filter-input"><span class="sr-only">Filter kecamatan</span><input type="text" name="kecamatan" placeholder="Semua kecamatan" list="district-options"><datalist id="district-options"></datalist></label>
+            <button class="button button-filter" type="submit">Terapkan filter</button>
+            <button class="button button-outline filter-reset" id="filter-reset" type="button">Atur ulang</button>
+          </div>
+          <details class="filter-options">
+            <summary><span class="filter-options-title">Filter lainnya</span><small>Tanggal, wilayah, sekolah, usia, kelengkapan, dan pembayaran</small><span class="filter-options-count" id="filter-options-count">Opsional</span></summary>
+            <div class="filter-groups">
+              <fieldset class="filter-group">
+                <legend>Tanggal pendaftaran dan kelahiran</legend>
+                <div class="date-filter-fields">
+                  <label class="filter-date"><span>Daftar dari</span><input type="date" name="tanggal_daftar_mulai"></label>
+                  <label class="filter-date"><span>Daftar sampai</span><input type="date" name="tanggal_daftar_sampai"></label>
+                  <label class="filter-date"><span>Lahir dari</span><input type="date" name="tanggal_lahir_mulai"></label>
+                  <label class="filter-date"><span>Lahir sampai</span><input type="date" name="tanggal_lahir_sampai"></label>
+                </div>
+              </fieldset>
+              <fieldset class="filter-group">
+                <legend>Wilayah dan data peserta</legend>
+                <div class="advanced-filters">
+                  <label class="field"><span>Provinsi</span><input type="text" name="provinsi" list="province-options" placeholder="Semua provinsi"><datalist id="province-options"></datalist></label>
+                  <label class="field"><span>Kabupaten/kota</span><input type="text" name="kabupaten" list="regency-options" placeholder="Semua kabupaten"><datalist id="regency-options"></datalist></label>
+                  <label class="field"><span>Sekolah asal</span><input type="text" name="sekolah" list="school-options" placeholder="Semua sekolah"><datalist id="school-options"></datalist></label>
+                  <label class="field"><span>Kelengkapan pencatatan</span><select name="missing"><option value="all">Semua data</option><option value="any">Ada data belum tercatat</option><option value="gender">Jenis kelamin belum tercatat</option><option value="school">Sekolah belum tercatat</option><option value="proof">Metadata lampiran belum tercatat</option><option value="consent">Persetujuan belum lengkap</option></select></label>
+                  <label class="field"><span>Usia tercatat saat daftar</span><select name="age_group"><option value="all">Semua usia</option><option value="under6">Di bawah 6 tahun</option><option value="6to7">6–kurang dari 7 tahun</option><option value="7to8">7–kurang dari 8 tahun</option><option value="8plus">8 tahun atau lebih</option><option value="unknown">Belum tercatat</option></select></label>
+                  <label class="field"><span>Periode cepat (WIB)</span><select id="period-preset"><option value="">Pilih periode</option><option value="7">7 hari terakhir</option><option value="30">30 hari terakhir</option><option value="90">90 hari terakhir</option></select></label>
+                </div>
+              </fieldset>
+              <fieldset class="filter-group">
+                <legend>Pembayaran</legend>
+                <div class="advanced-filters payment-filters">
+                  <label class="field"><span>Status pembayaran</span><select name="payment_status"><option value="all">Semua pembayaran</option><option value="pending">Belum diperiksa</option><option value="verified">Terverifikasi</option><option value="needs_correction">Perlu perbaikan</option></select></label>
+                  <label class="field"><span>Pemeriksa</span><input name="payment_reviewer" type="text" list="reviewer-options" placeholder="Semua petugas"><datalist id="reviewer-options"></datalist></label>
+                  <label class="field"><span>Tanggal bayar dari</span><input name="tanggal_bayar_mulai" type="date"></label>
+                  <label class="field"><span>Tanggal bayar sampai</span><input name="tanggal_bayar_sampai" type="date"></label>
+                </div>
+              </fieldset>
+            </div>
+          </details>
+          <div class="filter-chips" id="filter-chips" role="group" aria-label="Filter terapan"></div>
+          <p class="report-filter-status" id="report-filter-status" aria-live="polite">Tanpa filter — ringkasan mencakup semua pendaftar.</p>
+        </form>
       </section>
       <section class="report-panel" id="reports-panel" aria-labelledby="reports-title">
         <div class="table-heading"><div><span class="section-kicker">RINGKASAN OPERASIONAL</span><h2 id="reports-title" tabindex="-1">Laporan pendaftaran</h2></div><button class="button button-outline" id="refresh-report" type="button">Muat ulang laporan</button></div>
