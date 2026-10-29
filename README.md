@@ -4,7 +4,7 @@ Aplikasi pendaftaran publik dan dashboard panitia untuk Kelompok Tahfidz. Stack 
 
 ## Menjalankan lokal
 
-Persyaratan: Bun 1.4+ dan database MariaDB yang dapat diakses.
+Persyaratan: Bun 1.4.2 dan database MariaDB yang dapat diakses.
 
 ```bash
 cp .env.example .env
@@ -220,3 +220,7 @@ Untuk membuat empat contoh PDF memakai data fiktif, jalankan bun run preview:pdf
 Migrasi 0007 menambahkan akun, sesi, audit, versi bukti, nomor versi peserta, dan status pembayaran default pending. Data identitas dan berkas lama tetap dipertahankan; bukti legacy didukung oleh pembaca versi lama. Sebelum upgrade, cadangkan MariaDB, seluruh DATA_DIR, serta DATA_ENCRYPTION_KEY. Setelah startup, login dengan akun Admin awal lalu buat akun petugas yang dibutuhkan. Endpoint /readyz memeriksa koneksi database.
 
 bun run verify menjalankan pemeriksaan tipe, tes, HTML/JavaScript, audit dependency, dan konsistensi migrasi. Dengan TEST_DATABASE_URL pada database khusus bernama test, suite integrasi juga memeriksa role, sesi, CRUD, pemeriksaan pembayaran, konflik bersamaan, perlindungan Admin terakhir, dan konsistensi ekspor 1.000 peserta. Fixture tes menggunakan database sementara dan tidak boleh diarahkan ke production.
+
+`bun run test:ui` menjalankan browser Chromium terhadap server aplikasi yang dimulai dan dihentikan otomatis. Siapkan `TEST_DATABASE_URL` pada MariaDB khusus pengujian, lalu jalankan `bunx playwright install chromium` sekali. Untuk Chrome lokal yang sudah terpasang, isi `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH` dengan lokasi executable Chrome. Gunakan Node.js 20+ untuk skrip browser dan Bun 1.4.2 pada PATH; `BUN_BIN` dapat menunjuk executable Bun secara eksplisit.
+
+Pemeriksaan browser mencakup CRUD, arsip/pemulihan, pembayaran dan penggantian bukti, aturan usia yang berubah, draft yang belum disimpan, akun Bendahara, delapan unduhan, serta enam halaman pada delapan lebar layar. Screenshot dan unduhan disimpan di `tmp/ui-check`. Server memakai volume lampiran sementara; pengaturan dikembalikan dan record fixture dibersihkan setelah proses. Workflow CI juga menjalankan pemeriksaan ini. Jangan menjalankan dua suite yang mengubah pengaturan pada database pengujian yang sama secara bersamaan.

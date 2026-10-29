@@ -13,6 +13,7 @@
     "test": "bun test --isolate",
     "test:html": "html-validate \"public/*.html\"",
     "test:js": "bun build --target browser --no-bundle --outdir ./tmp/frontend-check public/app.js public/admin.js public/success.js",
+    "test:ui": "node scripts/check-admin-ui.mjs",
     "typecheck": "tsc --noEmit",
     "verify": "bun run typecheck && bun run test && bun run test:html && bun run test:js && bun audit && bunx drizzle-kit check",
     "preview:pdf": "bun scripts/preview-admin-exports.ts",
@@ -30,6 +31,7 @@
     "@types/bun": "^1.4.2",
     "drizzle-kit": "^0.31.11",
     "html-validate": "9.7.1",
+    "playwright": "1.64.1",
     "typescript": "^5.9.3"
   },
   "overrides": {

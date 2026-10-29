@@ -27,6 +27,52 @@
   let settingsDirty = false;
   const settingsUpdated = document.querySelector("#settings-updated");
   const participantDialog = document.querySelector("#participant-dialog");
+  const dirtyDialogForms = new Set();
+
+  function canCloseDialog(dialog) {
+    if (dialog.hasAttribute('data-saving')) return false;
+    return ![...dirtyDialogForms].some(form => form.closest('dialog') === dialog)
+      || window.confirm('Ada perubahan yang belum disimpan. Tutup dan buang perubahan?');
+  }
+  function closeDialog(dialog) { if (canCloseDialog(dialog)) dialog.close(); }
+  function lockDialogForm(form) {
+    const dialog = form.closest?.('dialog');
+    const controls = [...(form.querySelectorAll?.('input, select, textarea, button') || []), ...(dialog?.querySelectorAll('[data-close], #close-participant-dialog') || [])];
+    const states = controls.map(control => [control, control.disabled]);
+    for (const [control] of states) control.disabled = true;
+    dialog?.setAttribute('data-saving', 'true');
+    let locked = true;
+    return () => {
+      if (!locked) return;
+      locked = false;
+      for (const [control, disabled] of states) control.disabled = disabled;
+      dialog?.removeAttribute('data-saving');
+    };
+  }
+  for (const dialog of document.querySelectorAll('dialog')) {
+    for (const form of dialog.querySelectorAll('form')) {
+      form.addEventListener('input', () => dirtyDialogForms.add(form));
+      form.addEventListener('change', () => dirtyDialogForms.add(form));
+      form.addEventListener('reset', () => dirtyDialogForms.delete(form));
+    }
+    dialog.addEventListener('cancel', event => {
+      if ((dialog.id === 'password-dialog' && staffUser.mustChangePassword) || !canCloseDialog(dialog)) event.preventDefault();
+    });
+    dialog.addEventListener('close', () => { for (const form of dialog.querySelectorAll('form')) dirtyDialogForms.delete(form); });
+  }
+  for (const input of document.querySelectorAll('input[type="password"]')) {
+    const control = document.createElement('div'); control.className = 'password-control';
+    input.before(control); control.append(input);
+    const toggle = document.createElement('button'); toggle.type = 'button'; toggle.textContent = 'Tampilkan';
+    toggle.setAttribute('aria-label', 'Tampilkan ' + (input.closest('label')?.querySelector('span')?.textContent || 'password'));
+    toggle.setAttribute('aria-pressed', 'false');
+    const hide = () => { input.type = 'password'; toggle.textContent = 'Tampilkan'; toggle.setAttribute('aria-pressed', 'false'); };
+    toggle.addEventListener('click', () => {
+      const show = input.type === 'password'; input.type = show ? 'text' : 'password';
+      toggle.textContent = show ? 'Sembunyikan' : 'Tampilkan'; toggle.setAttribute('aria-pressed', String(show));
+    });
+    input.form?.addEventListener('reset', hide); control.append(toggle);
+  }
 
   function showAlert(element, message, type = "error") {
     element.textContent = message;
@@ -200,19 +246,17 @@
         proofStatus.textContent = "Bukti transfer terlampir";
         child.append(proofStatus);
       }
-      if (true) {
-        const exportActions = document.createElement("div");
-        exportActions.className = "individual-export-actions";
-        for (const [format, label] of [["pdf", "PDF"], ["xlsx", "Excel"]]) {
-          const link = document.createElement("a");
-          link.href = `/api/admin/waitinglist/${encodeURIComponent(item.id)}/export.${format}`;
-          link.className = "individual-export-link";
-          link.textContent = label;
-          link.setAttribute("aria-label", `Ekspor data ${item.nama_anak} sebagai ${format === "pdf" ? "PDF" : "Excel"}`);
-          exportActions.append(link);
-        }
-        child.append(exportActions);
+      const exportActions = document.createElement("div");
+      exportActions.className = "individual-export-actions";
+      for (const [format, label] of [["pdf", "PDF"], ["xlsx", "Excel"]]) {
+        const link = document.createElement("a");
+        link.href = `/api/admin/waitinglist/${encodeURIComponent(item.id)}/export.${format}`;
+        link.className = "individual-export-link";
+        link.textContent = label;
+        link.setAttribute("aria-label", `Ekspor data ${item.nama_anak} sebagai ${format === "pdf" ? "PDF" : "Excel"}`);
+        exportActions.append(link);
       }
+      child.append(exportActions);
       const detailButton = document.createElement("button");
       detailButton.type = "button";
       detailButton.className = "participant-detail-button";
@@ -365,7 +409,7 @@
       document.querySelector("#report-trend-period").textContent = report.registrationPeriod.label === "Semua pendaftar"
         ? "30 hari terakhir"
         : firstTrendDate && lastTrendDate ? `${formatDate(firstTrendDate)} – ${formatDate(lastTrendDate)}` : "Tidak ada tanggal pada filter";
-      if (report.trend) document.querySelector('#report-trend-period').textContent = `${report.trend.start} – ${report.trend.end} · ${intervalLabel(report.trend.interval)}`;
+      if (report.trend) document.querySelector('#report-trend-period').textContent = `${formatDate(report.trend.start)} – ${formatDate(report.trend.end)} · ${intervalLabel(report.trend.interval)}`;
       renderDailyReport(report.trend?.buckets || report.daily);
       renderAreaReport(report.topDistricts);
       renderAnalytics(report);
@@ -431,6 +475,7 @@
   async function showParticipantDetail(id) {
     const requestId = ++participantRequestId;
     currentParticipantId = id;
+    currentParticipant = null;
     if (!participantDialog.open) participantDialog.showModal();
     document.querySelector("#payment-review").hidden = true;
     document.querySelector("#participant-history").hidden = true;
@@ -462,7 +507,7 @@
       setDetail("#detail-gender", participant.jenis_kelamin === "putra" ? "Putra" : participant.jenis_kelamin === "putri" ? "Putri" : "Belum dicatat");
       setDetail("#detail-school", participant.sekolah_asal);
       setDetail("#detail-birthdate", formatDate(participant.tanggal_lahir_anak));
-      setDetail('#detail-age', participant.umur_terhitung_bulan === null ? 'Belum tercatat' : `${formatAge(participant.umur_terhitung_bulan)} (${participant.umur_terhitung_bulan} bulan)`);
+      setDetail('#detail-age', !Number.isFinite(participant.umur_terhitung_bulan) ? 'Belum tercatat' : `${formatAge(participant.umur_terhitung_bulan)} (${participant.umur_terhitung_bulan} bulan)`);
       setDetail('#detail-eligibility', participant.status_eligibility === 'eligible' ? 'Memenuhi kriteria saat mendaftar' : participant.status_eligibility === 'not_eligible' ? 'Belum memenuhi kriteria saat mendaftar' : 'Belum tercatat');
       setDetail('#detail-parent', `${participant.nama_ortu} · ${participant.status_ortu === 'bapak' ? 'Bapak' : participant.status_ortu === 'ibu' ? 'Ibu' : participant.status_ortu || 'Belum tercatat'}`);
       setDetail("#detail-phone", participant.no_hp_wa);
@@ -528,9 +573,11 @@
 
   document.querySelector("#archive-participant-button").addEventListener("click", () => changeParticipantLifecycle("archive"));
   document.querySelector("#restore-participant-button").addEventListener("click", () => changeParticipantLifecycle("restore"));
-  document.querySelector("#close-participant-dialog").addEventListener("click", () => participantDialog.close());
+  document.querySelector("#close-participant-dialog").addEventListener("click", () => closeDialog(participantDialog));
   participantDialog.addEventListener("click", (event) => {
-    if (event.target === participantDialog) participantDialog.close();
+    if (event.target !== participantDialog) return;
+    const rect = participantDialog.getBoundingClientRect();
+    if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) closeDialog(participantDialog);
   });
 
   loginForm.addEventListener("submit", async (event) => {
@@ -571,7 +618,7 @@
   });
 
   window.addEventListener("beforeunload", (event) => {
-    if (!settingsDirty) return;
+    if (!settingsDirty && !dirtyDialogForms.size) return;
     event.preventDefault();
     event.returnValue = "";
   });
@@ -732,7 +779,7 @@
   document.querySelector('#export-report').addEventListener('click', event => download(`/api/admin/report.xlsx?${filtersQuery()}`, event.currentTarget));
   document.querySelector('#print-report').addEventListener('click', () => window.print());
   document.querySelector("#logout-button").addEventListener("click", async () => {
-    if (settingsDirty && !window.confirm("Perubahan pengaturan belum disimpan. Tetap keluar dan buang perubahan?")) return;
+    if ((settingsDirty || dirtyDialogForms.size) && !window.confirm("Ada perubahan yang belum disimpan. Tetap keluar dan buang perubahan?")) return;
     try {
       await api("/api/admin/logout", { method: "POST", body: "{}" });
       csrfToken = '';
@@ -794,15 +841,23 @@
     additionalCount.classList.toggle('is-active', activeAdditionalFilters > 0);
     for (const [key, value] of appliedFilters) {
       if (['sort', 'page_size', 'trend'].includes(key)) continue;
-      const chip = document.createElement('span');
+      const chip = document.createElement('button');
+      chip.type = 'button';
       chip.textContent = filterLabel(key, value);
+      chip.setAttribute('aria-label', `Hapus filter ${filterLabel(key, value)}`);
+      chip.addEventListener('click', () => {
+        appliedFilters.delete(key);
+        const field = filterForm.elements[key];
+        if (field) field.value = field.tagName === 'SELECT' ? 'all' : '';
+        validateDateRanges(); updateRegionOptions(); currentPage = 1; loadRows(); loadReport();
+      });
       container.append(chip);
     }
   }
   function filterLabel(key, value) {
     const labels = { payment_status: 'Pembayaran', payment_reviewer: 'Pemeriksa', tanggal_bayar_mulai: 'Bayar dari', tanggal_bayar_sampai: 'Bayar sampai', q: 'Pencarian', status: 'Kelayakan saat daftar', jenis_kelamin: 'Jenis kelamin', kecamatan: 'Kecamatan', provinsi: 'Provinsi', kabupaten: 'Kabupaten/kota', sekolah: 'Sekolah', missing: 'Belum tercatat', age_group: 'Usia saat daftar', tanggal_daftar_mulai: 'Daftar dari', tanggal_daftar_sampai: 'Daftar sampai', tanggal_lahir_mulai: 'Lahir dari', tanggal_lahir_sampai: 'Lahir sampai' };
     const values = { pending: 'Belum diperiksa', verified: 'Terverifikasi', needs_correction: 'Perlu perbaikan', eligible: 'Memenuhi', not_eligible: 'Belum memenuhi', gender: 'Jenis kelamin', school: 'Sekolah', proof: 'Metadata lampiran', consent: 'Persetujuan', any: 'Ada kekosongan', under6: '<6 tahun', '6to7': '6–<7 tahun', '7to8': '7–<8 tahun', '8plus': '≥8 tahun', unknown: 'Belum tercatat', putra: 'Putra', putri: 'Putri' };
-    return `${labels[key] || key}: ${values[value] || value}`;
+    return `${labels[key] || key}: ${Object.hasOwn(values, value) ? values[value] : value}`;
   }
   function fillOptions(id, values) {
     const list = document.querySelector(id); list.replaceChildren();
@@ -839,6 +894,14 @@
     filterForm.elements.tanggal_daftar_mulai.value = new Date(Date.parse(today) - (Number(event.target.value) - 1) * 86400000).toISOString().slice(0, 10);
     validateDateRanges();
   });
+  for (const key of ['sort', 'page_size', 'trend']) filterForm.elements[key].addEventListener('change', () => {
+    const value = filterForm.elements[key].value;
+    if (value === ({ sort: 'newest', page_size: '25', trend: 'auto' })[key]) appliedFilters.delete(key);
+    else appliedFilters.set(key, value);
+    currentPage = 1;
+    if (key !== 'trend') loadRows();
+    else loadReport();
+  });
   document.querySelector('#retry-data').addEventListener('click', () => { loadRows(); loadReport(); loadFilterOptions(); });
 
   function expireSession() {
@@ -855,6 +918,7 @@
     loginCard.querySelector('h1').focus();
   }
   function clearPrivateView() {
+    dirtyDialogForms.clear();
     usersRequestId++;
     currentParticipant = null;
     for (const id of ['users-rows', 'history-content', 'payment-kpis', 'payment-trend']) document.querySelector('#' + id).replaceChildren();
@@ -979,7 +1043,7 @@
       const hint = document.createElement('small'); hint.textContent = note;
       card.append(title, count, hint); card.addEventListener('click', () => drillDown(filter)); container.append(card);
     }
-    document.querySelector('#payment-trend-period').textContent = `${payment.trend.start} – ${payment.trend.end} · ${intervalLabel(payment.trend.interval)} · menurut tanggal pembayaran (WIB)`;
+    document.querySelector('#payment-trend-period').textContent = `${formatDate(payment.trend.start)} – ${formatDate(payment.trend.end)} · ${intervalLabel(payment.trend.interval)} · menurut tanggal pembayaran (WIB)`;
     const max = Math.max(1, ...payment.trend.buckets.map(row => row.amount));
     for (const row of payment.trend.buckets) {
       const li = document.createElement('li'); const date = document.createElement('span'); date.textContent = row.date;
@@ -998,8 +1062,11 @@
   function updatePaymentRequirements() {
     const verified = paymentForm.elements.status.value === 'verified';
     paymentForm.elements.date.required = verified;
+    paymentForm.elements.date.disabled = !verified;
     paymentForm.elements.amountConfirmed.required = verified;
+    paymentForm.elements.amountConfirmed.disabled = !verified;
     paymentForm.elements.note.required = paymentForm.elements.status.value === 'needs_correction' || currentParticipant?.payment_status !== 'pending';
+    paymentForm.elements.note.minLength = paymentForm.elements.note.required ? 3 : 0;
     paymentForm.elements.date.max = new Date(Date.now() + 7 * 3600000).toISOString().slice(0, 10);
   }
   function fillPaymentReview(participant) {
@@ -1015,15 +1082,22 @@
   paymentForm.elements.status.addEventListener('change', updatePaymentRequirements);
   paymentForm.addEventListener('submit', async event => {
     event.preventDefault(); if (!currentParticipant || !paymentForm.reportValidity()) return;
+    const participant = currentParticipant, requestId = participantRequestId;
+    const payload = { version: participant.version, status: paymentForm.elements.status.value, date: paymentForm.elements.date.value,
+      note: paymentForm.elements.note.value, amountConfirmed: paymentForm.elements.amountConfirmed.checked };
     const button = paymentForm.querySelector('button[type="submit"]'); button.disabled = true;
+    const unlock = lockDialogForm(paymentForm);
     try {
-      await api(`/api/admin/waitinglist/${currentParticipant.id}/payment`, { method: 'PUT', body: JSON.stringify({
-        version: currentParticipant.version, status: paymentForm.elements.status.value, date: paymentForm.elements.date.value,
-        note: paymentForm.elements.note.value, amountConfirmed: paymentForm.elements.amountConfirmed.checked }) });
-      await showParticipantDetail(currentParticipant.id); loadRows(); loadReport(); loadFilterOptions();
-      showAlert(document.querySelector('#payment-alert'), 'Hasil pemeriksaan tersimpan dan tercatat dalam riwayat.', 'success');
-    } catch (error) { showAlert(document.querySelector('#payment-alert'), error.message); }
-    finally { button.disabled = false; }
+      await api(`/api/admin/waitinglist/${participant.id}/payment`, { method: 'PUT', body: JSON.stringify(payload) });
+      unlock();
+      dirtyDialogForms.delete(paymentForm);
+      if (!dashboard.hidden) { loadRows(); loadReport(); loadFilterOptions(); }
+      if (requestId === participantRequestId && participantDialog.open) {
+        await showParticipantDetail(participant.id);
+        showAlert(document.querySelector('#payment-alert'), 'Hasil pemeriksaan tersimpan dan tercatat dalam riwayat.', 'success');
+      }
+    } catch (error) { if (requestId === participantRequestId && participantDialog.open) showAlert(document.querySelector('#payment-alert'), error.message); }
+    finally { unlock(); button.disabled = false; }
   });
   document.querySelector('#reload-detail').addEventListener('click', () => currentParticipantId && showParticipantDetail(currentParticipantId));
   async function loadParticipantHistory(id, requestId) {
@@ -1048,10 +1122,23 @@
         } else if (entry.details.before && entry.details.after) {
           const details = document.createElement('details'); const summary = document.createElement('summary'); summary.textContent = 'Lihat perubahan data';
           const dl = document.createElement('dl');
+          const labels = { nama_anak: 'Nama calon santri', nama_ortu: 'Nama orang tua', status_ortu: 'Hubungan orang tua', jenis_kelamin: 'Jenis kelamin', sekolah_asal: 'Sekolah asal', tanggal_lahir_anak: 'Tanggal lahir', umur_terhitung_bulan: 'Usia saat mendaftar (bulan)', status_eligibility: 'Kelayakan saat mendaftar', provinsi_nama: 'Provinsi', kabupaten_nama: 'Kabupaten/kota', kecamatan_nama: 'Kecamatan', desa_nama: 'Desa/kelurahan', no_hp_wa: 'WhatsApp', email: 'Email', konfirmasi_data: 'Persetujuan data', konfirmasi_bukti_transfer: 'Konfirmasi pengiriman bukti', konfirmasi_ketentuan_biaya: 'Persetujuan biaya', payment_status: 'Status pembayaran', payment_date: 'Tanggal pembayaran', payment_reviewer: 'Pemeriksa', payment_reviewed_at: 'Waktu pemeriksaan', payment_note: 'Catatan pembayaran' };
+          const readableValue = (key, value) => {
+            if (value === null || value === undefined || value === '') return 'Belum dicatat';
+            if (key.startsWith('konfirmasi_')) return Number(value) === 1 ? 'Disetujui/dikonfirmasi' : 'Belum dikonfirmasi';
+            if (key === 'status_eligibility') return value === 'eligible' ? 'Memenuhi saat mendaftar' : value === 'not_eligible' ? 'Belum memenuhi saat mendaftar' : 'Belum dicatat';
+            if (key === 'payment_status') return paymentLabel(value);
+            if (['tanggal_lahir_anak', 'payment_date', 'payment_reviewed_at'].includes(key)) return formatDate(value, key === 'payment_reviewed_at');
+            if (['status_ortu', 'jenis_kelamin'].includes(key)) {
+              const options = { bapak: 'Bapak', ibu: 'Ibu', putra: 'Putra', putri: 'Putri' };
+              return Object.hasOwn(options, value) ? options[value] : String(value);
+            }
+            return String(value);
+          };
           for (const [key, value] of Object.entries(entry.details.after)) {
-            if (['created_at', 'proofId'].includes(key) || String(entry.details.before[key] ?? '') === String(value ?? '')) continue;
-            const dt = document.createElement('dt'); dt.textContent = key.replaceAll('_', ' ');
-            const dd = document.createElement('dd'); dd.textContent = `${entry.details.before[key] ?? '-'} → ${value ?? '-'}`; dl.append(dt, dd);
+            if (['created_at', 'proofId'].includes(key) || key.endsWith('_id') || String(entry.details.before[key] ?? '') === String(value ?? '')) continue;
+            const dt = document.createElement('dt'); dt.textContent = labels[key] || key.replaceAll('_', ' ');
+            const dd = document.createElement('dd'); dd.textContent = `${readableValue(key, entry.details.before[key])} → ${readableValue(key, value)}`; dl.append(dt, dd);
           }
           details.append(summary, dl); item.append(details);
         }
@@ -1061,7 +1148,7 @@
       for (const proof of history.proofs || []) {
         const a = document.createElement('a'); a.className = 'history-proof';
         a.href = `/api/admin/waitinglist/${id}/proof?version=${encodeURIComponent(proof.id)}`;
-        a.textContent = `Unduh versi bukti · ${formatDate(proof.created_at, true)} WIB · ${proof.created_by || 'Pendaftaran awal'} (${Math.ceil(proof.size / 1024)} KB)`; container.append(a);
+        a.textContent = `Unduh versi bukti · ${formatDate(proof.created_at, true)} WIB · ${proof.created_by || 'Pendaftaran awal'} (${proof.size > 0 ? Math.ceil(proof.size / 1024) + ' KB' : 'ukuran belum tercatat'})`; container.append(a);
       }
     } catch (error) { if (requestId === participantRequestId && participantDialog.open) container.textContent = error.message; }
   }
@@ -1071,15 +1158,23 @@
   lifecycleForm.addEventListener('submit', async event => {
     event.preventDefault(); if (!lifecycleForm.reportValidity()) return;
     const button = lifecycleForm.querySelector('button[type="submit"]'); button.disabled = true;
+    const unlock = lockDialogForm(lifecycleForm);
     try { await submitParticipantLifecycle(pendingLifecycleAction, lifecycleForm.elements.reason.value); }
-    finally { button.disabled = false; }
+    finally { unlock(); button.disabled = false; }
   });
   for (const button of document.querySelectorAll('[data-close]')) {
-    button.addEventListener('click', () => document.querySelector('#' + button.dataset.close).close());
+    button.addEventListener('click', () => closeDialog(document.querySelector('#' + button.dataset.close)));
   }
 
   const editor = document.querySelector('#participant-editor'), editorForm = document.querySelector('#participant-editor-form');
-  let editingParticipant = null, editorEpoch = 0;
+  let editingParticipant = null, editorEpoch = 0, editorBirthdateLimit = '';
+  function validateEditorBirthdate() {
+    const field = editorForm.elements.tanggal_lahir_anak;
+    field.setCustomValidity(field.value && field.value !== editingParticipant?.tanggal_lahir_anak && editorBirthdateLimit && field.value > editorBirthdateLimit
+      ? `Tanggal lahir untuk aturan saat ini paling lambat ${formatDate(editorBirthdateLimit)}.` : '');
+  }
+  editorForm.elements.tanggal_lahir_anak.addEventListener('input', validateEditorBirthdate);
+  editorForm.elements.tanggal_lahir_anak.addEventListener('change', validateEditorBirthdate);
   function validateEditorContact() {
     const field = editorForm.elements.no_hp_wa;
     const raw = field.value.replace(/[^0-9+]/g, '');
@@ -1107,13 +1202,62 @@
     select.disabled = false; select.value = selected;
   }
   for (let i = 0; i < 3; i++) editorForm.elements[regionLevels[i] + '_id'].addEventListener('change', async event => {
-    editorEpoch++; for (let j = i + 1; j < 4; j++) resetEditorRegion(j);
-    if (!event.target.value) return;
-    try { await loadEditorRegion(i + 1, event.target.value); } catch (error) { showAlert(document.querySelector('#editor-alert'), error.message + ' Pilih kembali wilayah untuk mencoba lagi.'); }
+    const epoch = ++editorEpoch; for (let j = i + 1; j < 4; j++) resetEditorRegion(j);
+    document.querySelector('#editor-save').disabled = true;
+    try {
+      if (event.target.value) await loadEditorRegion(i + 1, event.target.value, '', epoch);
+    } catch (error) {
+      if (epoch !== editorEpoch || !editor.open) return;
+      showAlert(document.querySelector('#editor-alert'), error.message + ' Gunakan Coba muat wilayah lagi.');
+      document.querySelector('#retry-editor-regions').hidden = false;
+    } finally {
+      if (epoch === editorEpoch && editor.open) document.querySelector('#editor-save').disabled = !editorBirthdateLimit;
+    }
   });
   editor.addEventListener('close', () => { editorEpoch++; });
+  async function prepareEditorReferences(epoch) {
+    let useStored = true;
+    const choices = regionLevels.map(name => {
+      const select = editorForm.elements[name + '_id'];
+      const id = select.value || (useStored ? editingParticipant?.[name + '_id'] : '') || '';
+      const label = select.value ? select.options[select.selectedIndex].textContent : editingParticipant?.[name + '_nama'] || '';
+      useStored = useStored && id === editingParticipant?.[name + '_id'];
+      return { id, label };
+    });
+    let rulesLoaded = false;
+    document.querySelector('#editor-save').disabled = true;
+    document.querySelector('#retry-editor-regions').hidden = true;
+    showAlert(document.querySelector('#editor-alert'), '');
+    try {
+      const config = await api('/api/config');
+      if (epoch !== editorEpoch || !editor.open) return;
+      const today = new Date(Date.now() + 7 * 3600000).toISOString().slice(0, 10);
+      editorBirthdateLimit = config.eligibleBirthdate < today ? config.eligibleBirthdate : today;
+      editorForm.elements.tanggal_lahir_anak.max = today;
+      document.querySelector('#editor-age-hint').textContent = `Batas tanggal lahir sesuai aturan saat ini: ${formatDate(editorBirthdateLimit)}.${editingParticipant ? ' Usia dan kelayakan saat daftar dipertahankan jika tanggal lahir tetap.' : ''}`;
+      validateEditorBirthdate(); rulesLoaded = true;
+      for (let i = 0; i < 4; i++) {
+        if (i && !choices[i - 1].id) break;
+        await loadEditorRegion(i, i ? choices[i - 1].id : '', choices[i].id, epoch);
+        if (epoch !== editorEpoch || !editor.open) return;
+      }
+    } catch (error) {
+      if (epoch !== editorEpoch || !editor.open) return;
+      // Keep already recorded locations usable for a contact correction during an upstream outage.
+      for (let i = 0; i < 4; i++) {
+        resetEditorRegion(i);
+        if (!choices[i].id) continue;
+        const select = editorForm.elements[regionLevels[i] + '_id'], option = document.createElement('option');
+        option.value = choices[i].id; option.textContent = choices[i].label; select.append(option); select.value = choices[i].id; select.disabled = false;
+      }
+      showAlert(document.querySelector('#editor-alert'), `${error.message} ${rulesLoaded && editingParticipant ? 'Wilayah yang sudah tercatat tetap dapat digunakan.' : 'Muat ulang agar pilihan wilayah tersedia.'}`);
+      document.querySelector('#retry-editor-regions').hidden = false;
+    } finally { if (epoch === editorEpoch) document.querySelector('#editor-save').disabled = !rulesLoaded; }
+  }
+  document.querySelector('#retry-editor-regions').addEventListener('click', () => prepareEditorReferences(++editorEpoch));
   async function openParticipantEditor(participant = null) {
     editingParticipant = participant; const epoch = ++editorEpoch; editorForm.reset();
+    editorBirthdateLimit = ''; editorForm.elements.tanggal_lahir_anak.setCustomValidity('');
     editorForm.elements.no_hp_wa.setCustomValidity(''); editorForm.elements.bukti_transfer.setCustomValidity('');
     document.querySelector('#editor-title').textContent = participant ? 'Ubah data pendaftar' : 'Tambah pendaftar';
     document.querySelector('#editor-proof-hint').textContent = participant ? 'Kosongkan untuk mempertahankan bukti saat ini. Bukti baru akan mengulang pemeriksaan pembayaran.' : 'Bukti wajib diunggah.';
@@ -1123,23 +1267,15 @@
     for (const key of ['konfirmasi_data', 'konfirmasi_bukti_transfer', 'konfirmasi_ketentuan_biaya']) editorForm.elements[key].checked = participant?.[key] === 1;
     for (let i = 0; i < 4; i++) resetEditorRegion(i);
     showAlert(document.querySelector('#editor-alert'), ''); editor.showModal();
-    document.querySelector('#editor-save').disabled = true;
-    try {
-      const config = await api('/api/config');
-      if (epoch !== editorEpoch || !editor.open) return;
-      const today = new Date(Date.now() + 7 * 3600000).toISOString().slice(0, 10);
-      editorForm.elements.tanggal_lahir_anak.max = config.eligibleBirthdate < today ? config.eligibleBirthdate : today;
-      await loadEditorRegion(0, '', participant?.provinsi_id || '', epoch);
-      if (participant) for (let i = 1; i < 4; i++) await loadEditorRegion(i, participant[regionLevels[i - 1] + '_id'], participant[regionLevels[i] + '_id'], epoch);
-    } catch (error) { if (editor.open) showAlert(document.querySelector('#editor-alert'), error.message); }
-    finally { if (epoch === editorEpoch) document.querySelector('#editor-save').disabled = false; }
+    await prepareEditorReferences(epoch);
   }
   document.querySelector('#add-participant').addEventListener('click', () => openParticipantEditor());
   document.querySelector('#edit-participant').addEventListener('click', () => openParticipantEditor(currentParticipant));
   editorForm.addEventListener('submit', async event => {
-    event.preventDefault(); validateEditorContact(); if (!editorForm.reportValidity()) return;
+    event.preventDefault(); validateEditorContact(); validateEditorBirthdate(); if (!editorForm.reportValidity()) return;
     if (regionLevels.some(name => !editorForm.elements[name + '_id'].value)) { showAlert(document.querySelector('#editor-alert'), 'Pilih wilayah lengkap dari provinsi sampai desa.'); return; }
     const button = document.querySelector('#editor-save'); button.disabled = true;
+    let unlock = () => {};
     try {
       const submittingParticipant = editingParticipant;
       const data = new FormData(editorForm);
@@ -1149,12 +1285,13 @@
       if (!file || !file.size) data.delete('bukti_transfer');
       else if (file.size > 5 * 1024 * 1024) throw new Error('Ukuran bukti transfer maksimal 5 MB.');
       if (submittingParticipant) data.set('version', String(submittingParticipant.version));
+      unlock = lockDialogForm(editorForm);
       const result = await api('/api/admin/waitinglist' + (submittingParticipant ? '/' + submittingParticipant.id : ''), { method: submittingParticipant ? 'PUT' : 'POST', body: data });
       const id = submittingParticipant?.id || result.id; editor.close();
       await showParticipantDetail(id); loadRows(); loadReport(); loadFilterOptions();
       showAlert(dashboardAlert, 'Data pendaftar berhasil disimpan.', 'success');
     } catch (error) { showAlert(document.querySelector('#editor-alert'), error.message); }
-    finally { button.disabled = false; }
+    finally { unlock(); button.disabled = false; }
   });
 
   let editingUser = null, resettingUser = null, usersRequestId = 0;
@@ -1162,8 +1299,10 @@
   async function loadUsers() {
     if (staffUser.role !== 'admin') return; const requestId = ++usersRequestId;
     const container = document.querySelector('#users-rows'); container.replaceChildren();
+    showAlert(document.querySelector('#users-alert'), 'Memuat akun petugas…', 'info');
     try {
       const result = await api('/api/admin/users'); if (requestId !== usersRequestId || dashboard.hidden) return;
+      showAlert(document.querySelector('#users-alert'), '');
       for (const user of result.users) {
         const tr = document.createElement('tr'); tr.append(makeCell(`${user.name} (${user.username})`), makeCell(user.role === 'admin' ? 'Admin' : 'Bendahara'), makeCell(user.active ? (user.mustChangePassword ? 'Aktif · wajib ganti password' : 'Aktif') : 'Nonaktif'));
         const actions = document.createElement('td'); actions.className = 'user-actions';
@@ -1187,25 +1326,29 @@
   userForm.addEventListener('submit', async event => {
     event.preventDefault(); if (!userForm.reportValidity()) return;
     const button = userForm.querySelector('button[type="submit"]'); button.disabled = true;
+    let unlock = () => {};
     try {
       const payload = { name: userForm.elements.name.value, role: userForm.elements.role.value };
       if (editingUser) { payload.active = userForm.elements.active.checked; payload.version = editingUser.version; }
       else { payload.username = userForm.elements.username.value; payload.password = userForm.elements.password.value; payload.active = userForm.elements.active.checked; }
+      unlock = lockDialogForm(userForm);
       await api('/api/admin/users' + (editingUser ? '/' + editingUser.id : ''), { method: editingUser ? 'PUT' : 'POST', body: JSON.stringify(payload) });
       document.querySelector('#user-dialog').close();
       if (editingUser?.id === staffUser.id) expireSession(); else loadUsers();
     } catch (error) { showAlert(document.querySelector('#user-alert'), error.message); }
-    finally { button.disabled = false; }
+    finally { unlock(); button.disabled = false; }
   });
   document.querySelector('#reset-password-form').addEventListener('submit', async event => {
     event.preventDefault(); const form = event.currentTarget; if (!form.reportValidity()) return;
     const button = form.querySelector('button[type="submit"]'); button.disabled = true;
+    const password = form.elements.password.value;
+    const unlock = lockDialogForm(form);
     try {
-      await api(`/api/admin/users/${resettingUser.id}/reset-password`, { method: 'POST', body: JSON.stringify({ password: form.elements.password.value, version: resettingUser.version }) });
+      await api(`/api/admin/users/${resettingUser.id}/reset-password`, { method: 'POST', body: JSON.stringify({ password, version: resettingUser.version }) });
       document.querySelector('#reset-password-dialog').close(); form.reset();
       if (resettingUser.id === staffUser.id) expireSession(); else loadUsers();
     } catch (error) { showAlert(document.querySelector('#reset-password-alert'), error.message); }
-    finally { button.disabled = false; }
+    finally { unlock(); button.disabled = false; }
   });
   function openPasswordDialog() {
     document.querySelector('#password-form').reset(); showAlert(document.querySelector('#password-alert'), '');
@@ -1219,12 +1362,14 @@
     event.preventDefault(); const form = event.currentTarget; if (!form.reportValidity()) return;
     if (form.elements.password.value !== form.elements.confirmation.value) { showAlert(document.querySelector('#password-alert'), 'Pengulangan password belum cocok.'); return; }
     const button = form.querySelector('button[type="submit"]'); button.disabled = true;
+    const payload = { currentPassword: form.elements.currentPassword.value, password: form.elements.password.value };
+    const unlock = lockDialogForm(form);
     try {
-      await api('/api/admin/password', { method: 'POST', body: JSON.stringify({ currentPassword: form.elements.currentPassword.value, password: form.elements.password.value }) });
+      await api('/api/admin/password', { method: 'POST', body: JSON.stringify(payload) });
       form.reset(); document.querySelector('#password-dialog').close();
       dashboard.hidden = false; expireSession(); showAlert(loginAlert, 'Password berhasil diubah. Silakan login dengan password baru.', 'success');
     } catch (error) { showAlert(document.querySelector('#password-alert'), error.message); }
-    finally { button.disabled = false; }
+    finally { unlock(); button.disabled = false; }
   });
 
   restoreSession();

@@ -146,6 +146,7 @@ export function validateWaitinglist(
   payload: Record<string, unknown>,
   settings: SystemSettings,
   now = new Date(),
+  options: { existingBirthdate?: string } = {},
 ): WaitinglistRecordInput {
   const nama_ortu = requiredText(payload, "nama_ortu", "Nama orang tua", 120);
   const status_ortu = String(payload.status_ortu ?? "").trim().toLowerCase();
@@ -162,10 +163,13 @@ export function validateWaitinglist(
   if (sekolah_asal.length > 120) throw new Error("Sekolah asal terlalu panjang.");
   const tanggal_lahir_anak = String(payload.tanggal_lahir_anak ?? "").trim();
   if (!isValidIsoDate(tanggal_lahir_anak)) throw new Error("Tanggal lahir tidak valid.");
-  if (tanggal_lahir_anak > now.toISOString().slice(0, 10)) {
+  const todayWib = new Date(now.getTime() + 7 * 3600000).toISOString().slice(0, 10);
+  if (tanggal_lahir_anak > todayWib) {
     throw new Error("Tanggal lahir tidak boleh di masa depan.");
   }
-  if (tanggal_lahir_anak > eligibleBirthdate(settings)) {
+  // A contact/identity correction retains the registration's age snapshot.
+  // Only a trusted stored birthdate may preserve that snapshot on an admin edit.
+  if (tanggal_lahir_anak !== options.existingBirthdate && tanggal_lahir_anak > eligibleBirthdate(settings)) {
     throw new Error(eligibilityRetryMessage(tanggal_lahir_anak, settings));
   }
 

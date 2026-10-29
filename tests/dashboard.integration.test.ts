@@ -90,8 +90,13 @@ test.skipIf(!process.env.TEST_DATABASE_URL)("dashboard roles, CRUD, financial au
     expect((await call(`/api/admin/waitinglist/${id}`, treasurer, "PUT", form({ version: "2", reason: "Koreksi kontak" }, false))).status).toBe(403);
     expect((await call(`/api/admin/waitinglist/${id}`, admin, "PUT", form({ version: "1", reason: "Koreksi kontak" }, false))).status).toBe(409);
     const originalTime = participant.created_at, originalAge = participant.umur_terhitung_bulan;
+    const activeSettings = await settings.getSystemSettings();
+    await settings.saveSystemSettings({ ...activeSettings, minAgeYears: 18, minAgeMonths: 0 });
+    expect((await call(`/api/admin/waitinglist/${id}`, admin, "PUT", form({ version: "2", reason: "Koreksi tanggal lahir", tanggal_lahir_anak: "2020-01-02" }, false))).status).toBe(400);
     expect((await call(`/api/admin/waitinglist/${id}`, admin, "PUT", form({ version: "2", reason: "Koreksi kontak", email: "baru@example.test" }, false))).status).toBe(200);
     participant = await detail(); expect(participant.created_at).toBe(originalTime); expect(participant.umur_terhitung_bulan).toBe(originalAge); expect(participant.payment_status).toBe("verified");
+    expect(participant.status_eligibility).toBe("eligible");
+    await settings.saveSystemSettings(activeSettings);
     expect((await call(`/api/admin/waitinglist/${id}`, admin, "PUT", form({ version: "3", reason: "Ganti bukti transfer" }))).status).toBe(200);
     participant = await detail(); expect(participant.payment_status).toBe("pending"); expect(participant.payment_date).toBeNull();
     const history = await (await call(`/api/admin/waitinglist/${id}/history`, treasurer)).json() as any;
@@ -106,6 +111,16 @@ test.skipIf(!process.env.TEST_DATABASE_URL)("dashboard roles, CRUD, financial au
     report = await (await call("/api/admin/report" + query + "&view=all", admin)).json() as any; expect(report.payments.verifiedAmount).toBe(150000);
     expect((await call(`/api/admin/waitinglist/${id}/export.pdf`, treasurer)).status).toBe(200);
     expect((await call(`/api/admin/waitinglist/${id}/restore`, admin, "POST", { version: 6, reason: "Pulihkan uji" })).status).toBe(200);
+    // A legacy unknown age and an earlier eligibility decision must survive identity-only corrections exactly.
+    const legacyAge = encryption.encryptField("", "umur_terhitung_bulan", id);
+    const legacyEligibility = encryption.encryptField("not_eligible", "status_eligibility", id);
+    await db.update(participants).set({ umur_terhitung_bulan: legacyAge, status_eligibility: legacyEligibility }).where(eq(participants.id, id));
+    expect((await call(`/api/admin/waitinglist/${id}`, admin, "PUT", form({ version: "7", reason: "Koreksi data lama", email: "legacy@example.test" }, false))).status).toBe(200);
+    const [preserved] = await db.select().from(participants).where(eq(participants.id, id));
+    expect(preserved!.umur_terhitung_bulan).toBe(legacyAge); expect(preserved!.status_eligibility).toBe(legacyEligibility);
+    expect((await detail()).umur_terhitung_bulan).toBeNull();
+    expect((await call(`/api/admin/waitinglist/${id}`, admin, "PUT", form({ version: "8", reason: "Perbaiki tanggal lahir", tanggal_lahir_anak: "2019-01-01" }, false))).status).toBe(200);
+    participant = await detail(); expect(participant.umur_terhitung_bulan).toBe(102); expect(participant.status_eligibility).toBe("eligible"); expect(participant.created_at).toBe(originalTime);
 
     // The same filtered dataset must drive 1,000 participant rows, financial totals and both export formats.
     const { validateWaitinglist } = await import("../src/lib/validation");

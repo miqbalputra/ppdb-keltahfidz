@@ -48,6 +48,12 @@ function validPayload() {
 }
 
 describe("eligibility rules", () => {
+  test("uses WIB for future birthdates even before the UTC day changes", () => {
+    const boundarySettings = { ...settings, cutoffDate: "2028-01-01", minAgeYears: 1, minAgeMonths: 0 };
+    const now = new Date("2026-10-28T18:00:00.000Z");
+    expect(validateWaitinglist({ ...validPayload(), tanggal_lahir_anak: "2026-10-29" }, boundarySettings, now).tanggal_lahir_anak).toBe("2026-10-29");
+    expect(() => validateWaitinglist({ ...validPayload(), tanggal_lahir_anak: "2026-10-30" }, boundarySettings, now)).toThrow("masa depan");
+  });
   test("rejects independently valid region IDs that belong to different parents", () => {
     expect(() => validateWaitinglist({ ...validPayload(), kabupaten_id: "11.01" }, settings)).toThrow("hierarki");
     expect(() => validateWaitinglist({ ...validPayload(), desa_id: "32.74.01.1001" }, settings)).toThrow("hierarki");

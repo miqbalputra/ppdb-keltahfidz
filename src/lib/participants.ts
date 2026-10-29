@@ -85,29 +85,32 @@ export async function createParticipant(values: WaitinglistRecordInput, file: Fi
 }
 export async function updateParticipant(id: string, payload: Record<string, unknown>, file: File | undefined, actor: string) {
   const version = validVersion(payload.version), reason = reasonText(String(payload.reason ?? ""));
-  let values: WaitinglistRecordInput;
-  try { values = validateWaitinglist(payload, await getSystemSettings()); }
-  catch (error) { throw new ServiceError(400, (error as Error).message); }
+  const settings = await getSystemSettings();
   const proof = file && file.size ? await writeProof(id, file, actor) : null;
   try {
     return await db.transaction(async tx => {
       const stored = await findParticipant(id, tx, true); assertVersion(stored, version);
       ensure(!stored.deleted_at, 409, "Pulihkan peserta dari arsip sebelum mengubah data.");
       const before = decryptSensitiveRecord(stored);
+      let values: WaitinglistRecordInput;
+      try { values = validateWaitinglist(payload, settings, new Date(), { existingBirthdate: before.tanggal_lahir_anak }); }
+      catch (error) { throw new ServiceError(400, (error as Error).message); }
+      const sameBirthdate = before.tanggal_lahir_anak === values.tanggal_lahir_anak;
       if (!proof) await readProof(stored);
       else await rememberLegacyProof(tx, stored);
-      if (before.tanggal_lahir_anak === values.tanggal_lahir_anak) {
-        values.umur_terhitung_bulan = before.umur_terhitung_bulan;
-        values.status_eligibility = before.status_eligibility as "eligible";
-      }
-      const updates = encryptSensitiveRecord({ id, ...values, created_at: stored.created_at,
+      const updates: typeof participants.$inferInsert = encryptSensitiveRecord({ id, ...values, created_at: stored.created_at,
         umur_terhitung_bulan: String(values.umur_terhitung_bulan), updated_at: new Date().toISOString(), updated_by: actor,
         version: stored.version + 1, ...(proof ? { proof_id: proof.id, bukti_transfer_mime: proof.mime,
           payment_status: "pending", payment_date: null, payment_reviewed_at: null, payment_reviewer: null, payment_note: null } : {}) });
+      if (sameBirthdate) {
+        updates.umur_terhitung_bulan = stored.umur_terhitung_bulan;
+        updates.status_eligibility = stored.status_eligibility;
+      }
       await tx.update(participants).set(updates).where(eq(participants.id, id));
       if (proof) await tx.insert(participantProofs).values(proof);
       await audit(tx, id, actor, proof ? "participant_updated_proof" : "participant_updated", { reason, before,
         after: { ...values, created_at: stored.created_at, proofId: proof?.id ?? stored.proof_id,
+          ...(sameBirthdate ? { umur_terhitung_bulan: before.umur_terhitung_bulan, status_eligibility: before.status_eligibility } : {}),
           ...(proof ? { payment_status: "pending", payment_date: null, payment_reviewer: null, payment_reviewed_at: null, payment_note: null } : {}) } });
       return { saved: true, version: stored.version + 1 };
     });

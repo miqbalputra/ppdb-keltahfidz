@@ -167,7 +167,9 @@ describe("frontend accessibility contracts", () => {
     expect(html).toContain('aria-labelledby="settings-title"');
     expect(html).toContain('type="button">Arsipkan pendaftar</button>');
     expect(html).toContain('<option value="archived">Arsip (nonaktif)</option>');
-    expect(html).toContain('src="/admin.js?v=2027-workspace-2"');
+    const scriptVersion = html.match(/src="\/admin\.js\?v=([^"\s]+)"/)?.[1];
+    expect(scriptVersion).toBeTruthy();
+    expect(html).toContain(`href="/admin.css?v=${scriptVersion}"`);
   });
 
   test("admin table and export controls are accessible and include every requested filter", async () => {

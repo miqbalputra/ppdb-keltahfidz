@@ -70,20 +70,13 @@ html:has(body.admin-page) { scroll-behavior: auto; }
 .filter-toolbar strong { font-size: 11px; letter-spacing: .08em; color: #245b42; background: #e7f1eb; padding: 7px 10px; border-radius: 5px; }
 .filter-toolbar span { font-size: 12px; color: #596b62; }
 .filter-toolbar button { margin-left: auto; }
-.admin-page .filters { padding: 18px 20px 8px; margin: 0; gap: 10px; display: flex; flex-wrap: wrap; border: 0; }
-.admin-page .filters > label { flex: 1 1 175px; min-width: 0; }
-.admin-page .filters .search-field { flex: 2 1 300px; }
+.admin-page .filters { margin: 0; border: 0; }
 .admin-page .filters input, .admin-page .filters select, .advanced-filters input, .advanced-filters select, .table-controls select, .trend-control select { width: 100%; min-width: 0; min-height: 44px; font-size: 13px; border: 1px solid #ccd8d1; background: white; padding: 9px 11px; color: #263f34; border-radius: 6px; }
-.advanced-filter-details, .date-filter-details { margin: 8px 20px; font-size: 12px; color: #435c50; }
-.date-filter-details { flex: 1 1 100%; margin: 0; order: 10; }
-.advanced-filter-details summary, .date-filter-details summary { padding: 12px 4px; min-height: 44px; cursor: pointer; font-weight: 600; }
 .date-filter-fields { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; padding-top: 8px; }
 .date-filter-fields label { display: grid; gap: 5px; }
-.advanced-filter-details .advanced-filters { padding: 8px 0 16px; }
 .advanced-filters { padding: 12px 20px 18px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
 .advanced-filters .field { gap: 7px; font-size: 12px; }
 .filter-chips { padding: 0 20px; display: flex; flex-wrap: wrap; gap: 7px; }
-.filter-chips span { background: #f0f4f1; color: #3a5546; border: 1px solid #d7e3da; border-radius: 20px; padding: 5px 10px; font-size: 11px; overflow-wrap: anywhere; }
 .admin-page .report-filter-status { font-size: 12px; padding: 12px 20px 16px; }
 .recent-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; padding: 8px 22px 18px; }
 .recent-stats article { display: flex; flex-direction: column; gap: 6px; padding: 18px; background: #f3f7fa; border: 1px solid #dfe8ef; border-radius: 8px; }
@@ -130,8 +123,6 @@ html:has(body.admin-page) { scroll-behavior: auto; }
   .admin-main { padding: 20px 12px 40px; }
   .dashboard-heading h1 { font-size: 28px; }
   .dashboard-nav a { font-size: 12px; padding: 9px; }
-  .advanced-filters, .date-filter-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); padding: 12px; }
-  .advanced-filter-details { margin: 0 12px; }
   .filter-toolbar { padding: 12px; gap: 8px; }
   .filter-toolbar span { flex-basis: 100%; }
   .filter-toolbar button { margin-left: 0; }
@@ -181,11 +172,14 @@ html:has(body.admin-page) { scroll-behavior: auto; }
   flex: initial;
   border-radius: 7px;
 }
-.filter-primary-grid .search-field input {
+.admin-page .filter-primary-grid .search-field input {
   min-height: 0;
   height: 100%;
   padding-inline: 4px;
   font-size: 14px;
+  border: 0;
+  outline: 0;
+  box-shadow: none;
 }
 .filter-primary-grid .filter-select,
 .filter-primary-grid .filter-input { width: auto; min-width: 0; flex: initial; }
@@ -245,15 +239,34 @@ html:has(body.admin-page) { scroll-behavior: auto; }
 .filter-group .date-filter input { min-height: 42px; border-radius: 7px; font-size: 13px; }
 .filter-chips { min-height: 0; padding: 0; margin: 0; }
 .filter-chips:not(:empty) { padding-top: 2px; }
+.filter-chips button { display: inline-flex; align-items: center; gap: 9px; min-height: 40px; max-width: 100%; padding: 7px 12px; border: 1px solid #cbded1; border-radius: 999px; color: #24573a; background: #edf5ef; font: inherit; font-size: 12px; text-align: left; overflow-wrap: anywhere; cursor: pointer; }
+.filter-chips button::after { content: "×"; font-size: 18px; line-height: 1; flex: 0 0 auto; }
+.filter-chips button:hover { background: #dfede3; border-color: #94b69f; }
+.password-control { display: flex; min-width: 0; border: 1px solid #bdcfc2; border-radius: 7px; background: #fff; }
+.password-control:focus-within { outline: 3px solid #2863aa; outline-offset: 2px; }
+.admin-page .password-control input { flex: 1 1 auto; width: 0; min-width: 0; border: 0; outline: 0; box-shadow: none; }
+.password-control button { flex: 0 0 auto; padding: 8px 11px; min-height: 44px; border: 0; border-left: 1px solid #e1e9e3; border-radius: 0 6px 6px 0; background: #f5f8f5; color: #28573b; font: inherit; font-size: 12px; font-weight: 600; cursor: pointer; }
+.workspace-form .field small { color: #5e7063; font-size: 12px; line-height: 1.55; }
+.admin-page .form-alert.info { color: #305764; background: #f0f6f9; border-color: #d4e4eb; }
+dialog[data-saving] { cursor: progress; }
+dialog[data-saving] .button[type="submit"]::after { content: ""; width: 14px; height: 14px; border: 2px solid currentColor; border-top-color: transparent; border-radius: 50%; animation: admin-spin .8s linear infinite; }
+@keyframes admin-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { dialog[data-saving] .button[type="submit"]::after { animation: none; } }
 .admin-page .report-filter-status { margin: 0; padding: 10px 0 14px; color: #5e6d64; font-size: 12px; }
 .admin-page .table-heading h2 { line-height: 1.25; }
 .admin-page .table-heading .button,
 .session-actions .button { min-height: 44px; font-size: 13px; }
+.admin-page .export-actions .button-primary,
+.admin-page .participant-detail-actions .button-primary,
+.admin-page .settings-actions .button-primary { width: auto; margin: 0; }
+.admin-page .settings-actions { flex-wrap: wrap; gap: 18px; }
+.admin-page .settings-actions .field-hint { flex: 1 1 320px; min-width: 0; margin: 0; font-size: 12px; }
+.admin-page .settings-actions .button { min-width: 180px; }
 .admin-page .button:focus-visible,
 .admin-page .dashboard-nav a:focus-visible,
 .admin-page .filter-options > summary:focus-visible { outline-offset: 2px; }
 
-@media (max-width: 1400px) {
+@media (max-width: 1600px) {
   .filter-primary-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
   .filter-primary-grid .search-field { grid-column: span 2; }
   .filter-groups { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -265,6 +278,8 @@ html:has(body.admin-page) { scroll-behavior: auto; }
   .dashboard-nav a { flex: 0 0 auto; min-height: 44px; padding-inline: 14px; white-space: nowrap; }
 }
 @media (max-width: 700px) {
+  .admin-page .settings-actions .field-hint { flex-basis: auto; }
+  .admin-page .settings-actions .button { width: 100%; min-width: 0; }
   .admin-page .filters.report-filters { padding: 12px 12px 0; }
   .filter-primary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; }
   .filter-primary-grid .search-field { grid-column: 1 / -1; }
