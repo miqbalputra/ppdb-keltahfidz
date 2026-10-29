@@ -2,6 +2,10 @@ import { readStoredField } from "./encryption";
 import { isValidIsoDate } from "./validation";
 
 export interface WaitinglistFilterQuery {
+  payment_status?: string;
+  payment_reviewer?: string;
+  tanggal_bayar_mulai?: string;
+  tanggal_bayar_sampai?: string;
   q?: string;
   view?: string;
   sort?: string;
@@ -21,7 +25,20 @@ export interface WaitinglistFilterQuery {
   tanggal_lahir_sampai?: string;
 }
 
+export function describeFilters(query: WaitinglistFilterQuery): string {
+  const labels: Record<string, string> = { q: 'Pencarian', view: 'Status data', status: 'Kelayakan usia', jenis_kelamin: 'Jenis kelamin',
+    provinsi: 'Provinsi', kabupaten: 'Kabupaten/kota', kecamatan: 'Kecamatan', sekolah: 'Sekolah asal', missing: 'Data belum tercatat', age_group: 'Kelompok usia',
+    tanggal_daftar_mulai: 'Daftar dari', tanggal_daftar_sampai: 'Daftar sampai', tanggal_lahir_mulai: 'Lahir dari', tanggal_lahir_sampai: 'Lahir sampai',
+    payment_status: 'Pembayaran', payment_reviewer: 'Pemeriksa', tanggal_bayar_mulai: 'Bayar dari', tanggal_bayar_sampai: 'Bayar sampai' };
+  const values: Record<string, string> = { active: 'Aktif', archived: 'Arsip', all: 'Semua', pending: 'Belum diperiksa', verified: 'Terverifikasi', needs_correction: 'Perlu perbaikan', eligible: 'Memenuhi', not_eligible: 'Belum memenuhi', putra: 'Putra', putri: 'Putri', gender: 'Jenis kelamin', school: 'Sekolah', proof: 'Metadata bukti', consent: 'Persetujuan', any: 'Ada kekosongan', under6: '<6 tahun', '6to7': '6–<7 tahun', '7to8': '7–<8 tahun', '8plus': '8 tahun ke atas', unknown: 'Belum tercatat' };
+  return Object.entries(query).filter(([key, value]) => labels[key] && value && key !== 'view' && value !== 'all')
+    .map(([key, value]) => `${labels[key]}: ${values[String(value)] || value}`).join('; ') || 'Tanpa filter tambahan';
+}
+
 export interface EncryptedWaitinglistFilterRow {
+  payment_status?: string;
+  payment_reviewer?: string | null;
+  payment_date?: string | null;
   id: string;
   nama_anak: string;
   nama_ortu: string;
@@ -44,6 +61,7 @@ export interface EncryptedWaitinglistFilterRow {
 }
 
 const rangePairs = [
+  ["tanggal_bayar_mulai", "tanggal_bayar_sampai", "Tanggal pembayaran"],
   ["tanggal_daftar_mulai", "tanggal_daftar_sampai", "Tanggal pendaftaran"],
   ["tanggal_lahir_mulai", "tanggal_lahir_sampai", "Tanggal lahir"],
 ] as const;
@@ -57,7 +75,7 @@ export function validateWaitinglistFilterQuery(query: WaitinglistFilterQuery): s
     if (start && end && start > end) return `Rentang ${label.toLocaleLowerCase()} harus berurutan dari tanggal awal ke tanggal akhir.`;
   }
   const enums: Record<string, string[]> = {
-    view: ['active', 'archived'], sort: ['newest', 'oldest', 'name', 'age'],
+    view: ['active', 'archived', 'all'], payment_status: ['all', 'pending', 'verified', 'needs_correction'], sort: ['newest', 'oldest', 'name', 'age'],
     page_size: ['25', '50', '100'], trend: ['auto', 'daily', 'weekly', 'monthly'],
     missing: ['all', 'any', 'gender', 'school', 'proof', 'consent'],
     age_group: ['all', 'under6', '6to7', '7to8', '8plus', 'unknown'],
@@ -89,7 +107,8 @@ export function registrationCreatedAtBounds(query: WaitinglistFilterQuery): {
 
 export function hasWaitinglistFilters(query: WaitinglistFilterQuery): boolean {
   return Boolean(
-    query.q?.trim()
+    (query.payment_status && query.payment_status !== 'all') || query.payment_reviewer?.trim()
+    || query.tanggal_bayar_mulai || query.tanggal_bayar_sampai || query.q?.trim()
     || query.provinsi?.trim() || query.kabupaten?.trim() || query.sekolah?.trim()
     || (query.missing && query.missing !== 'all')
     || (query.age_group && query.age_group !== 'all')
@@ -143,6 +162,10 @@ export function matchesEncryptedWaitinglist(
   row: EncryptedWaitinglistFilterRow,
   query: WaitinglistFilterQuery,
 ): boolean {
+  if (query.payment_status && query.payment_status !== 'all' && (row.payment_status || 'pending') !== query.payment_status) return false;
+  if (query.payment_reviewer?.trim() && row.payment_reviewer !== query.payment_reviewer.trim()) return false;
+  if (query.tanggal_bayar_mulai && (!row.payment_date || row.payment_date < query.tanggal_bayar_mulai)) return false;
+  if (query.tanggal_bayar_sampai && (!row.payment_date || row.payment_date > query.tanggal_bayar_sampai)) return false;
   const status = query.status ?? "all";
   if ((status === "eligible" || status === "not_eligible")
     && readStoredField(row, 'status_eligibility') !== status) return false;

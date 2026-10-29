@@ -60,9 +60,14 @@ function dashboardHarness(
     }
     append() {}
   }
+  for (const name of ['payment-form', 'lifecycle-form', 'participant-editor-form', 'user-form', 'reset-password-form', 'password-form']) {
+    const form = makeNode('#' + name);
+    form.elements = new Proxy({}, { get: (_, key) => makeNode('#' + name + '-' + String(key)) });
+    form.reset = () => {}; form.reportValidity = () => true;
+  }
   const participantId = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
   const participant = {
-    id: participantId, nama_anak: "Amina Zahra", jenis_kelamin: "putri", sekolah_asal: "TK Tunas",
+    version: 1, payment_status: "pending", id: participantId, nama_anak: "Amina Zahra", jenis_kelamin: "putri", sekolah_asal: "TK Tunas",
     tanggal_lahir_anak: "2021-01-01", umur_terhitung_bulan: 72, status_eligibility: "eligible",
     nama_ortu: "Siti Aminah", status_ortu: "ibu", no_hp_wa: "6281234567890", email: "siti@example.test",
     desa_nama: "Desa A", kecamatan_nama: "Kecamatan B", kabupaten_nama: "Kabupaten C", provinsi_nama: "Jawa Barat",
@@ -150,6 +155,8 @@ describe("admin settings draft safety", () => {
     await browser.node("created:button").listeners.click();
     await browser.settle();
     await browser.node("#archive-participant-button").listeners.click();
+    browser.node("#lifecycle-form-reason").value = "Arsip sesuai permintaan";
+    await browser.node("#lifecycle-form").listeners.submit({ preventDefault() {} });
     await browser.settle();
     expect(browser.requests).toContainEqual({
       path: `/api/admin/waitinglist/${browser.participantId}/archive`, method: "POST",
@@ -165,6 +172,8 @@ describe("admin settings draft safety", () => {
     expect(browser.node("#archive-participant-button").hidden).toBe(true);
     expect(browser.node("#restore-participant-button").hidden).toBe(false);
     await browser.node("#restore-participant-button").listeners.click();
+    browser.node("#lifecycle-form-reason").value = "Pulihkan sesuai permintaan";
+    await browser.node("#lifecycle-form").listeners.submit({ preventDefault() {} });
     await browser.settle();
     expect(browser.requests).toContainEqual({
       path: `/api/admin/waitinglist/${browser.participantId}/restore`, method: "POST",

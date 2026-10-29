@@ -1,3 +1,4 @@
+import { buildPaymentReport } from "./payment-report";
 import { readStoredField } from './encryption';
 import { matchesEncryptedWaitinglist, missingRecordFields, recordedAgeGroup, type EncryptedWaitinglistFilterRow, type WaitinglistFilterQuery } from './waitinglist-filters';
 
@@ -8,6 +9,7 @@ export interface EncryptedWaitinglistReportRow extends EncryptedWaitinglistFilte
 }
 export interface Breakdown { label: string; total: number; percent: number; filter?: WaitinglistFilterQuery }
 export interface WaitinglistReport {
+  payments: ReturnType<typeof buildPaymentReport>;
   total: number;
   registrationPeriod: { start: string | null; end: string | null; label: string };
   daily: Array<{ date: string; total: number }>;
@@ -104,7 +106,7 @@ export function buildWaitinglistReport(rows: EncryptedWaitinglistReportRow[], qu
   const percent = (value: number) => total ? Math.round(value / total * 1000) / 10 : 0;
   const labels = { gender: 'Jenis kelamin belum tercatat', school: 'Sekolah asal belum tercatat', proof: 'Metadata lampiran belum tercatat', consent: 'Persetujuan belum lengkap tercatat' };
   return {
-    total, generatedAt: now.toISOString(), scope: query.view === 'archived' ? 'Arsip' : 'Aktif', recent,
+    total, generatedAt: now.toISOString(), scope: query.view === 'all' ? 'Aktif dan arsip' : query.view === 'archived' ? 'Arsip' : 'Aktif', recent, payments: buildPaymentReport(filtered, query, now),
     registrationPeriod: { start: startDate, end: endDate, label: startDate || endDate ? `${startDate ?? 'awal data'} – ${endDate ?? 'tanpa batas akhir'}` : 'Semua pendaftar' },
     daily, gender, eligibilityAtSubmission,
     topDistricts: [...districts.values()].sort((a, b) => b.total - a.total || a.district.localeCompare(b.district, 'id')).slice(0, 8),

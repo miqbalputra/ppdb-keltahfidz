@@ -1,4 +1,56 @@
 /* Admin-only workspace; public pages retain their existing stylesheet. */
+.session-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; font-size: 12px; }
+.payment-kpis { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; padding: 20px; }
+.payment-kpis button { border: 1px solid #dbe5df; border-radius: 10px; background: #f7faf8; color: #244b36; padding: 18px; text-align: left; cursor: pointer; }
+.payment-kpis span, .payment-kpis strong, .payment-kpis small { display: block; }
+.payment-kpis strong { font-size: 27px; margin: 9px 0; font-variant-numeric: tabular-nums; }
+.payment-kpis small { color: #52685c; }
+.payment-trend-wrap { padding: 0 20px 20px; }
+.payment-trend-wrap h3 { font-size: 16px; }
+.payment-trend-wrap p { color: #52685c; font-size: 12px; margin: 8px 0; }
+.payment-trend { display: grid; gap: 8px; list-style: none; max-height: 300px; overflow: auto; padding: 8px 0; }
+.payment-trend li { display: grid; grid-template-columns: 110px minmax(80px, 1fr) 120px; gap: 10px; align-items: center; font-size: 12px; }
+.payment-trend meter { width: 100%; height: 16px; accent-color: #287449; }
+.payment-badge { display: inline-block; padding: 6px 9px; border-radius: 6px; background: #f1f3f5; color: #4c5b56; white-space: nowrap; font-size: 12px; }
+.payment-badge.verified { background: #e3f3e8; color: #175a34; }
+.payment-badge.needs_correction { background: #fff0e8; color: #883c19; }
+.workspace-dialog { width: min(840px, calc(100vw - 32px)); max-height: calc(100svh - 40px); padding: 24px; border: 1px solid #cbd8cf; border-radius: 16px; color: #203d2e; overflow: auto; }
+.workspace-dialog::backdrop { background: rgba(12, 31, 21, .48); }
+.compact-dialog { width: min(540px, calc(100vw - 32px)); }
+.dialog-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding-bottom: 18px; }
+.dialog-heading h2 { font-size: 23px; margin: 0; }
+.workspace-form { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; padding: 12px 0; }
+.workspace-form .field { display: grid; gap: 7px; min-width: 0; }
+.workspace-form .field > span { font-size: 13px; font-weight: 600; }
+.workspace-form input:not([type="checkbox"]), .workspace-form select, .workspace-form textarea { width: 100%; min-width: 0; min-height: 44px; padding: 10px 12px; border: 1px solid #bdcfc2; border-radius: 7px; background: white; color: #203d2e; font: inherit; font-size: 14px; }
+.workspace-form input[type="checkbox"] { accent-color: #287449; width: 19px; height: 19px; flex: 0 0 auto; }
+.workspace-form .confirm-row { display: flex; gap: 10px; align-items: flex-start; font-size: 13px; }
+.workspace-form .full-width { grid-column: 1 / -1; }
+.workspace-form .button { justify-self: start; }
+.workspace-form .form-alert { margin: 0; }
+.workspace-form input:invalid:not(:placeholder-shown):focus, .workspace-form textarea:invalid:focus { border-color: #a33e32; }
+.payment-review, .participant-history { margin-top: 24px; padding-top: 20px; border-top: 1px solid #dbe5df; }
+.payment-review h3, .participant-history h3 { font-size: 18px; margin-bottom: 12px; }
+.history-item { border-left: 3px solid #dbe5df; padding: 10px 0 10px 14px; margin-bottom: 10px; font-size: 13px; overflow-wrap: anywhere; }
+.history-item small { display: block; margin: 6px 0; color: #52685c; }
+.history-item summary { cursor: pointer; min-height: 36px; padding-top: 8px; }
+.history-item dl { display: grid; grid-template-columns: 1fr 2fr; gap: 6px; margin-top: 8px; }
+.history-proof { display: block; margin: 10px 0; color: #1c613a; text-decoration: underline; }
+.user-actions { display: flex; flex-wrap: wrap; gap: 7px; }
+.admin-page .table-heading { gap: 16px; flex-wrap: wrap; }
+.admin-page .table-heading > .button { width: auto; flex: 0 0 auto; }
+.admin-page .table-heading > div:first-child { flex: 1 1 220px; }
+.admin-page .footer-inner { padding-left: 232px; }
+.payment-badge + small { display: block; margin-top: 7px; color: #52685c; }
+@media (max-width: 1100px) { .admin-page .footer-inner { padding-left: 0; } }
+@media (max-width: 700px) {
+  .payment-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); padding: 14px; }
+  .payment-kpis strong { font-size: 22px; }
+  .workspace-form { grid-template-columns: 1fr; }
+  .workspace-dialog { padding: 18px; }
+  .session-actions { justify-content: flex-start; }
+  .payment-trend li { grid-template-columns: 90px minmax(40px, 1fr) 95px; font-size: 11px; }
+}
 html:has(body.admin-page) { scroll-behavior: auto; }
 .admin-page { background: #f3f5f7; --workspace-ink: #172b27; }
 .admin-page [hidden] { display: none !important; }

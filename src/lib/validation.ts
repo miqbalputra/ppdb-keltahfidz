@@ -185,6 +185,11 @@ export function validateWaitinglist(
     region[`${key}_id`] = id;
     region[`${key}_nama`] = name;
   }
+  if (!region.kabupaten_id.startsWith(`${region.provinsi_id}.`)
+    || !region.kecamatan_id.startsWith(`${region.kabupaten_id}.`)
+    || !region.desa_id.startsWith(`${region.kecamatan_id}.`)) {
+    throw new Error("Wilayah yang dipilih tidak sesuai hierarki. Pilih ulang provinsi sampai desa.");
+  }
 
   const email = requiredText(payload, "email", "Email", 254).toLowerCase();
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new Error("Format email belum valid.");

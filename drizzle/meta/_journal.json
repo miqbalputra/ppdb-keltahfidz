@@ -50,6 +50,13 @@
       "when": 1792976145810,
       "tag": "0006_huge_groot",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "5",
+      "when": 1793237617609,
+      "tag": "0007_fancy_triton",
+      "breakpoints": true
     }
   ]
 }

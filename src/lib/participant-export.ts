@@ -1,7 +1,13 @@
 import ExcelJS from "exceljs";
-import { PDFDocument, PageSizes, StandardFonts, rgb, type PDFFont, type PDFPage } from "pdf-lib";
+import { PdfLayout } from "./pdf-layout";
+import { paymentLabel, REGISTRATION_FEE } from "./payment-report";
 
 export interface ParticipantExportRecord {
+  payment_status?: string;
+  payment_date?: string | null;
+  payment_reviewed_at?: string | null;
+  payment_reviewer?: string | null;
+  payment_note?: string | null;
   id: string;
   nama_ortu: string;
   status_ortu: string;
@@ -65,6 +71,12 @@ const registrationDateLabel = (isoTimestamp: string): string => {
 };
 
 const fields: ExportField[] = [
+  { key: 'payment_status', label: 'Status pembayaran', value: r => paymentLabel(r.payment_status) },
+  { key: 'payment_date', label: 'Tanggal pembayaran', value: r => r.payment_date ? dateLabel(r.payment_date) : '-' },
+  { key: 'payment_status', label: 'Nominal tervalidasi (Rp)', value: r => r.payment_status === 'verified' ? String(REGISTRATION_FEE) : '0' },
+  { key: 'payment_reviewer', label: 'Pemeriksa pembayaran', value: r => r.payment_reviewer || '-' },
+  { key: 'payment_reviewed_at', label: 'Waktu pemeriksaan', value: r => r.payment_reviewed_at ? registrationDateLabel(r.payment_reviewed_at) : '-' },
+  { key: 'payment_note', label: 'Catatan pemeriksaan', value: r => r.payment_note || '-' },
   { key: "id", label: "ID pendaftaran", value: (record) => record.id },
   { key: "nama_anak", label: "Nama calon santri", value: (record) => record.nama_anak },
   {
@@ -93,6 +105,8 @@ const fields: ExportField[] = [
   { key: 'deleted_at', label: 'Waktu arsip', value: record => record.deleted_at ? registrationDateLabel(record.deleted_at) : '' },
   { key: 'deleted_by', label: 'Diarsipkan oleh', value: record => record.deleted_by || '' },
 ];
+
+fields.push(...fields.splice(0, 6));
 
 function valuesFor(record: ParticipantExportRecord): string[] {
   return fields.map((field) => String(field.value(record)));
@@ -139,15 +153,41 @@ export async function generateParticipantXlsx(record: ParticipantExportRecord): 
   return new Uint8Array(await workbook.xlsx.writeBuffer());
 }
 
-export async function generateParticipantsXlsx(records: ParticipantExportRecord[]): Promise<Uint8Array> {
+export async function generateParticipantsXlsx(records: ParticipantExportRecord[], context: ExportContext = {}): Promise<Uint8Array> {
   const workbook = makeWorkbook("Daftar pendaftar SPSB 2027");
   const worksheet = workbook.addWorksheet("Data Pendaftar");
   worksheet.columns = fields.map((field) => ({ header: field.label, width: Math.min(Math.max(field.label.length + 3, 18), 34) }));
   const header = worksheet.getRow(1);
   styleHeader(header);
   setTextRows(worksheet, records.map(valuesFor));
+  const amountColumn = fields.findIndex(field => field.label === 'Nominal tervalidasi (Rp)') + 1;
+  records.forEach((record, i) => { const cell = worksheet.getRow(i + 2).getCell(amountColumn); cell.value = record.payment_status === 'verified' ? REGISTRATION_FEE : 0; cell.numFmt = '#,##0'; });
   worksheet.views = [{ state: "frozen", ySplit: 1 }];
   if (fields.length) worksheet.autoFilter = { from: "A1", to: `${columnName(fields.length)}1` };
+  const metadata = workbook.addWorksheet('Cakupan'); metadata.columns = [{ width: 26 }, { width: 90 }];
+  metadata.addRows([['Laporan', 'Data pendaftar SPSB 2027'], ['Status data', context.scope || 'Aktif'], ['Filter', context.filters || 'Tanpa filter tambahan'],
+    ['Dibuat (WIB)', registrationDateLabel(context.generatedAt || new Date().toISOString())], ['Jumlah peserta', records.length]]);
+  metadata.eachRow(row => row.alignment = { wrapText: true, vertical: 'top' });
+  return new Uint8Array(await workbook.xlsx.writeBuffer());
+}
+
+export async function generatePaymentsXlsx(records: ParticipantExportRecord[], context: ExportContext = {}) {
+  const workbook = makeWorkbook('Rekap pemeriksaan pembayaran SPSB 2027');
+  const ws = workbook.addWorksheet('Pembayaran');
+  ws.columns = ['ID', 'Calon santri', 'Orang tua', 'WhatsApp', 'Email', 'Status data', 'Pembayaran', 'Biaya (Rp)', 'Nominal tervalidasi (Rp)', 'Tanggal bayar', 'Pemeriksa', 'Waktu pemeriksaan WIB', 'Catatan'].map(header => ({ header, width: 25 }));
+  styleHeader(ws.getRow(1));
+  records.forEach(record => {
+    const row = ws.addRow([record.id, record.nama_anak, record.nama_ortu, record.no_hp_wa, record.email, record.deleted_at ? 'Arsip' : 'Aktif',
+      paymentLabel(record.payment_status), REGISTRATION_FEE, record.payment_status === 'verified' ? REGISTRATION_FEE : 0,
+      record.payment_date || '', record.payment_reviewer || '', record.payment_reviewed_at ? registrationDateLabel(record.payment_reviewed_at) : '', record.payment_note || '']);
+    row.eachCell(cell => { cell.alignment = { wrapText: true, vertical: 'top' }; cell.numFmt = typeof cell.value === 'number' ? '#,##0' : '@'; });
+  });
+  ws.views = [{ state: 'frozen', ySplit: 1 }]; ws.autoFilter = 'A1:M1';
+  const metadata = workbook.addWorksheet('Cakupan'); metadata.columns = [{ width: 28 }, { width: 90 }];
+  metadata.addRows([['Laporan', 'Pemeriksaan pembayaran SPSB 2027'], ['Status data', context.scope || 'Aktif dan arsip'],
+    ['Filter', context.filters || 'Tanpa filter tambahan'], ['Dibuat (WIB)', registrationDateLabel(context.generatedAt || new Date().toISOString())],
+    ['Jumlah peserta', records.length], ['Nominal tervalidasi (Rp)', records.filter(row => row.payment_status === 'verified').length * REGISTRATION_FEE]]);
+  metadata.eachRow(row => row.alignment = { wrapText: true, vertical: 'top' });
   return new Uint8Array(await workbook.xlsx.writeBuffer());
 }
 
@@ -162,132 +202,28 @@ function columnName(column: number): string {
   return name;
 }
 
-function pdfSafeText(value: string, font: PDFFont): string {
-  let safe = "";
-  for (const character of value.replace(/[\r\n\t]+/g, " ")) {
-    try {
-      font.encodeText(character);
-      safe += character;
-    } catch {
-      const normalized = character.normalize("NFKD").replace(/\p{Mark}/gu, "");
-      try {
-        font.encodeText(normalized);
-        safe += normalized;
-      } catch {
-        safe += "?";
-      }
-    }
-  }
-  return safe;
-}
-
-function wrapPdfText(value: string, font: PDFFont, size: number, maxWidth: number): string[] {
-  const text = pdfSafeText(value, font).replace(/\s+/g, " ").trim();
-  if (!text) return ["—"];
-  const lines: string[] = [];
-  let line = "";
-  for (const word of text.split(" ")) {
-    const candidate = line ? `${line} ${word}` : word;
-    if (font.widthOfTextAtSize(candidate, size) <= maxWidth) {
-      line = candidate;
-      continue;
-    }
-    if (line) lines.push(line);
-    line = "";
-    for (const character of word) {
-      const chunk = line + character;
-      if (font.widthOfTextAtSize(chunk, size) > maxWidth && line) {
-        lines.push(line);
-        line = character;
-      } else {
-        line = chunk;
-      }
-    }
-  }
-  if (line) lines.push(line);
-  return lines;
-}
-
 export async function generateParticipantPdf(record: ParticipantExportRecord): Promise<Uint8Array> {
-  const document = await PDFDocument.create();
-  const regular = await document.embedFont(StandardFonts.Helvetica);
-  const bold = await document.embedFont(StandardFonts.HelveticaBold);
-  const margin = 48;
-  const pageWidth = PageSizes.A4[0];
-  const pageHeight = PageSizes.A4[1];
-  let page = document.addPage(PageSizes.A4);
-  const pages: PDFPage[] = [page];
-  let cursorY = 0;
-
-  const drawPageHeader = (): void => {
-    cursorY = pageHeight - margin;
-    page.drawText("DATA PENDAFTARAN SPSB 2027", {
-      x: margin,
-      y: cursorY,
-      size: 16,
-      font: bold,
-      color: rgb(0.235, 0.306, 0.259),
-    });
-    cursorY -= 21;
-    page.drawText("Kelompok Tahfidz Griya Qur’an · Tunas Ilmu", {
-      x: margin,
-      y: cursorY,
-      size: 10,
-      font: regular,
-      color: rgb(0.31, 0.42, 0.34),
-    });
-    cursorY -= 17;
-    page.drawLine({
-      start: { x: margin, y: cursorY },
-      end: { x: pageWidth - margin, y: cursorY },
-      thickness: 1,
-      color: rgb(0.83, 0.87, 0.83),
-    });
-    cursorY -= 22;
-  };
-  const newPage = (): void => {
-    page = document.addPage(PageSizes.A4);
-    pages.push(page);
-    drawPageHeader();
-  };
-
-  drawPageHeader();
-  const valueWidth = pageWidth - margin * 2;
-  for (const field of fields) {
-    const label = pdfSafeText(field.label, bold);
-    const lines = wrapPdfText(field.value(record), regular, 10, valueWidth);
-    const neededHeight = 12 + lines.length * 13 + 9;
-    if (cursorY - neededHeight < margin + 18) newPage();
-    page.drawText(label, {
-      x: margin,
-      y: cursorY,
-      size: 8,
-      font: bold,
-      color: rgb(0.40, 0.43, 0.40),
-    });
-    cursorY -= 13;
-    for (const line of lines) {
-      page.drawText(line, {
-        x: margin,
-        y: cursorY,
-        size: 10,
-        font: regular,
-        color: rgb(0.18, 0.19, 0.18),
-        maxWidth: valueWidth,
-      });
-      cursorY -= 13;
-    }
-    cursorY -= 9;
+  const pdf = await PdfLayout.create('Formulir Pendaftaran Santri');
+  pdf.paragraph('ID pendaftaran: ' + record.id);
+  pdf.paragraph('Status data: ' + (record.deleted_at ? 'Arsip' : 'Aktif') + ' | Terdaftar: ' + registrationDateLabel(record.created_at));
+  const group = (title: string, keys: string[]) => { pdf.section(title); pdf.fields(fields.filter(f => keys.includes(f.key)).map(f => [f.label, f.label === 'Nominal tervalidasi (Rp)' ? Number(f.value(record)).toLocaleString('id-ID') : f.value(record)])); };
+  group('IDENTITAS CALON SANTRI', ['nama_anak', 'jenis_kelamin', 'sekolah_asal', 'tanggal_lahir_anak', 'umur_terhitung_bulan', 'status_eligibility']);
+  group('ORANG TUA DAN DOMISILI', ['nama_ortu', 'status_ortu', 'no_hp_wa', 'email', 'provinsi_nama', 'kabupaten_nama', 'kecamatan_nama', 'desa_nama']);
+  group('PERSETUJUAN DAN LAMPIRAN', ['konfirmasi_data', 'konfirmasi_bukti_transfer', 'konfirmasi_ketentuan_biaya', 'bukti_transfer_mime']);
+  group('PEMERIKSAAN PEMBAYARAN', ['payment_status', 'payment_date', 'payment_reviewer', 'payment_reviewed_at', 'payment_note']);
+  pdf.paragraph('Penerimaan formulir dan verifikasi pembayaran tidak menentukan hasil seleksi. Bukti transfer tersedia sebagai lampiran terpisah.');
+  return pdf.save();
+}
+export interface ExportContext { scope?: string; filters?: string; generatedAt?: string }
+export async function generateParticipantsPdf(records: ParticipantExportRecord[], context: ExportContext = {}, paymentOnly = false): Promise<Uint8Array> {
+  const pdf = await PdfLayout.create(paymentOnly ? 'Rekap Pemeriksaan Pembayaran' : 'Rekap Pendaftar SPSB 2027', true, context.generatedAt);
+  pdf.paragraph('Cakupan: ' + (context.scope || 'Aktif') + ' | Total: ' + records.length + ' peserta');
+  pdf.paragraph('Filter: ' + (context.filters || 'Tanpa filter'));
+  if (paymentOnly) {
+    pdf.paragraph('Biaya pendaftaran Rp150.000 | Nominal tervalidasi: Rp' + (records.filter(r => r.payment_status === 'verified').length * REGISTRATION_FEE).toLocaleString('id-ID'));
+    pdf.table(['No.', 'Calon santri / orang tua', 'WhatsApp', 'Hasil pemeriksaan', 'Tanggal bayar', 'Pemeriksa / catatan'], records.map((r, i) => [i + 1, r.nama_anak + '\n' + r.nama_ortu, r.no_hp_wa, paymentLabel(r.payment_status), r.payment_date ? dateLabel(r.payment_date) : '-', (r.payment_reviewer || '-') + '\n' + (r.payment_note || '')]), [0.4, 2.1, 1.35, 1.4, 1, 2]);
+  } else {
+    pdf.table(['No.', 'Calon santri', 'Orang tua', 'WhatsApp', 'Kabupaten/kota', 'Tanggal daftar', 'Pembayaran'], records.map((r, i) => [i + 1, r.nama_anak + '\n' + (r.jenis_kelamin === 'putra' ? 'Putra' : r.jenis_kelamin === 'putri' ? 'Putri' : '-'), r.nama_ortu, r.no_hp_wa, r.kabupaten_nama, registrationDateLabel(r.created_at), paymentLabel(r.payment_status)]), [0.4, 1.8, 1.7, 1.35, 1.6, 1.4, 1.4]);
   }
-
-  for (const [index, currentPage] of pages.entries()) {
-    currentPage.drawText(`Dokumen panitia · ID ${pdfSafeText(record.id, regular)} · ${index + 1}/${pages.length}`, {
-      x: margin,
-      y: 24,
-      size: 8,
-      font: regular,
-      color: rgb(0.45, 0.47, 0.45),
-    });
-  }
-  return document.save();
+  return pdf.save();
 }

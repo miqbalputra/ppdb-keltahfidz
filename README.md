@@ -69,15 +69,15 @@ Ulangi dengan `--preset=desktop` untuk profil desktop. Untuk audit admin/konfirm
 
 Dashboard di `/admin` mencakup:
 
-- Login admin dengan sesi bertanda tangan, cookie HttpOnly, dan perlindungan CSRF.
+- Login akun Admin/Bendahara dengan password Argon2id, sesi database empat jam, cookie HttpOnly, dan perlindungan CSRF.
 - Monitoring status aplikasi, koneksi MariaDB, runtime Bun, webhook n8n, dan Turnstile.
 - Ruang kerja dengan navigasi Ringkasan, Data peserta, Analitik & laporan, Arsip, dan Pengaturan (termasuk brosur/status sistem). Sidebar desktop berubah menjadi navigasi ringkas pada mobile; halaman dapat dibuka langsung melalui hash URL.
 - Laporan sesuai filter: total, pendaftaran hari ini/7/30 hari WIB, komposisi gender, kelayakan saat pendaftaran, wilayah berhierarki, sekolah asal, kelompok usia tercatat, hubungan orang tua, serta kelengkapan pencatatan. Usia dan kelayakan merupakan snapshot tersimpan, bukan hitung ulang mengikuti aturan usia saat ini atau hasil seleksi.
 - Pencarian ID/nama/kontak/sekolah/wilayah; filter tanggal daftar/lahir, kelayakan, gender, provinsi/kabupaten/kecamatan, sekolah, kelompok usia, dan data belum tercatat. Filter hanya berlaku setelah tombol Terapkan ditekan; seluruh panel dan unduhan memakai filter terapan, bukan input yang belum diterapkan. Provinsi, kabupaten dan sekolah memakai nama tepat (tidak peka kapital); kecamatan memakai pencarian sebagian jika tanpa provinsi/kabupaten, dan nama tepat jika hierarkinya dipilih. Opsi wilayah/sekolah berasal dari data tersimpan.
-- Urutan terbaru/terlama/nama/usia dengan tie-breaker ID, ukuran halaman 25/50/100, dan halaman yang otomatis disesuaikan setelah dataset menyusut. Kontak pribadi hanya dimuat pada detail read-only/ekspor, bukan payload tabel. Detail menyediakan salin ID/kontak, tautan WhatsApp/email, persetujuan, lampiran, dan metadata arsip.
-- Pendaftar dapat diarsipkan dan dipulihkan dari detail. Pengarsipan hanya menandai record; identitas terenkripsi dan lampiran tetap disimpan. Default daftar/laporan/ekspor adalah aktif; memilih Arsip membuat seluruh cakupan menghitung arsip saja. Unduhan daftar arsip berlabel `-arsip`; PDF/Excel individual tetap khusus peserta aktif. Tidak tersedia penghapusan permanen.
+- Urutan terbaru/terlama/nama/usia dengan tie-breaker ID, ukuran halaman 25/50/100, dan halaman yang otomatis disesuaikan setelah dataset menyusut. Kontak pribadi hanya dimuat pada detail read-only/ekspor, bukan payload tabel. Detail menyediakan salin ID/kontak, tautan WhatsApp/email, persetujuan, lampiran, riwayat perubahan, pemeriksaan pembayaran, dan metadata arsip. Admin dapat menambah serta mengubah data dari dashboard.
+- Pendaftar dapat diarsipkan dan dipulihkan dari detail. Pengarsipan hanya menandai record; identitas terenkripsi dan lampiran tetap disimpan. Default daftar/laporan/ekspor adalah aktif; memilih Arsip membuat seluruh cakupan menghitung arsip saja. Unduhan daftar arsip berlabel `-arsip`; PDF/Excel individual tersedia untuk peserta aktif dan arsip. Tidak tersedia penghapusan permanen.
 - Excel laporan agregat multi-sheet dan laporan siap cetak mencantumkan cakupan, filter, periode, dan waktu pembuatan WIB. CSV/Excel daftar mengekspor seluruh hasil, bukan halaman aktif, termasuk persetujuan, metadata lampiran dan arsip. CSV mempertahankan usia dalam bulan; Excel menyajikan label tahun/bulan. Angka kontak/ID tetap teks dan teks formula tidak dieksekusi sebagai formula.
-- Tabel hanya memuat kontak minimum; nomor WhatsApp/email dimuat lewat endpoint detail admin yang terautentikasi. Laporan agregat tidak mengembalikan identitas peserta. Bukti transfer tampil sebagai lampiran yang dikirim pengguna, bukan bukti pembayaran terverifikasi.
+- Tabel hanya memuat kontak minimum; nomor WhatsApp/email dimuat lewat endpoint detail admin yang terautentikasi. Laporan agregat tidak mengembalikan identitas peserta. Lampiran bukti transfer belum menandakan pembayaran terverifikasi; hasil pemeriksaan petugas ditampilkan melalui status pembayaran.
 - Pengaturan tanggal acuan usia, usia minimum, link grup WhatsApp, dan jadwal halaman “Segera Dibuka”. Perubahan disimpan di MariaDB.
 - Unggah, ganti, atau hapus brosur SPSB dalam format JPG/PNG (maksimal 10 MB). Tombol Download Brosur selalu terlihat pada halaman countdown; sebelum diunggah atau setelah dihapus, pengunjung mendapat pesan “Brosur belum tersedia”. Gambar tersimpan sebagai file di volume persisten `DATA_DIR`. Setelah pembaruan dari versi PDF, unggah brosur gambar agar kembali tersedia.
 
@@ -85,11 +85,11 @@ Dashboard di `/admin` mencakup:
 
 Semua KPI merupakan **irisan filter terapan** dan cakupan aktif/arsip; misalnya “7 hari terakhir” bukan angka global ketika filter sekolah dipakai. Hari ini memakai kalender Asia/Jakarta; 7/30 hari termasuk hari ini. Total tanpa filter tanggal meliputi semua data pada cakupan tersebut, sedangkan grafik default hanya 30 hari terakhir. Dengan batas tanggal eksplisit, grafik mengikuti rentang; batas awal yang kosong memakai tanggal data pertama (atau 30 hari bila tidak ada data). Tren mengisi bucket kosong dan otomatis diperbesar menjadi mingguan/bulanan/tahunan untuk rentang panjang, maksimal sekitar 400 bucket; seluruh periode tetap dihitung, tidak dipotong diam-diam. Bucket mingguan mulai Senin, bulanan mulai tanggal 1; bucket tepi hanya menghitung data di dalam rentang terapan.
 
-Persentase rekap memakai total peserta sesuai filter sebagai denominator, bukan total global. Kategori usia: <6, 6–<7, 7–<8, ≥8 tahun, dan belum tercatat. Kelengkapan menunjukkan gender/sekolah/metadata lampiran/persetujuan yang belum tercatat; jumlah “setidaknya satu kekosongan” menghitung peserta unik, bukan penjumlahan seluruh kolom. Metadata lampiran **tidak membuktikan berkas masih tersedia atau pembayaran valid**. Null/kosong tidak diasumsikan lengkap; tidak ada statistik pendapatan, penerimaan, atau kuota rekaan. Sistem tetap satu akun admin berbasis environment, tanpa alur seleksi/verifikasi/pembayaran baru.
+Persentase rekap memakai total peserta sesuai filter sebagai denominator, bukan total global. Kategori usia: <6, 6–<7, 7–<8, ≥8 tahun, dan belum tercatat. Kelengkapan menunjukkan gender/sekolah/metadata lampiran/persetujuan yang belum tercatat; jumlah “setidaknya satu kekosongan” menghitung peserta unik, bukan penjumlahan seluruh kolom. Metadata lampiran **tidak membuktikan berkas masih tersedia atau pembayaran valid**. Null/kosong tidak diasumsikan lengkap; tidak ada statistik pendapatan, penerimaan, atau kuota rekaan. Akun Admin dan Bendahara dikelola di database. Pemeriksaan pembayaran dilakukan manual oleh petugas; sistem tidak menjalankan seleksi atau integrasi bank otomatis.
 
 Pada landing page “Segera Dibuka”, teks **“Sudah diunduh X kali”** di bawah tombol brosur menunjukkan total respons unduhan yang berhasil dilayani server (bukan jumlah orang unik atau kepastian berkas disimpan di perangkat). Hitungan dimulai dari 0 saat fitur dipasang, tanpa menebak riwayat sebelumnya; unduhan berulang dan unduhan langsung dari endpoint yang sama, termasuk tombol admin, ikut dihitung. Nilai disimpan secara atomik di MariaDB pada kunci internal `brochureDownloadCount` dalam `system_settings`, tetap ada setelah restart/ganti/hapus brosur dan perubahan pengaturan admin. Status, HEAD, serta unduhan yang gagal sebelum respons sukses tidak menambah hitungan. Tampilan mengambil angka asli saat countdown dimuat dan memperbaruinya setelah unduhan berhasil; jika status gagal dimuat, angka disembunyikan. Jika pencatatan database gagal, endpoint unduhan mengembalikan 503 tanpa melayani attachment.
 
-Kredensial admin, `APP_SECRET`, URL webhook n8n, dan secret Turnstile tetap dikelola melalui environment Coolify—bukan ditampilkan atau disimpan sebagai pengaturan biasa di dashboard.
+Kredensial Admin awal, `APP_SECRET`, URL webhook n8n, dan secret Turnstile dikelola melalui environment Coolify. Setelah akun awal terbentuk, pengelolaan akun dan password dilakukan melalui menu Akun petugas.
 
 ## Perlindungan data dan operasional keamanan
 
@@ -110,7 +110,7 @@ Salin `.env.example` sebagai titik awal. Variabel penting:
 |---|---|
 | `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD` | Koneksi MariaDB. `DATABASE_URL` dapat dipakai sebagai alternatif. |
 | `DB_POOL_SIZE` | Batas koneksi pool MariaDB per instance (1–100, default 10). Sesuaikan dengan batas koneksi database dan jumlah replica. |
-| `ADMIN_USERNAME`, `ADMIN_PASSWORD` | Kredensial admin. Isi password kuat sebelum deployment. |
+| `ADMIN_USERNAME`, `ADMIN_PASSWORD` | Kredensial bootstrap Admin pertama dan pemulihan dari host. Tidak menimpa akun/password database saat restart. |
 | `APP_SECRET` | Kunci sesi admin; gunakan nilai acak yang kuat dan tetap antar-restart. |
 | `DATA_ENCRYPTION_KEY` | Kunci AES-256-GCM 32 byte yang stabil untuk enkripsi field pribadi. Simpan terpisah dan aman; jangan kehilangan atau menggantinya tanpa rencana rotasi. |
 | `COOKIE_SECURE` | Set `true` di deployment HTTPS. |
@@ -172,3 +172,51 @@ bun run verify
 ```
 
 `tests/database.integration.test.ts` menjalankan alur pendaftaran, enkripsi, login admin, filter/ekspor, pengaturan, Turnstile, dan webhook terhadap MariaDB sungguhan serta mock untuk layanan eksternal. Tes ini hanya aktif bila `TEST_DATABASE_URL` diarahkan ke database khusus yang namanya memuat `test`; migrasi dan penghapusan record uji dilakukan di database tersebut, jadi jangan arahkan ke database produksi. Workflow GitHub Actions menjalankannya dengan MariaDB sementara, memeriksa audit dependency, migrasi, impor SQLite dry-run, dan build Docker.
+
+## Dashboard Admin dan Bendahara
+
+Dashboard tersedia di /admin dengan navigasi Ringkasan, Data peserta, Pembayaran, Analitik & laporan, Arsip, Akun petugas, dan Pengaturan. Halaman publik Segera Dibuka tetap menggunakan tampilan sebelumnya.
+
+| Kemampuan | Admin | Bendahara |
+|---|---|---|
+| Lihat seluruh data, bukti, arsip, riwayat, Excel/PDF | Ya | Ya |
+| Periksa dan koreksi pembayaran | Ya | Ya |
+| Tambah/edit/arsip/pulihkan pendaftar | Ya | Tidak |
+| Kelola akun, pengaturan, brosur | Ya | Tidak |
+
+### Akun dan sesi
+
+Saat tabel akun kosong, startup membuat satu Admin dari ADMIN_USERNAME/ADMIN_PASSWORD. Sesudah itu environment tidak mengubah password akun yang sudah ada. Admin membuat akun petugas di menu Akun petugas; akun baru/reset wajib mengganti password sebelum membuka data. Username unik dan tidak dapat diganti; nama, role, dan status aktif dapat diubah. Password minimal 16 karakter. Penonaktifan, perubahan akun/role, reset, dan ganti password mencabut sesi terkait. Admin aktif terakhir tidak dapat dinonaktifkan atau diturunkan rolenya, termasuk pada perubahan bersamaan.
+
+Migrasi memerlukan login ulang; cookie versi lama tidak diterima. Jika Admin kehilangan akses, isi ADMIN_USERNAME dan ADMIN_PASSWORD baru pada environment host/Coolify lalu jalankan bun run staff:recover dari container yang sudah dimigrasikan. Script memulihkan akun tersebut dan mengharuskan penggantian password. Password tidak dicetak di log.
+
+### CRUD dan audit
+
+Tambah/edit mengikuti validasi form publik: usia memenuhi aturan aktif, kontak valid, bukti JPG/PNG/PDF maksimal 5 MB, dan tiga persetujuan wajib. Admin boleh memasukkan data saat halaman publik masih countdown; CAPTCHA dan jadwal hanya berlaku bagi pendaftaran publik. Semua tindakan manual tidak mengirim webhook/email otomatis. Edit mempertahankan ID dan tanggal pendaftaran. Usia/kelayakan dihitung ulang ketika tanggal lahir diubah; pengubahan field lain mempertahankan nilai usia sebelumnya.
+
+Arsip dan pemulihan memerlukan alasan. Data pribadi dalam audit serta catatan pemeriksaan dienkripsi AES-GCM. Nomor versi mencegah perubahan petugas menimpa perubahan lain: respons 409 berarti data harus dimuat ulang sebelum disimpan. Riwayat peserta tersedia di detail, termasuk versi bukti yang lama. Tidak tersedia penghapusan permanen.
+
+### Pemeriksaan pembayaran Rp150.000
+
+Status adalah pending (Belum diperiksa), verified (Terverifikasi), dan needs_correction (Perlu perbaikan). Unggahan dan data lama selalu dimulai Belum diperiksa. Petugas menetapkan Terverifikasi setelah memastikan pembayaran Rp150.000 cocok dengan bukti dan catatan bank; tanggal bayar wajib diisi dan tidak boleh di masa depan WIB. Berkas yang hilang/tidak dapat didekripsi tidak dapat diverifikasi. Catatan wajib ketika perlu perbaikan atau mengoreksi hasil pemeriksaan sebelumnya.
+
+Bukti pengganti disimpan sebagai versi baru dan mengembalikan status ke Belum diperiksa. Pengarsipan tidak menghapus status atau riwayat pembayaran. Laporan pembayaran default mencakup aktif dan arsip; cakupan tertera di layar dan dokumen. Nominal tervalidasi = jumlah peserta berstatus Terverifikasi x Rp150.000; angka ini merupakan hasil pemeriksaan petugas, bukan saldo rekening atau jurnal akuntansi. Tren keuangan menggunakan tanggal pembayaran yang dicatat, bukan tanggal pendaftaran.
+
+### Ekspor dan API tambahan
+
+Excel daftar dan individual mencakup pembayaran, tanggal bayar, pemeriksa, waktu pemeriksaan WIB, serta catatan. Workbook pembayaran menyimpan nominal sebagai angka dan kontak sebagai teks. PDF memakai logo lembaga, font Noto Sans tertanam, kop, cakupan/filter, tabel berulang, dan nomor halaman. Formulir individu A4 portrait; rekap pendaftar/pembayaran A4 landscape. Semua unduhan mencakup seluruh hasil filter. Bukti transfer tetap diunduh terpisah.
+
+- POST /api/admin/waitinglist dan PUT /api/admin/waitinglist/:id: multipart data peserta; edit menambahkan version dan reason. Bukti baru opsional pada edit bila bukti lama dapat dibuka.
+- POST /api/admin/waitinglist/:id/archive dan /restore: JSON version serta reason.
+- PUT /api/admin/waitinglist/:id/payment: JSON version, status, date, note, amountConfirmed. GET /api/admin/waitinglist/:id/history: audit dan daftar versi bukti. GET /proof?version=<id>: versi bukti peserta terkait.
+- GET/POST /api/admin/users, PUT /api/admin/users/:id, POST /api/admin/users/:id/reset-password (password dan version), POST /api/admin/password (currentPassword dan password).
+- GET /api/admin/export.pdf, /api/admin/report.pdf, /api/admin/payments/export.xlsx, /api/admin/payments/export.pdf.
+- Filter bersama mendukung view=all, payment_status, payment_reviewer, tanggal_bayar_mulai, dan tanggal_bayar_sampai. Login/me menyertakan user, role, dan status wajib ganti password; semua otorisasi diperiksa di server.
+
+Untuk membuat empat contoh PDF memakai data fiktif, jalankan bun run preview:pdf. Hasil berada di output/pdf. Font dan lisensinya tersimpan di assets/fonts dan disertakan pada image Docker; pembuatan PDF tidak memerlukan jaringan atau browser di production.
+
+### Upgrade dan pemeriksaan
+
+Migrasi 0007 menambahkan akun, sesi, audit, versi bukti, nomor versi peserta, dan status pembayaran default pending. Data identitas dan berkas lama tetap dipertahankan; bukti legacy didukung oleh pembaca versi lama. Sebelum upgrade, cadangkan MariaDB, seluruh DATA_DIR, serta DATA_ENCRYPTION_KEY. Setelah startup, login dengan akun Admin awal lalu buat akun petugas yang dibutuhkan. Endpoint /readyz memeriksa koneksi database.
+
+bun run verify menjalankan pemeriksaan tipe, tes, HTML/JavaScript, audit dependency, dan konsistensi migrasi. Dengan TEST_DATABASE_URL pada database khusus bernama test, suite integrasi juga memeriksa role, sesi, CRUD, pemeriksaan pembayaran, konflik bersamaan, perlindungan Admin terakhir, dan konsistensi ekspor 1.000 peserta. Fixture tes menggunakan database sementara dan tidak boleh diarahkan ke production.

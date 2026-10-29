@@ -22,6 +22,7 @@ mock.module("../src/lib/brochure-downloads", () => ({
     totalDownloads += 1;
   },
 }));
+await (await import("./helpers/staff-mock")).mockStaffAuthentication();
 const { app } = await import("../src/index");
 const { readBrochure, saveBrochure, validateBrochure, brochureStatus, detectBrochureMime } = await import("../src/lib/brochure");
 

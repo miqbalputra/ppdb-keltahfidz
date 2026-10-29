@@ -3,7 +3,7 @@
 
 **Versi:** 1.1
 **Tanggal:** 25 September 2026 (revisi: tambah field email wajib, auto-format nomor WhatsApp)
-**Status:** Draft untuk implementasi
+**Status:** Dokumen awal fase waitinglist. Implementasi kini mencakup pendaftaran, CRUD Admin, role Bendahara, verifikasi pembayaran manual Rp150.000, audit, dan ekspor Excel/PDF. Spesifikasi operasional terbaru ada pada README bagian Dashboard Admin dan Bendahara.
 
 ---
 

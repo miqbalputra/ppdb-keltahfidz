@@ -6,3 +6,5 @@ tests/
 scripts/
 data/
 *.sqlite3*
+tmp/
+output/

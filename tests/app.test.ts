@@ -6,6 +6,7 @@ describe("Elysia application", () => {
     process.env.ADMIN_PASSWORD = "test-admin-password";
     process.env.APP_SECRET = "test-secret-with-more-than-32-characters";
     process.env.DATA_ENCRYPTION_KEY = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+    await (await import("./helpers/staff-mock")).mockStaffAuthentication();
     const { app } = await import("../src/index");
     const response = await app.handle(new Request("http://localhost/healthz"));
 
@@ -144,7 +145,7 @@ describe("Elysia application", () => {
     expect(await response.json()).toMatchObject({ error: expect.stringContaining("harus berurutan") });
   });
 
-  test("admin login issues a signed HttpOnly session and logout requires CSRF", async () => {
+  test("admin login issues an opaque HttpOnly session and logout requires CSRF", async () => {
     const { app } = await import("../src/index");
     const login = await app.handle(new Request("http://localhost/api/admin/login", {
       method: "POST",

@@ -14,6 +14,8 @@
   const brochureSave = document.querySelector("#brochure-save");
   const brochureDelete = document.querySelector("#brochure-delete");
   let csrfToken = "";
+  let staffUser = { role: "admin", name: "", username: "", mustChangePassword: false };
+  let currentParticipant = null;
   let currentPage = 1;
   let totalPages = 1;
   let rowsRequestController = null;
@@ -46,11 +48,13 @@
     const contentType = response.headers.get("Content-Type") || "";
     const payload = contentType.includes("application/json") ? await response.json() : null;
     if (response.status === 401 && !path.includes('/api/admin/login')) expireSession();
-    if (!response.ok) throw new Error(payload?.error || "Permintaan tidak berhasil.");
+    if (!response.ok) { const error = new Error(payload?.error || "Permintaan tidak berhasil."); error.status = response.status; error.code = payload?.code; throw error; }
     return payload;
   }
 
   function showDashboard(focusHeading = false) {
+    applyStaffPermissions();
+    if (staffUser.mustChangePassword) { openPasswordDialog(); return; }
     loginCard.hidden = true;
     dashboard.hidden = false;
     if (focusHeading) dashboard.querySelector(".dashboard-heading h1").focus();
@@ -65,6 +69,7 @@
       const result = await api("/api/admin/me");
       if (result.authenticated) {
         csrfToken = result.csrfToken;
+        staffUser = result.user || staffUser;
         showDashboard();
       }
     } catch (error) {
@@ -156,7 +161,7 @@
     if (!rows.length) {
       const tr = document.createElement("tr");
       const td = document.createElement("td");
-      td.colSpan = 7;
+      td.colSpan = 8;
       td.className = "table-empty";
       td.textContent = "Belum ada data yang cocok dengan pencarian.";
       tr.append(td);
@@ -195,7 +200,7 @@
         proofStatus.textContent = "Bukti transfer terlampir";
         child.append(proofStatus);
       }
-      if (currentView === "active") {
+      if (true) {
         const exportActions = document.createElement("div");
         exportActions.className = "individual-export-actions";
         for (const [format, label] of [["pdf", "PDF"], ["xlsx", "Excel"]]) {
@@ -245,7 +250,11 @@
       badge.textContent = item.status_eligibility === "eligible" ? "Memenuhi saat daftar" : item.status_eligibility === 'not_eligible' ? "Belum memenuhi saat daftar" : 'Belum tercatat';
       statusCell.append(badge);
       tr.append(statusCell, makeCell(formatDate(item.created_at, true)));
-      rowsContainer.append(tr);
+      const payment = document.createElement('td');
+      const paymentBadge = document.createElement('span'); paymentBadge.className = 'payment-badge ' + (item.payment_status || 'pending');
+      paymentBadge.textContent = paymentLabel(item.payment_status); payment.append(paymentBadge);
+      const paymentInfo = document.createElement('small'); paymentInfo.textContent = item.payment_reviewer || 'Menunggu pemeriksaan'; payment.append(paymentInfo);
+      tr.append(payment); rowsContainer.append(tr);
     }
   }
 
@@ -281,7 +290,7 @@
       renderRows(result.rows);
       totalPages = result.pages;
       currentPage = result.page;
-      document.querySelector("#table-summary").textContent = `${new Intl.NumberFormat("id-ID").format(result.total)} pendaftar ${currentView === "archived" ? "diarsipkan" : "aktif"} · halaman ${result.page} dari ${result.pages}`;
+      document.querySelector("#table-summary").textContent = `${new Intl.NumberFormat("id-ID").format(result.total)} pendaftar ${currentView === "all" ? "aktif dan arsip" : currentView === "archived" ? "diarsipkan" : "aktif"} · halaman ${result.page} dari ${result.pages}`;
       document.querySelector("#export-xlsx-button").hidden = false;
       document.querySelector("#export-button").hidden = false;
       document.querySelector("#page-indicator").textContent = `${result.page} / ${result.pages}`;
@@ -302,7 +311,7 @@
   function renderTableMessage(message) {
     const row = document.createElement("tr");
     const cell = document.createElement("td");
-    cell.colSpan = 7;
+    cell.colSpan = 8;
     cell.className = "table-empty";
     cell.textContent = message;
     row.append(cell);
@@ -320,12 +329,15 @@
     reportPeriod.textContent = 'Memuat laporan…';
     document.querySelector('#analytics-panel').setAttribute('aria-busy', 'true');
     document.querySelector('#analytics-filters').textContent = '';
-    document.querySelector('#scope-label').textContent = currentView === 'archived' ? 'DATA ARSIP' : 'DATA AKTIF';
+    document.querySelector('#scope-label').textContent = currentView === 'all' ? 'AKTIF DAN ARSIP' : currentView === 'archived' ? 'DATA ARSIP' : 'DATA AKTIF';
     document.querySelector('#report-filter-status').textContent = 'Memuat cakupan filter terapan…';
     ["#report-total", "#report-putra", "#report-putri", "#report-eligible", "#report-gender-unrecorded", "#report-not-eligible"]
       .forEach((selector) => { document.querySelector(selector).textContent = "Memuat…"; });
     renderDailyReport([]);
     renderAreaReport([]);
+    document.querySelector('#payment-kpis').textContent = 'Memuat pemeriksaan pembayaran…';
+    document.querySelector('#payment-trend').replaceChildren();
+    for (const id of ['export-report-pdf', 'export-payment-xlsx', 'export-payment-pdf']) document.querySelector('#' + id).disabled = true;
     document.querySelector('#analytics-content').replaceChildren();
     document.querySelector('#recent-stats').replaceChildren();
     document.querySelector('#analytics-meta').textContent = 'Memuat laporan…';
@@ -346,21 +358,24 @@
       reportPeriod.textContent = report.registrationPeriod.label === "Semua pendaftar"
         ? `Semua tanggal pendaftaran · ${activeFilters ? "sesuai filter aktif" : "semua pendaftar"} · tren 30 hari terakhir`
         : `Periode pendaftaran: ${report.registrationPeriod.label}`;
-      document.querySelector('#scope-label').textContent = currentView === 'archived' ? 'DATA ARSIP' : 'DATA AKTIF';
-      document.querySelector('#report-filter-status').textContent = `${currentView === 'archived' ? 'Arsip' : 'Aktif'} · ${activeFilters} filter terapan · laporan, tabel, dan ekspor memakai cakupan yang sama.`;
+      document.querySelector('#scope-label').textContent = currentView === 'all' ? 'AKTIF DAN ARSIP' : currentView === 'archived' ? 'DATA ARSIP' : 'DATA AKTIF';
+      document.querySelector('#report-filter-status').textContent = `${currentView === 'all' ? 'Aktif dan arsip' : currentView === 'archived' ? 'Arsip' : 'Aktif'} · ${activeFilters} filter terapan · laporan, tabel, dan ekspor memakai cakupan yang sama.`;
       const firstTrendDate = report.daily[0]?.date;
       const lastTrendDate = report.daily.at(-1)?.date;
       document.querySelector("#report-trend-period").textContent = report.registrationPeriod.label === "Semua pendaftar"
         ? "30 hari terakhir"
         : firstTrendDate && lastTrendDate ? `${formatDate(firstTrendDate)} – ${formatDate(lastTrendDate)}` : "Tidak ada tanggal pada filter";
-      if (report.trend) document.querySelector('#report-trend-period').textContent = `${report.trend.start} – ${report.trend.end} · ${report.trend.interval}`;
+      if (report.trend) document.querySelector('#report-trend-period').textContent = `${report.trend.start} – ${report.trend.end} · ${intervalLabel(report.trend.interval)}`;
       renderDailyReport(report.trend?.buckets || report.daily);
       renderAreaReport(report.topDistricts);
       renderAnalytics(report);
+      renderPayments(report);
+      for (const id of ['export-report-pdf', 'export-payment-xlsx', 'export-payment-pdf']) document.querySelector('#' + id).disabled = false;
       document.querySelector('#export-report').disabled = false;
       document.querySelector('#print-report').disabled = false;
     } catch (error) {
       if (controller.signal.aborted || requestId !== reportRequestId) return;
+      document.querySelector("#payment-kpis").textContent = "Data pembayaran gagal dimuat. Gunakan Muat ulang data.";
       reportPeriod.textContent = "Laporan belum dapat dimuat.";
       document.querySelector('#analytics-meta').textContent = 'Laporan gagal dimuat. Gunakan Muat ulang data untuk mencoba lagi.';
       showAlert(dashboardAlert, error.message);
@@ -416,7 +431,9 @@
   async function showParticipantDetail(id) {
     const requestId = ++participantRequestId;
     currentParticipantId = id;
-    participantDialog.showModal();
+    if (!participantDialog.open) participantDialog.showModal();
+    document.querySelector("#payment-review").hidden = true;
+    document.querySelector("#participant-history").hidden = true;
     participantDialog.setAttribute("aria-busy", "true");
     document.querySelector("#participant-detail-status").hidden = false;
     document.querySelector("#participant-detail-status").textContent = "Memuat detail pendaftaran…";
@@ -425,12 +442,14 @@
     try {
       const participant = await api(`/api/admin/waitinglist/${encodeURIComponent(id)}`);
       if (requestId !== participantRequestId || !participantDialog.open) return;
+      currentParticipant = participant;
       const setDetail = (selector, value) => { document.querySelector(selector).textContent = value || "Belum dicatat"; };
       const isArchived = Boolean(participant.deleted_at);
-      document.querySelector("#archive-participant-button").hidden = isArchived;
-      document.querySelector("#restore-participant-button").hidden = !isArchived;
-      document.querySelector("#detail-pdf-link").hidden = isArchived;
-      document.querySelector("#detail-xlsx-link").hidden = isArchived;
+      document.querySelector("#archive-participant-button").hidden = isArchived || staffUser.role !== "admin";
+      document.querySelector("#restore-participant-button").hidden = !isArchived || staffUser.role !== "admin";
+      document.querySelector("#detail-pdf-link").hidden = false;
+      document.querySelector("#edit-participant").hidden = isArchived || staffUser.role !== "admin";
+      document.querySelector("#detail-xlsx-link").hidden = false;
       if (isArchived) {
         setDetail("#participant-detail-status", `Diarsipkan ${formatDate(participant.deleted_at, true)} oleh ${participant.deleted_by || "admin"}. Data masih tersimpan dan dapat dipulihkan.`);
         document.querySelector("#participant-detail-status").hidden = false;
@@ -463,6 +482,8 @@
       if (!isArchived) document.querySelector("#participant-detail-status").hidden = true;
       document.querySelector("#participant-detail-grid").hidden = false;
       document.querySelector("#participant-detail-actions").hidden = false;
+      fillPaymentReview(participant);
+      loadParticipantHistory(id, requestId);
     } catch (error) {
       if (requestId === participantRequestId && participantDialog.open) {
         document.querySelector("#participant-detail-status").textContent = error.message;
@@ -475,14 +496,18 @@
   async function changeParticipantLifecycle(action) {
     if (!currentParticipantId) return;
     const archive = action === "archive";
-    const message = archive
-      ? "Pindahkan pendaftar ini ke arsip? Data dan bukti transfer tidak dihapus dan dapat dipulihkan kapan saja."
-      : "Pulihkan pendaftar ini ke daftar aktif?";
-    if (!window.confirm(message)) return;
+    document.querySelector('#lifecycle-title').textContent = archive ? 'Arsipkan pendaftar' : 'Pulihkan pendaftar';
+    pendingLifecycleAction = action;
+    lifecycleForm.reset(); showAlert(document.querySelector('#lifecycle-alert'), '');
+    document.querySelector('#lifecycle-dialog').showModal();
+  }
+  async function submitParticipantLifecycle(action, reason) {
+    const archive = action === 'archive';
     const button = document.querySelector(archive ? "#archive-participant-button" : "#restore-participant-button");
     button.disabled = true;
     try {
-      await api(`/api/admin/waitinglist/${encodeURIComponent(currentParticipantId)}/${action}`, { method: "POST", body: "{}" });
+      await api(`/api/admin/waitinglist/${encodeURIComponent(currentParticipantId)}/${action}`, { method: "POST", body: JSON.stringify({ version: currentParticipant.version, reason }) });
+      document.querySelector("#lifecycle-dialog").close();
       participantDialog.close();
       if (!archive) {
         currentView = "active";
@@ -495,7 +520,7 @@
       await loadReport();
       showAlert(dashboardAlert, archive ? "Pendaftar dipindahkan ke arsip dan dapat dipulihkan." : "Pendaftar berhasil dipulihkan.", "success");
     } catch (error) {
-      showAlert(dashboardAlert, error.message);
+      showAlert(document.querySelector("#lifecycle-alert"), error.message);
     } finally {
       button.disabled = false;
     }
@@ -522,6 +547,9 @@
         body: JSON.stringify({ username: data.get("username"), password: data.get("password") }),
       });
       csrfToken = result.csrfToken;
+      staffUser = result.user || staffUser;
+      configurationLoaded = false;
+      if (staffUser.role === "bendahara" && !window.location.hash) window.location.hash = "pembayaran";
       loginForm.reset();
       showDashboard(true);
     } catch (error) {
@@ -552,6 +580,7 @@
     const ranges = [
       ["tanggal_daftar_mulai", "tanggal_daftar_sampai", "tanggal pendaftaran"],
       ["tanggal_lahir_mulai", "tanggal_lahir_sampai", "tanggal lahir"],
+      ["tanggal_bayar_mulai", "tanggal_bayar_sampai", "tanggal pembayaran"],
     ];
     let valid = true;
     for (const [startName, endName, label] of ranges) {
@@ -590,7 +619,7 @@
     filterForm.reset();
     validateDateRanges();
     currentPage = 1;
-    currentView = activePage === 'arsip' ? 'archived' : 'active';
+    currentView = activePage === 'pembayaran' ? 'all' : activePage === 'arsip' ? 'archived' : 'active';
     document.querySelector('#participant-view').value = currentView;
     appliedFilters = new URLSearchParams();
     loadFilterOptions();
@@ -722,18 +751,21 @@
   });
 
   let activePage = 'ringkasan';
+  let previousNavigationPage = '';
   let configurationLoaded = false;
   let lastOptionsView = '';
   let optionsRequestId = 0;
   let regionOptions = [];
-  const pagePanels = { ringkasan: ['reports-panel'], peserta: ['waitinglist-panel'], analitik: ['analytics-panel'], arsip: ['waitinglist-panel'], pengaturan: ['settings-panel', 'brochure-panel', 'system-panel'] };
+  const pagePanels = { pembayaran: ['payments-panel', 'waitinglist-panel'], akun: ['users-panel'], ringkasan: ['reports-panel'], peserta: ['waitinglist-panel'], analitik: ['analytics-panel'], arsip: ['waitinglist-panel'], pengaturan: ['settings-panel', 'brochure-panel', 'system-panel'] };
 
   function navigate(focus = true) {
     const requested = (window.location.hash || '#ringkasan').slice(1);
     activePage = Object.hasOwn(pagePanels, requested) ? requested : 'ringkasan';
+    if (staffUser.role !== 'admin' && ['akun', 'pengaturan'].includes(activePage)) activePage = 'pembayaran';
+    if (activePage === 'akun') loadUsers();
     if (activePage === 'pengaturan' && !configurationLoaded) { configurationLoaded = true; loadSystem(); loadBrochure(); }
-    if (activePage === 'peserta' || activePage === 'arsip') {
-      const next = activePage === 'arsip' ? 'archived' : 'active';
+    if (activePage === 'peserta' || activePage === 'arsip' || activePage === 'pembayaran') {
+      const next = activePage === 'pembayaran' ? (previousNavigationPage === 'pembayaran' ? currentView : 'all') : activePage === 'arsip' ? 'archived' : (currentView === 'archived' ? 'active' : currentView);
       if (next !== currentView) {
         currentView = next;
         document.querySelector('#participant-view').value = next;
@@ -742,7 +774,8 @@
       }
     }
     for (const id of new Set(Object.values(pagePanels).flat())) document.querySelector(`#${id}`).hidden = !pagePanels[activePage].includes(id);
-    document.querySelector('.workspace-filters').hidden = activePage === 'pengaturan';
+    previousNavigationPage = activePage;
+    document.querySelector('.workspace-filters').hidden = ['pengaturan', 'akun'].includes(activePage);
     document.querySelector('#waitinglist-title').textContent = currentView === 'archived' ? 'Arsip pendaftar' : 'Data pendaftar';
     for (const link of document.querySelectorAll('[data-page]')) {
       if (link.dataset.page === activePage) link.setAttribute('aria-current', 'page'); else link.removeAttribute('aria-current');
@@ -762,8 +795,8 @@
     }
   }
   function filterLabel(key, value) {
-    const labels = { q: 'Pencarian', status: 'Kelayakan saat daftar', jenis_kelamin: 'Jenis kelamin', kecamatan: 'Kecamatan', provinsi: 'Provinsi', kabupaten: 'Kabupaten/kota', sekolah: 'Sekolah', missing: 'Belum tercatat', age_group: 'Usia saat daftar', tanggal_daftar_mulai: 'Daftar dari', tanggal_daftar_sampai: 'Daftar sampai', tanggal_lahir_mulai: 'Lahir dari', tanggal_lahir_sampai: 'Lahir sampai' };
-    const values = { eligible: 'Memenuhi', not_eligible: 'Belum memenuhi', gender: 'Jenis kelamin', school: 'Sekolah', proof: 'Metadata lampiran', consent: 'Persetujuan', any: 'Ada kekosongan', under6: '<6 tahun', '6to7': '6–<7 tahun', '7to8': '7–<8 tahun', '8plus': '≥8 tahun', unknown: 'Belum tercatat', putra: 'Putra', putri: 'Putri' };
+    const labels = { payment_status: 'Pembayaran', payment_reviewer: 'Pemeriksa', tanggal_bayar_mulai: 'Bayar dari', tanggal_bayar_sampai: 'Bayar sampai', q: 'Pencarian', status: 'Kelayakan saat daftar', jenis_kelamin: 'Jenis kelamin', kecamatan: 'Kecamatan', provinsi: 'Provinsi', kabupaten: 'Kabupaten/kota', sekolah: 'Sekolah', missing: 'Belum tercatat', age_group: 'Usia saat daftar', tanggal_daftar_mulai: 'Daftar dari', tanggal_daftar_sampai: 'Daftar sampai', tanggal_lahir_mulai: 'Lahir dari', tanggal_lahir_sampai: 'Lahir sampai' };
+    const values = { pending: 'Belum diperiksa', verified: 'Terverifikasi', needs_correction: 'Perlu perbaikan', eligible: 'Memenuhi', not_eligible: 'Belum memenuhi', gender: 'Jenis kelamin', school: 'Sekolah', proof: 'Metadata lampiran', consent: 'Persetujuan', any: 'Ada kekosongan', under6: '<6 tahun', '6to7': '6–<7 tahun', '7to8': '7–<8 tahun', '8plus': '≥8 tahun', unknown: 'Belum tercatat', putra: 'Putra', putri: 'Putri' };
     return `${labels[key] || key}: ${values[value] || value}`;
   }
   function fillOptions(id, values) {
@@ -785,6 +818,7 @@
     try {
       const result = await api(`/api/admin/filter-options?view=${view}`);
       if (id !== optionsRequestId) return;
+      fillOptions("#reviewer-options", result.reviewers || []);
       regionOptions = result.regions || [];
       fillOptions('#province-options', result.provinces || []);
       fillOptions('#school-options', result.schools || []);
@@ -804,6 +838,7 @@
 
   function expireSession() {
     csrfToken = '';
+    for (const dialog of document.querySelectorAll('dialog[open]')) dialog.close();
     configurationLoaded = false;
     if (dashboard.hidden) return;
     rowsRequestController?.abort(); reportRequestController?.abort();
@@ -815,6 +850,10 @@
     loginCard.querySelector('h1').focus();
   }
   function clearPrivateView() {
+    usersRequestId++;
+    currentParticipant = null;
+    for (const id of ['users-rows', 'history-content', 'payment-kpis', 'payment-trend']) document.querySelector('#' + id).replaceChildren();
+    for (const id of ['participant-editor-form', 'payment-form', 'user-form', 'reset-password-form', 'password-form']) document.querySelector('#' + id).reset();
     rowsContainer.replaceChildren();
     document.querySelector('#analytics-content').replaceChildren();
     for (const node of document.querySelectorAll('#participant-detail-grid dd')) node.replaceChildren();
@@ -859,10 +898,11 @@
       item.append(title, count, note); recent.append(item);
     }
     document.querySelector('#analytics-meta').textContent = `${report.scope} · ${report.total} peserta · ${report.registrationPeriod.label} · diperbarui ${formatDate(report.generatedAt, true)} WIB`;
-    document.querySelector('#analytics-filters').textContent = `Filter terapan: ${[...appliedFilters].filter(([key]) => !['sort', 'page_size', 'trend'].includes(key)).map(([key, value]) => filterLabel(key, value)).join(' · ') || 'Tanpa filter tambahan'}. Tren: ${report.trend.start} – ${report.trend.end} (${report.trend.interval}).`;
+    document.querySelector('#analytics-filters').textContent = `Filter terapan: ${[...appliedFilters].filter(([key]) => !['sort', 'page_size', 'trend'].includes(key)).map(([key, value]) => filterLabel(key, value)).join(' · ') || 'Tanpa filter tambahan'}. Tren: ${report.trend.start} – ${report.trend.end} (${intervalLabel(report.trend.interval)}).`;
     const names = { provinsi: 'Sebaran provinsi', kabupaten: 'Kabupaten/kota', kecamatan: 'Kecamatan', sekolah: 'Sekolah asal', usia: 'Usia tercatat saat daftar', orangTua: 'Hubungan orang tua/wali', gender: 'Jenis kelamin', eligibility: 'Kelayakan saat daftar' };
     const sections = [
       ['Tren pendaftaran', report.trend.buckets.map(row => ({ label: row.date, total: row.total }))],
+      ...(report.payments ? [['Status pembayaran', ['pending', 'verified', 'needs_correction'].map(status => ({ label: paymentLabel(status), total: report.payments[status], percent: report.total ? Math.round(report.payments[status] / report.total * 1000) / 10 : 0, filter: { payment_status: status } }))]] : []),
       ['Kelengkapan pencatatan', [{ label: 'Peserta dengan setidaknya satu kekosongan', total: report.completeness.any, filter: { missing: 'any' } }, ...report.completeness.fields]],
       ...Object.entries(report.breakdowns).map(([key, rows]) => [names[key] || key, rows]),
     ];
@@ -902,6 +942,285 @@
     } catch (error) { showAlert(dashboardAlert, error.message); }
     finally { if (button) button.disabled = false; }
   }
+
+  function intervalLabel(value) { return ({ daily: 'harian', weekly: 'mingguan', monthly: 'bulanan', yearly: 'tahunan' })[value] || value.replace(/^(\d+)-year$/, 'per $1 tahun'); }
+  function paymentLabel(status) {
+    return status === 'verified' ? 'Terverifikasi' : status === 'needs_correction' ? 'Perlu perbaikan' : 'Belum diperiksa';
+  }
+  function applyStaffPermissions() {
+    const admin = staffUser.role === 'admin';
+    document.querySelector('#staff-role-label').textContent = `SPSB 2027 · ${admin ? 'ADMIN' : 'BENDAHARA'}`;
+    document.querySelector('#staff-name-label').textContent = staffUser.name || staffUser.username;
+    for (const id of ['akun', 'pengaturan', 'add-participant']) document.querySelector('#' + id).hidden = !admin;
+  }
+  function renderPayments(report) {
+    const container = document.querySelector('#payment-kpis'); container.replaceChildren();
+    const trend = document.querySelector('#payment-trend'); trend.replaceChildren();
+    if (!report.payments) return;
+    const payment = report.payments;
+    document.querySelector('#payment-scope-note').textContent = `${report.scope} · ${report.total} peserta sesuai filter. Biaya tetap Rp150.000. Pembayaran peserta arsip tetap tersimpan.`;
+    const stats = [
+      ['Belum diperiksa', payment.pending, { payment_status: 'pending' }, 'menunggu pemeriksaan petugas'],
+      ['Terverifikasi', payment.verified, { payment_status: 'verified' }, `${payment.verifiedPercent}% dari peserta sesuai filter`],
+      ['Perlu perbaikan', payment.needs_correction, { payment_status: 'needs_correction' }, 'lihat catatan pemeriksa'],
+      ['Nominal tervalidasi', 'Rp' + payment.verifiedAmount.toLocaleString('id-ID'), { payment_status: 'verified' }, 'hanya pembayaran terverifikasi'],
+      ['Tanpa metadata bukti', payment.withoutProof, { missing: 'proof' }, 'berkas belum tercatat'],
+      ['Biaya pendaftaran', 'Rp150.000', {}, 'satu pembayaran per peserta'],
+    ];
+    for (const [label, value, filter, note] of stats) {
+      const card = document.createElement('button'); card.type = 'button';
+      const title = document.createElement('span'); title.textContent = label;
+      const count = document.createElement('strong'); count.textContent = value;
+      const hint = document.createElement('small'); hint.textContent = note;
+      card.append(title, count, hint); card.addEventListener('click', () => drillDown(filter)); container.append(card);
+    }
+    document.querySelector('#payment-trend-period').textContent = `${payment.trend.start} – ${payment.trend.end} · ${intervalLabel(payment.trend.interval)} · menurut tanggal pembayaran (WIB)`;
+    const max = Math.max(1, ...payment.trend.buckets.map(row => row.amount));
+    for (const row of payment.trend.buckets) {
+      const li = document.createElement('li'); const date = document.createElement('span'); date.textContent = row.date;
+      const meter = document.createElement('meter'); meter.min = 0; meter.max = max; meter.value = row.amount;
+      meter.setAttribute('aria-label', `${row.date}: ${row.total} pembayaran, Rp${row.amount.toLocaleString('id-ID')}`);
+      const value = document.createElement('span'); value.textContent = `Rp${row.amount.toLocaleString('id-ID')}`;
+      li.append(date, meter, value); trend.append(li);
+    }
+  }
+  for (const [id, path] of [['export-participants-pdf', '/api/admin/export.pdf'], ['export-report-pdf', '/api/admin/report.pdf'],
+    ['export-payment-xlsx', '/api/admin/payments/export.xlsx'], ['export-payment-pdf', '/api/admin/payments/export.pdf']]) {
+    document.querySelector('#' + id).addEventListener('click', event => download(`${path}?${filtersQuery()}`, event.currentTarget));
+  }
+
+  const paymentForm = document.querySelector('#payment-form');
+  function updatePaymentRequirements() {
+    const verified = paymentForm.elements.status.value === 'verified';
+    paymentForm.elements.date.required = verified;
+    paymentForm.elements.amountConfirmed.required = verified;
+    paymentForm.elements.note.required = paymentForm.elements.status.value === 'needs_correction' || currentParticipant?.payment_status !== 'pending';
+    paymentForm.elements.date.max = new Date(Date.now() + 7 * 3600000).toISOString().slice(0, 10);
+  }
+  function fillPaymentReview(participant) {
+    paymentForm.reset();
+    paymentForm.elements.status.value = participant.payment_status || 'pending';
+    paymentForm.elements.date.value = participant.payment_date || '';
+    paymentForm.elements.note.value = '';
+    paymentForm.elements.amountConfirmed.checked = false;
+    document.querySelector('#payment-current-status').textContent = `${paymentLabel(participant.payment_status)}${participant.payment_reviewer ? ` · ${participant.payment_reviewer} · ${formatDate(participant.payment_reviewed_at, true)} WIB` : ''}${participant.payment_note ? ` · ${participant.payment_note}` : ''}`;
+    showAlert(document.querySelector('#payment-alert'), '');
+    document.querySelector('#payment-review').hidden = false; updatePaymentRequirements();
+  }
+  paymentForm.elements.status.addEventListener('change', updatePaymentRequirements);
+  paymentForm.addEventListener('submit', async event => {
+    event.preventDefault(); if (!currentParticipant || !paymentForm.reportValidity()) return;
+    const button = paymentForm.querySelector('button[type="submit"]'); button.disabled = true;
+    try {
+      await api(`/api/admin/waitinglist/${currentParticipant.id}/payment`, { method: 'PUT', body: JSON.stringify({
+        version: currentParticipant.version, status: paymentForm.elements.status.value, date: paymentForm.elements.date.value,
+        note: paymentForm.elements.note.value, amountConfirmed: paymentForm.elements.amountConfirmed.checked }) });
+      await showParticipantDetail(currentParticipant.id); loadRows(); loadReport(); loadFilterOptions();
+      showAlert(document.querySelector('#payment-alert'), 'Hasil pemeriksaan tersimpan dan tercatat dalam riwayat.', 'success');
+    } catch (error) { showAlert(document.querySelector('#payment-alert'), error.message); }
+    finally { button.disabled = false; }
+  });
+  document.querySelector('#reload-detail').addEventListener('click', () => currentParticipantId && showParticipantDetail(currentParticipantId));
+  async function loadParticipantHistory(id, requestId) {
+    const container = document.querySelector('#history-content'); container.replaceChildren();
+    document.querySelector('#participant-history').hidden = false;
+    container.textContent = 'Memuat riwayat…';
+    try {
+      const history = await api(`/api/admin/waitinglist/${id}/history`);
+      if (requestId !== participantRequestId || !participantDialog.open) return;
+      container.replaceChildren();
+      const names = { participant_created: 'Pendaftaran dibuat', participant_updated: 'Data pendaftar diubah', participant_updated_proof: 'Data dan bukti transfer diperbarui; pemeriksaan diulang',
+        participant_archived: 'Pendaftar diarsipkan', participant_restored: 'Pendaftar dipulihkan', payment_reviewed: 'Pembayaran diperiksa' };
+      for (const entry of history.events || []) {
+        const item = document.createElement('article'); item.className = 'history-item';
+        const title = document.createElement('strong'); title.textContent = names[entry.action] || entry.action;
+        const meta = document.createElement('small'); meta.textContent = `${entry.actor} · ${formatDate(entry.created_at, true)} WIB`;
+        const note = document.createElement('p'); note.textContent = entry.details.reason || entry.details.after?.note || '';
+        item.append(title, meta, note);
+        if (entry.action === 'payment_reviewed') {
+          const status = document.createElement('p'); status.textContent = `${paymentLabel(entry.details.before?.status)} → ${paymentLabel(entry.details.after?.status)}${entry.details.after?.date ? ' · tanggal bayar ' + entry.details.after.date : ''}`;
+          item.append(status);
+        } else if (entry.details.before && entry.details.after) {
+          const details = document.createElement('details'); const summary = document.createElement('summary'); summary.textContent = 'Lihat perubahan data';
+          const dl = document.createElement('dl');
+          for (const [key, value] of Object.entries(entry.details.after)) {
+            if (['created_at', 'proofId'].includes(key) || String(entry.details.before[key] ?? '') === String(value ?? '')) continue;
+            const dt = document.createElement('dt'); dt.textContent = key.replaceAll('_', ' ');
+            const dd = document.createElement('dd'); dd.textContent = `${entry.details.before[key] ?? '-'} → ${value ?? '-'}`; dl.append(dt, dd);
+          }
+          details.append(summary, dl); item.append(details);
+        }
+        container.append(item);
+      }
+      if (!(history.events || []).length) container.textContent = 'Belum ada riwayat perubahan yang tercatat.';
+      for (const proof of history.proofs || []) {
+        const a = document.createElement('a'); a.className = 'history-proof';
+        a.href = `/api/admin/waitinglist/${id}/proof?version=${encodeURIComponent(proof.id)}`;
+        a.textContent = `Unduh versi bukti · ${formatDate(proof.created_at, true)} WIB · ${proof.created_by || 'Pendaftaran awal'} (${Math.ceil(proof.size / 1024)} KB)`; container.append(a);
+      }
+    } catch (error) { if (requestId === participantRequestId && participantDialog.open) container.textContent = error.message; }
+  }
+
+  let pendingLifecycleAction = '';
+  const lifecycleForm = document.querySelector('#lifecycle-form');
+  lifecycleForm.addEventListener('submit', async event => {
+    event.preventDefault(); if (!lifecycleForm.reportValidity()) return;
+    const button = lifecycleForm.querySelector('button[type="submit"]'); button.disabled = true;
+    try { await submitParticipantLifecycle(pendingLifecycleAction, lifecycleForm.elements.reason.value); }
+    finally { button.disabled = false; }
+  });
+  for (const button of document.querySelectorAll('[data-close]')) {
+    button.addEventListener('click', () => document.querySelector('#' + button.dataset.close).close());
+  }
+
+  const editor = document.querySelector('#participant-editor'), editorForm = document.querySelector('#participant-editor-form');
+  let editingParticipant = null, editorEpoch = 0;
+  function validateEditorContact() {
+    const field = editorForm.elements.no_hp_wa;
+    const raw = field.value.replace(/[^0-9+]/g, '');
+    const normalized = raw.startsWith('+62') ? raw.slice(1) : raw.startsWith('0') ? '62' + raw.slice(1) : raw;
+    field.setCustomValidity(raw && !/^628\d{8,12}$/.test(normalized) ? 'Nomor WhatsApp harus nomor seluler Indonesia yang valid, diawali 08 atau 628.' : '');
+    if (raw && !field.validationMessage) field.value = normalized;
+  }
+  editorForm.elements.no_hp_wa.addEventListener('blur', validateEditorContact);
+  editorForm.elements.no_hp_wa.addEventListener('input', () => editorForm.elements.no_hp_wa.setCustomValidity(''));
+  editorForm.elements.bukti_transfer.addEventListener('change', () => {
+    const field = editorForm.elements.bukti_transfer;
+    field.setCustomValidity(field.files[0]?.size > 5 * 1024 * 1024 ? 'Ukuran bukti transfer maksimal 5 MB.' : '');
+  });
+  const regionLevels = ['provinsi', 'kabupaten', 'kecamatan', 'desa'];
+  const regionEndpoints = ['provinces', 'regencies', 'districts', 'villages'];
+  function resetEditorRegion(index) {
+    const select = editorForm.elements[regionLevels[index] + '_id']; select.replaceChildren();
+    const option = document.createElement('option'); option.value = ''; option.textContent = 'Pilih wilayah'; select.append(option); select.disabled = true;
+  }
+  async function loadEditorRegion(index, parent = '', selected = '', epoch = editorEpoch) {
+    const select = editorForm.elements[regionLevels[index] + '_id']; resetEditorRegion(index);
+    const result = await api(`/api/regions/${regionEndpoints[index]}${parent ? '?parent_id=' + encodeURIComponent(parent) : ''}`);
+    if (epoch !== editorEpoch || !editor.open || (index && editorForm.elements[regionLevels[index - 1] + '_id'].value !== parent)) return;
+    for (const row of result.items) { const option = document.createElement('option'); option.value = row.id; option.textContent = row.name; select.append(option); }
+    select.disabled = false; select.value = selected;
+  }
+  for (let i = 0; i < 3; i++) editorForm.elements[regionLevels[i] + '_id'].addEventListener('change', async event => {
+    editorEpoch++; for (let j = i + 1; j < 4; j++) resetEditorRegion(j);
+    if (!event.target.value) return;
+    try { await loadEditorRegion(i + 1, event.target.value); } catch (error) { showAlert(document.querySelector('#editor-alert'), error.message + ' Pilih kembali wilayah untuk mencoba lagi.'); }
+  });
+  editor.addEventListener('close', () => { editorEpoch++; });
+  async function openParticipantEditor(participant = null) {
+    editingParticipant = participant; const epoch = ++editorEpoch; editorForm.reset();
+    editorForm.elements.no_hp_wa.setCustomValidity(''); editorForm.elements.bukti_transfer.setCustomValidity('');
+    document.querySelector('#editor-title').textContent = participant ? 'Ubah data pendaftar' : 'Tambah pendaftar';
+    document.querySelector('#editor-proof-hint').textContent = participant ? 'Kosongkan untuk mempertahankan bukti saat ini. Bukti baru akan mengulang pemeriksaan pembayaran.' : 'Bukti wajib diunggah.';
+    document.querySelector('#editor-reason-field').hidden = !participant; editorForm.elements.reason.required = Boolean(participant);
+    editorForm.elements.bukti_transfer.required = !participant?.has_proof;
+    for (const key of ['nama_anak', 'nama_ortu', 'tanggal_lahir_anak', 'no_hp_wa', 'email', 'sekolah_asal', 'status_ortu', 'jenis_kelamin']) editorForm.elements[key].value = participant?.[key] || '';
+    for (const key of ['konfirmasi_data', 'konfirmasi_bukti_transfer', 'konfirmasi_ketentuan_biaya']) editorForm.elements[key].checked = participant?.[key] === 1;
+    for (let i = 0; i < 4; i++) resetEditorRegion(i);
+    showAlert(document.querySelector('#editor-alert'), ''); editor.showModal();
+    document.querySelector('#editor-save').disabled = true;
+    try {
+      const config = await api('/api/config');
+      if (epoch !== editorEpoch || !editor.open) return;
+      const today = new Date(Date.now() + 7 * 3600000).toISOString().slice(0, 10);
+      editorForm.elements.tanggal_lahir_anak.max = config.eligibleBirthdate < today ? config.eligibleBirthdate : today;
+      await loadEditorRegion(0, '', participant?.provinsi_id || '', epoch);
+      if (participant) for (let i = 1; i < 4; i++) await loadEditorRegion(i, participant[regionLevels[i - 1] + '_id'], participant[regionLevels[i] + '_id'], epoch);
+    } catch (error) { if (editor.open) showAlert(document.querySelector('#editor-alert'), error.message); }
+    finally { if (epoch === editorEpoch) document.querySelector('#editor-save').disabled = false; }
+  }
+  document.querySelector('#add-participant').addEventListener('click', () => openParticipantEditor());
+  document.querySelector('#edit-participant').addEventListener('click', () => openParticipantEditor(currentParticipant));
+  editorForm.addEventListener('submit', async event => {
+    event.preventDefault(); validateEditorContact(); if (!editorForm.reportValidity()) return;
+    if (regionLevels.some(name => !editorForm.elements[name + '_id'].value)) { showAlert(document.querySelector('#editor-alert'), 'Pilih wilayah lengkap dari provinsi sampai desa.'); return; }
+    const button = document.querySelector('#editor-save'); button.disabled = true;
+    try {
+      const submittingParticipant = editingParticipant;
+      const data = new FormData(editorForm);
+      for (const name of regionLevels) { const field = editorForm.elements[name + '_id']; data.set(name + '_nama', field.options[field.selectedIndex]?.textContent || ''); }
+      for (const key of ['konfirmasi_data', 'konfirmasi_bukti_transfer', 'konfirmasi_ketentuan_biaya']) data.set(key, 'true');
+      const file = editorForm.elements.bukti_transfer.files[0];
+      if (!file || !file.size) data.delete('bukti_transfer');
+      else if (file.size > 5 * 1024 * 1024) throw new Error('Ukuran bukti transfer maksimal 5 MB.');
+      if (submittingParticipant) data.set('version', String(submittingParticipant.version));
+      const result = await api('/api/admin/waitinglist' + (submittingParticipant ? '/' + submittingParticipant.id : ''), { method: submittingParticipant ? 'PUT' : 'POST', body: data });
+      const id = submittingParticipant?.id || result.id; editor.close();
+      await showParticipantDetail(id); loadRows(); loadReport(); loadFilterOptions();
+      showAlert(dashboardAlert, 'Data pendaftar berhasil disimpan.', 'success');
+    } catch (error) { showAlert(document.querySelector('#editor-alert'), error.message); }
+    finally { button.disabled = false; }
+  });
+
+  let editingUser = null, resettingUser = null, usersRequestId = 0;
+  const userForm = document.querySelector('#user-form');
+  async function loadUsers() {
+    if (staffUser.role !== 'admin') return; const requestId = ++usersRequestId;
+    const container = document.querySelector('#users-rows'); container.replaceChildren();
+    try {
+      const result = await api('/api/admin/users'); if (requestId !== usersRequestId || dashboard.hidden) return;
+      for (const user of result.users) {
+        const tr = document.createElement('tr'); tr.append(makeCell(`${user.name} (${user.username})`), makeCell(user.role === 'admin' ? 'Admin' : 'Bendahara'), makeCell(user.active ? (user.mustChangePassword ? 'Aktif · wajib ganti password' : 'Aktif') : 'Nonaktif'));
+        const actions = document.createElement('td'); actions.className = 'user-actions';
+        const edit = document.createElement('button'); edit.type = 'button'; edit.className = 'button button-outline'; edit.textContent = 'Ubah'; edit.addEventListener('click', () => openUser(user));
+        const reset = document.createElement('button'); reset.type = 'button'; reset.className = 'button button-outline'; reset.textContent = 'Reset password'; reset.addEventListener('click', () => {
+          resettingUser = user; document.querySelector('#reset-password-form').reset(); showAlert(document.querySelector('#reset-password-alert'), '');
+          document.querySelector('#reset-password-name').textContent = `${user.name} (${user.username}) wajib mengganti password saat login berikutnya.`; document.querySelector('#reset-password-dialog').showModal();
+        });
+        actions.append(edit, reset); tr.append(actions); container.append(tr);
+      }
+    } catch (error) { if (requestId === usersRequestId && !dashboard.hidden) showAlert(document.querySelector('#users-alert'), error.message); }
+  }
+  function openUser(user = null) {
+    editingUser = user; userForm.reset();
+    userForm.elements.name.value = user?.name || ''; userForm.elements.username.value = user?.username || ''; userForm.elements.username.disabled = Boolean(user);
+    userForm.elements.role.value = user?.role || 'bendahara'; userForm.elements.active.checked = user ? user.active : true;
+    userForm.elements.password.required = !user; document.querySelector('#user-password-field').hidden = Boolean(user);
+    showAlert(document.querySelector('#user-alert'), ''); document.querySelector('#user-dialog').showModal();
+  }
+  document.querySelector('#add-user').addEventListener('click', () => openUser());
+  userForm.addEventListener('submit', async event => {
+    event.preventDefault(); if (!userForm.reportValidity()) return;
+    const button = userForm.querySelector('button[type="submit"]'); button.disabled = true;
+    try {
+      const payload = { name: userForm.elements.name.value, role: userForm.elements.role.value };
+      if (editingUser) { payload.active = userForm.elements.active.checked; payload.version = editingUser.version; }
+      else { payload.username = userForm.elements.username.value; payload.password = userForm.elements.password.value; payload.active = userForm.elements.active.checked; }
+      await api('/api/admin/users' + (editingUser ? '/' + editingUser.id : ''), { method: editingUser ? 'PUT' : 'POST', body: JSON.stringify(payload) });
+      document.querySelector('#user-dialog').close();
+      if (editingUser?.id === staffUser.id) expireSession(); else loadUsers();
+    } catch (error) { showAlert(document.querySelector('#user-alert'), error.message); }
+    finally { button.disabled = false; }
+  });
+  document.querySelector('#reset-password-form').addEventListener('submit', async event => {
+    event.preventDefault(); const form = event.currentTarget; if (!form.reportValidity()) return;
+    const button = form.querySelector('button[type="submit"]'); button.disabled = true;
+    try {
+      await api(`/api/admin/users/${resettingUser.id}/reset-password`, { method: 'POST', body: JSON.stringify({ password: form.elements.password.value, version: resettingUser.version }) });
+      document.querySelector('#reset-password-dialog').close(); form.reset();
+      if (resettingUser.id === staffUser.id) expireSession(); else loadUsers();
+    } catch (error) { showAlert(document.querySelector('#reset-password-alert'), error.message); }
+    finally { button.disabled = false; }
+  });
+  function openPasswordDialog() {
+    document.querySelector('#password-form').reset(); showAlert(document.querySelector('#password-alert'), '');
+    document.querySelector('#close-password').hidden = staffUser.mustChangePassword;
+    document.querySelector('#password-note').textContent = staffUser.mustChangePassword ? 'Ganti password awal/sementara sebelum mengakses dashboard. Setelah disimpan, silakan login kembali.' : 'Sesi akan diakhiri setelah password diganti. Silakan login kembali.';
+    document.querySelector('#password-dialog').showModal();
+  }
+  document.querySelector('#change-password-button').addEventListener('click', openPasswordDialog);
+  document.querySelector('#password-dialog').addEventListener('cancel', event => { if (staffUser.mustChangePassword) event.preventDefault(); });
+  document.querySelector('#password-form').addEventListener('submit', async event => {
+    event.preventDefault(); const form = event.currentTarget; if (!form.reportValidity()) return;
+    if (form.elements.password.value !== form.elements.confirmation.value) { showAlert(document.querySelector('#password-alert'), 'Pengulangan password belum cocok.'); return; }
+    const button = form.querySelector('button[type="submit"]'); button.disabled = true;
+    try {
+      await api('/api/admin/password', { method: 'POST', body: JSON.stringify({ currentPassword: form.elements.currentPassword.value, password: form.elements.password.value }) });
+      form.reset(); document.querySelector('#password-dialog').close();
+      dashboard.hidden = false; expireSession(); showAlert(loginAlert, 'Password berhasil diubah. Silakan login dengan password baru.', 'success');
+    } catch (error) { showAlert(document.querySelector('#password-alert'), error.message); }
+    finally { button.disabled = false; }
+  });
 
   restoreSession();
 })();

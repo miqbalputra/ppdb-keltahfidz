@@ -23,6 +23,7 @@ const ENCRYPTED_FIELDS = [
   "desa_nama",
   "no_hp_wa",
   "email",
+  "payment_note",
 ] as const;
 
 export type DecryptedRow<T extends Record<string, unknown>> = Omit<T, "umur_terhitung_bulan"> & {

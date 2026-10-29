@@ -73,6 +73,7 @@ test.skipIf(!testDatabaseUrl)("MariaDB-backed public, admin, security, and notif
     ]);
     closeDb = closeDatabase;
     await migrate(db, { migrationsFolder: resolve(import.meta.dir, "../drizzle") });
+    await (await import("../src/lib/staff-auth")).seedStaffAdmin();
     await settingsModule.seedSystemSettings();
     previousSettings = await settingsModule.getSystemSettings();
     const testSettings = {
@@ -456,7 +457,7 @@ test.skipIf(!testDatabaseUrl)("MariaDB-backed public, admin, security, and notif
     expect((await app.handle(new Request(archiveUrl, { method: "POST", headers: adminHeaders, body: "{}" }))).status).toBe(403);
     const mutationHeaders = { ...adminHeaders, "x-csrf-token": loginResult.csrfToken };
     expect((await app.handle(new Request(archiveUrl, { method: "POST", headers: { ...mutationHeaders, origin: "https://bad.example" }, body: "{}" }))).status).toBe(403);
-    const archived = await app.handle(new Request(archiveUrl, { method: "POST", headers: mutationHeaders, body: "{}" }));
+    const archived = await app.handle(new Request(archiveUrl, { method: "POST", headers: mutationHeaders, body: JSON.stringify({ version: 1, reason: "Arsip peserta integrasi" }) }));
     expect(archived.status).toBe(200);
     expect(await archived.json()).toEqual({ archived: true });
     const archivedRow = await db.select().from(calonSantriWaitinglist).where(eq(calonSantriWaitinglist.id, successResult.id));
@@ -469,7 +470,7 @@ test.skipIf(!testDatabaseUrl)("MariaDB-backed public, admin, security, and notif
     expect(await archiveList.json()).toMatchObject({ total: 1, rows: [{ id: successResult.id, deleted_by: "integration-admin" }] });
     const reportAfterArchive = await app.handle(new Request(`http://localhost/api/admin/report?${exportQuery}`, { headers: adminHeaders }));
     expect((await reportAfterArchive.json() as { total: number }).total).toBe(1);
-    expect((await app.handle(new Request(`http://localhost/api/admin/waitinglist/${successResult.id}/export.pdf`, { headers: adminHeaders }))).status).toBe(404);
+    expect((await app.handle(new Request(`http://localhost/api/admin/waitinglist/${successResult.id}/export.pdf`, { headers: adminHeaders }))).status).toBe(200);
     const archivedQuery = new URLSearchParams(exportQuery); archivedQuery.set('view', 'archived');
     const archivedReport = await app.handle(new Request(`http://localhost/api/admin/report?${archivedQuery}`, { headers: adminHeaders }));
     expect(await archivedReport.json()).toMatchObject({ total: 1, scope: 'Arsip' });
@@ -481,7 +482,7 @@ test.skipIf(!testDatabaseUrl)("MariaDB-backed public, admin, security, and notif
     const archivedCsvResponse = await app.handle(new Request(`http://localhost/api/admin/export.csv?${archivedQuery}`, { headers: adminHeaders }));
     const archivedCsv = await archivedCsvResponse.text();
     expect(archivedCsv.split('\r\n')).toHaveLength(2); expect(archivedCsv).toContain(successResult.id); expect(archivedCsv).toContain('integration-admin');
-    const restored = await app.handle(new Request(restoreUrl, { method: "POST", headers: mutationHeaders, body: "{}" }));
+    const restored = await app.handle(new Request(restoreUrl, { method: "POST", headers: mutationHeaders, body: JSON.stringify({ version: 2, reason: "Pulihkan peserta integrasi" }) }));
     expect(restored.status).toBe(200);
     expect(await restored.json()).toEqual({ restored: true });
     const restoredRow = await db.select().from(calonSantriWaitinglist).where(eq(calonSantriWaitinglist.id, successResult.id));
@@ -533,6 +534,11 @@ test.skipIf(!testDatabaseUrl)("MariaDB-backed public, admin, security, and notif
         import("../src/db/schema"),
         import("drizzle-orm"),
       ]);
+      const { participantProofs, auditEvents } = await import('../src/db/schema');
+      const savedProofs = await db.select().from(participantProofs).where(inArray(participantProofs.participant_id, insertedIds));
+      await db.delete(participantProofs).where(inArray(participantProofs.participant_id, insertedIds));
+      await db.delete(auditEvents).where(inArray(auditEvents.subject_id, insertedIds));
+      await Promise.all(savedProofs.map(p => unlink(join(resolve(process.env.DATA_DIR ?? './data', 'payment-proofs'), p.storage_key)).catch(() => undefined)));
       await db.delete(calonSantriWaitinglist)
         .where(inArray(calonSantriWaitinglist.id, insertedIds))
         .catch(() => undefined);

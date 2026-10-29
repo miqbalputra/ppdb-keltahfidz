@@ -1,5 +1,5 @@
 import { randomBytes } from "node:crypto";
-import { chmod, mkdir, readFile, unlink, writeFile } from "node:fs/promises";
+import { chmod, mkdir } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { Elysia, t } from "elysia";
 import { and, count, desc, eq, gte, isNotNull, isNull, lt, sql } from "drizzle-orm";
@@ -28,35 +28,35 @@ import { calonSantriWaitinglist } from "./db/schema";
 import {
   allowedRate,
   clientIp,
-  createSession,
-  credentialsMatch,
   csrfMatches,
   originIsSame,
   readSessionCookie,
   sessionCookie,
-  validateSession,
   type AdminSession,
 } from "./lib/auth";
+import { getStaffSession, authenticateStaff, revokeSession, seedStaffAdmin, type StaffSession } from "./lib/staff-auth";
+import { adminManagementRoutes, authorizeStaffRequest } from "./lib/admin-routes";
+import { ServiceError } from "./lib/admin-common";
+import { createParticipant, readProof, changeLifecycle, validVersion } from "./lib/participants";
 import { getRegions } from "./lib/regions";
 import {
-  decryptPaymentProof,
   decryptSensitiveRecord,
-  encryptPaymentProof,
-  encryptSensitiveRecord,
 } from "./lib/encryption";
-import { detectPaymentProofMime } from "./lib/payment-proof";
 import { buildWaitinglistReport } from "./lib/waitinglist-report";
-import { generateReportXlsx } from "./lib/report-export";
+import { generateReportXlsx, generateReportPdf } from "./lib/report-export";
 import { brochureStatus, deleteBrochure, detectBrochureMime, readBrochure, saveBrochure, validateBrochure } from "./lib/brochure";
 import { getBrochureDownloadCount, recordBrochureDownload } from "./lib/brochure-downloads";
 import {
   generateParticipantPdf,
   generateParticipantXlsx,
   generateParticipantsXlsx,
+  generateParticipantsPdf,
+  generatePaymentsXlsx,
   type ParticipantExportRecord,
 } from "./lib/participant-export";
 import {
   hasWaitinglistFilters,
+  describeFilters,
   sortWaitinglist,
   matchesEncryptedWaitinglist,
   registrationCreatedAtBounds,
@@ -122,8 +122,11 @@ function waitinglistFilterProperties() {
     pattern: "^\\d{4}-\\d{2}-\\d{2}$",
   }));
   return {
+    payment_status: t.Optional(t.Union([t.Literal("all"), t.Literal("pending"), t.Literal("verified"), t.Literal("needs_correction")])),
+    payment_reviewer: t.Optional(t.String({ maxLength: 120 })),
+    tanggal_bayar_mulai: date(), tanggal_bayar_sampai: date(),
     q: t.Optional(t.String({ maxLength: 120 })),
-    view: t.Optional(t.Union([t.Literal('active'), t.Literal('archived')])),
+    view: t.Optional(t.Union([t.Literal('active'), t.Literal('archived'), t.Literal('all')])),
     sort: t.Optional(t.Union([t.Literal('newest'), t.Literal('oldest'), t.Literal('name'), t.Literal('age')])),
     page_size: t.Optional(t.Union([t.Literal('25'), t.Literal('50'), t.Literal('100')])),
     trend: t.Optional(t.Union([t.Literal('auto'), t.Literal('daily'), t.Literal('weekly'), t.Literal('monthly')])),
@@ -143,12 +146,17 @@ function waitinglistFilterProperties() {
 }
 
 function lifecycleCondition(query: WaitinglistFilterQuery) {
+  if (query.view === 'all') return sql`1 = 1`;
   return query.view === 'archived' ? isNotNull(calonSantriWaitinglist.deleted_at) : isNull(calonSantriWaitinglist.deleted_at);
 }
 
 async function adminDataset(query: WaitinglistFilterQuery) {
   const bounds = registrationCreatedAtBounds(query);
   const conditions = [lifecycleCondition(query)];
+  if (query.payment_status && query.payment_status !== 'all') conditions.push(eq(calonSantriWaitinglist.payment_status, query.payment_status));
+  if (query.payment_reviewer) conditions.push(eq(calonSantriWaitinglist.payment_reviewer, query.payment_reviewer));
+  if (query.tanggal_bayar_mulai) conditions.push(gte(calonSantriWaitinglist.payment_date, query.tanggal_bayar_mulai));
+  if (query.tanggal_bayar_sampai) conditions.push(sql`${calonSantriWaitinglist.payment_date} <= ${query.tanggal_bayar_sampai}`);
   if (bounds.startInclusive) conditions.push(gte(calonSantriWaitinglist.created_at, bounds.startInclusive));
   if (bounds.endExclusive) conditions.push(lt(calonSantriWaitinglist.created_at, bounds.endExclusive));
   const rows = await db.select().from(calonSantriWaitinglist).where(and(...conditions));
@@ -170,6 +178,8 @@ function participantListDto(row: typeof calonSantriWaitinglist.$inferSelect) {
     kecamatan_nama: participant.kecamatan_nama,
     kabupaten_nama: participant.kabupaten_nama,
     provinsi_nama: participant.provinsi_nama,
+    version: participant.version, payment_status: participant.payment_status, payment_date: participant.payment_date,
+    payment_reviewer: participant.payment_reviewer, payment_reviewed_at: participant.payment_reviewed_at,
     has_proof: Boolean(participant.bukti_transfer_mime),
     konfirmasi_ketentuan_biaya: participant.konfirmasi_ketentuan_biaya,
     created_at: participant.created_at,
@@ -190,12 +200,11 @@ function exportAttachment(bytes: Uint8Array, mime: string, filename: string): Re
   });
 }
 
-function getAdminSession(request: Request): AdminSession | null {
-  return validateSession(readSessionCookie(request.headers.get("cookie")));
+async function getAdminSession(request: Request): Promise<StaffSession | null> {
+  return getStaffSession(request);
 }
-
-function requireAdmin(request: Request, set: { status?: number | string }): AdminSession | null {
-  const session = getAdminSession(request);
+async function requireAdmin(request: Request, set: { status?: number | string }): Promise<StaffSession | null> {
+  const session = await getAdminSession(request);
   if (!session) set.status = 401;
   return session;
 }
@@ -252,10 +261,11 @@ async function triggerN8n(recordId: string, values: WaitinglistRecordInput, grou
 }
 
 export const app = new Elysia({ name: "spsb-waitinglist" })
-  .onRequest(({ request, set }) => {
+  .onRequest(async ({ request, set }) => {
+    await authorizeStaffRequest(request);
     const path = new URL(request.url).pathname;
     const isMultipart = request.headers.get("content-type")?.toLowerCase().startsWith("multipart/form-data");
-    const isProofUpload = request.method === "POST" && path === "/api/waitinglist" && isMultipart;
+    const isProofUpload = ["POST", "PUT"].includes(request.method) && (path === "/api/waitinglist" || /^\/api\/admin\/waitinglist(?:\/[a-f0-9]{32})?$/.test(path)) && isMultipart;
     const isBrochureUpload = request.method === "POST" && path === "/api/admin/brochure" && isMultipart;
     const maxBytes = isBrochureUpload ? MAX_BROCHURE_REQUEST_BYTES : isProofUpload ? MAX_UPLOAD_REQUEST_BYTES : MAX_REQUEST_BYTES;
     const contentLength = Number(request.headers.get("content-length") ?? 0);
@@ -290,7 +300,8 @@ export const app = new Elysia({ name: "spsb-waitinglist" })
       set.headers["Cache-Control"] = "no-store";
     }
   })
-  .onError(({ code, set }) => {
+  .onError(({ code, set, error }) => {
+    if (error instanceof ServiceError) { set.status = error.status; return { error: error.message, code: error.code }; }
     if (code === "NOT_FOUND") {
       set.status = 404;
       return { error: "Halaman tidak ditemukan." };
@@ -418,45 +429,14 @@ export const app = new Elysia({ name: "spsb-waitinglist" })
       return { error: error instanceof Error ? error.message : "Data pendaftaran tidak valid." };
     }
 
-    const proofBytes = Buffer.from(await body.bukti_transfer.arrayBuffer());
-    const proofMime = detectPaymentProofMime(proofBytes);
-    if (!proofMime) {
-      set.status = 400;
-      return { error: "Bukti transfer harus berupa file JPG, PNG, atau PDF yang valid." };
-    }
-    if (!proofBytes.length || proofBytes.length > MAX_PAYMENT_PROOF_BYTES) {
-      set.status = 400;
-      return { error: "Ukuran bukti transfer maksimal 5 MB." };
-    }
-
-    const id = randomBytes(16).toString("hex");
-    const proofPath = join(PAYMENT_PROOF_DIR, `${id}.enc`);
-    let proofWritten = false;
-    try {
-      await mkdir(PAYMENT_PROOF_DIR, { recursive: true, mode: 0o700 });
-      await chmod(PAYMENT_PROOF_DIR, 0o700);
-      await writeFile(proofPath, encryptPaymentProof(proofBytes, id), { flag: "wx", mode: 0o600 });
-      proofWritten = true;
-      const encryptedValues = encryptSensitiveRecord({
-        id,
-        ...values,
-        bukti_transfer_mime: proofMime,
-        umur_terhitung_bulan: String(values.umur_terhitung_bulan),
-      });
-      await db.insert(calonSantriWaitinglist).values(encryptedValues);
-    } catch {
-      if (proofWritten) await unlink(proofPath).catch(() => undefined);
-      console.error("Failed to persist encrypted waitinglist submission");
-      set.status = 500;
-      return { error: "Data belum dapat disimpan. Silakan coba kembali." };
-    }
+    const { id } = await createParticipant(values, body.bukti_transfer, null);
     const emailStatus = await triggerN8n(id, values, settings.whatsappGroupUrl);
     set.status = 201;
     return { id, emailStatus, whatsappGroupUrl: settings.whatsappGroupUrl };
   }, { body: waitinglistBody })
-  .get("/api/admin/me", ({ request }) => {
-    const session = getAdminSession(request);
-    return { authenticated: Boolean(session), username: session?.username ?? null, csrfToken: session?.csrfToken ?? null };
+  .get("/api/admin/me", async ({ request }) => {
+    const session = await getAdminSession(request);
+    return { authenticated: Boolean(session), username: session?.username ?? null, csrfToken: session?.csrfToken ?? null, user: session?.user ?? null, role: session?.user.role ?? null, permissions: session?.user.permissions ?? [] };
   })
   .post("/api/admin/login", async ({ body, request, set }) => {
     if (!originIsSame(request)) {
@@ -468,29 +448,30 @@ export const app = new Elysia({ name: "spsb-waitinglist" })
       set.status = 429;
       return { error: "Terlalu banyak percobaan login. Silakan coba lagi nanti." };
     }
-    if (!credentialsMatch(body.username, body.password)) {
+    const session = await authenticateStaff(body.username, body.password);
+    if (!session) {
       set.status = 401;
       return { error: "Username atau password salah." };
     }
-    const session = createSession(body.username);
     set.headers["Set-Cookie"] = sessionCookie(session.token, SESSION_HOURS * 60 * 60);
-    return { authenticated: true, username: body.username, csrfToken: session.csrfToken };
+    return { authenticated: true, username: session.user.username, csrfToken: session.csrfToken, user: session.user, role: session.user.role, permissions: session.user.permissions };
   }, {
     body: t.Object({ username: t.String({ maxLength: 120 }), password: t.String({ maxLength: 256 }) }),
   })
-  .post("/api/admin/logout", ({ request, set }) => {
+  .post("/api/admin/logout", async ({ request, set }) => {
     if (!originIsSame(request)) {
       set.status = 403;
       return { error: "Permintaan lintas situs ditolak." };
     }
-    const session = requireAdmin(request, set);
+    const session = await requireAdmin(request, set);
     if (!session) return { error: "Silakan login sebagai admin." };
     if (!requireCsrf(request, session, set)) return { error: "Sesi keamanan tidak valid." };
+    await revokeSession(session);
     set.headers["Set-Cookie"] = sessionCookie("", 0);
     return { authenticated: false };
   })
   .get("/api/admin/system", async ({ request, set }) => {
-    if (!requireAdmin(request, set)) return { error: "Silakan login sebagai admin." };
+    if (!await requireAdmin(request, set)) return { error: "Silakan login sebagai admin." };
     const base = {
       app: { status: "online", runtime: `Bun ${Bun.version}`, uptimeSeconds: Math.floor(process.uptime()) },
       database: { status: "offline" as "offline" | "online" },
@@ -510,7 +491,7 @@ export const app = new Elysia({ name: "spsb-waitinglist" })
     return base;
   })
   .get("/api/admin/brochure", async ({ request, set }) => {
-    if (!requireAdmin(request, set)) return { error: "Silakan login sebagai admin." };
+    if (!await requireAdmin(request, set)) return { error: "Silakan login sebagai admin." };
     return brochureStatus();
   })
   .post("/api/admin/brochure", async ({ body, request, set }) => {
@@ -518,7 +499,7 @@ export const app = new Elysia({ name: "spsb-waitinglist" })
       set.status = 403;
       return { error: "Permintaan lintas situs ditolak." };
     }
-    const session = requireAdmin(request, set);
+    const session = await requireAdmin(request, set);
     if (!session) return { error: "Silakan login sebagai admin." };
     if (!requireCsrf(request, session, set)) return { error: "Sesi keamanan tidak valid." };
     try {
@@ -541,7 +522,7 @@ export const app = new Elysia({ name: "spsb-waitinglist" })
       set.status = 403;
       return { error: "Permintaan lintas situs ditolak." };
     }
-    const session = requireAdmin(request, set);
+    const session = await requireAdmin(request, set);
     if (!session) return { error: "Silakan login sebagai admin." };
     if (!requireCsrf(request, session, set)) return { error: "Sesi keamanan tidak valid." };
     try {
@@ -554,7 +535,7 @@ export const app = new Elysia({ name: "spsb-waitinglist" })
     }
   })
   .get("/api/admin/settings", async ({ request, set }) => {
-    if (!requireAdmin(request, set)) return { error: "Silakan login sebagai admin." };
+    if (!await requireAdmin(request, set)) return { error: "Silakan login sebagai admin." };
     return {
       settings: await getSystemSettings(),
       updatedAt: await getSettingUpdatedAt(),
@@ -565,7 +546,7 @@ export const app = new Elysia({ name: "spsb-waitinglist" })
       set.status = 403;
       return { error: "Permintaan lintas situs ditolak." };
     }
-    const session = requireAdmin(request, set);
+    const session = await requireAdmin(request, set);
     if (!session) return { error: "Silakan login sebagai admin." };
     if (!requireCsrf(request, session, set)) return { error: "Sesi keamanan tidak valid." };
     let settings: SystemSettings;
@@ -585,7 +566,7 @@ export const app = new Elysia({ name: "spsb-waitinglist" })
     }
   }, { body: adminSettingsBody })
   .get("/api/admin/report", async ({ query, request, set }) => {
-    if (!requireAdmin(request, set)) return { error: "Silakan login sebagai admin." };
+    if (!await requireAdmin(request, set)) return { error: "Silakan login sebagai admin." };
     const filterError = validateWaitinglistFilterQuery(query);
     if (filterError) {
       set.status = 400;
@@ -594,23 +575,24 @@ export const app = new Elysia({ name: "spsb-waitinglist" })
     return buildWaitinglistReport(await adminDataset(query), query);
   }, { query: t.Object(waitinglistFilterProperties()) })
   .get('/api/admin/report.xlsx', async ({ query, request, set }) => {
-    if (!requireAdmin(request, set)) return { error: 'Silakan login sebagai admin.' };
+    if (!await requireAdmin(request, set)) return { error: 'Silakan login sebagai admin.' };
     const error = validateWaitinglistFilterQuery(query);
     if (error) { set.status = 400; return { error }; }
     const report = buildWaitinglistReport(await adminDataset(query), query);
     return exportAttachment(await generateReportXlsx(report, query), 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', `laporan-spsb-${query.view ?? 'active'}.xlsx`);
   }, { query: t.Object(waitinglistFilterProperties()) })
   .get('/api/admin/filter-options', async ({ request, query, set }) => {
-    if (!requireAdmin(request, set)) return { error: 'Silakan login sebagai admin.' };
+    if (!await requireAdmin(request, set)) return { error: 'Silakan login sebagai admin.' };
     const rows = (await adminDataset({ view: query.view })).map(row => decryptSensitiveRecord(row));
     return {
+      reviewers: [...new Set(rows.map(row => row.payment_reviewer).filter(Boolean))].sort(),
       provinces: [...new Set(rows.map(row => row.provinsi_nama))].filter(Boolean).sort(),
       regions: [...new Map(rows.map(row => [`${row.provinsi_nama}\u0000${row.kabupaten_nama}\u0000${row.kecamatan_nama}`, { province: row.provinsi_nama, regency: row.kabupaten_nama, district: row.kecamatan_nama }])).values()],
       schools: [...new Set(rows.map(row => row.sekolah_asal?.trim()).filter(Boolean))].sort(),
     };
   }, { query: t.Object(waitinglistFilterProperties()) })
   .get("/api/admin/waitinglist/:id", async ({ params, request, set }) => {
-    if (!requireAdmin(request, set)) return { error: "Silakan login sebagai admin." };
+    if (!await requireAdmin(request, set)) return { error: "Silakan login sebagai admin." };
     const [stored] = await db.select().from(calonSantriWaitinglist)
       .where(eq(calonSantriWaitinglist.id, params.id)).limit(1);
     if (!stored) {
@@ -619,6 +601,7 @@ export const app = new Elysia({ name: "spsb-waitinglist" })
     }
     const participant = decryptSensitiveRecord(stored);
     return {
+      ...participant,
       id: participant.id,
       nama_anak: participant.nama_anak,
       jenis_kelamin: participant.jenis_kelamin,
@@ -643,82 +626,27 @@ export const app = new Elysia({ name: "spsb-waitinglist" })
       deleted_by: participant.deleted_by,
     };
   }, { params: t.Object({ id: t.String({ pattern: "^[a-f0-9]{32}$" }) }) })
-  .post("/api/admin/waitinglist/:id/archive", async ({ params, request, set }) => {
-    if (!originIsSame(request)) {
-      set.status = 403;
-      return { error: "Permintaan lintas situs ditolak." };
-    }
-    const session = requireAdmin(request, set);
-    if (!session) return { error: "Silakan login sebagai admin." };
-    if (!requireCsrf(request, session, set)) return { error: "Token keamanan tidak valid. Muat ulang halaman." };
-    const [record] = await db.select({ id: calonSantriWaitinglist.id, deleted_at: calonSantriWaitinglist.deleted_at })
-      .from(calonSantriWaitinglist).where(eq(calonSantriWaitinglist.id, params.id)).limit(1);
-    if (!record) {
-      set.status = 404;
-      return { error: "Data pendaftar tidak ditemukan." };
-    }
-    if (record.deleted_at) {
-      set.status = 409;
-      return { error: "Pendaftar sudah berada di arsip." };
-    }
-    await db.update(calonSantriWaitinglist).set({ deleted_at: new Date().toISOString(), deleted_by: session.username })
-      .where(and(eq(calonSantriWaitinglist.id, params.id), isNull(calonSantriWaitinglist.deleted_at)));
+  .post("/api/admin/waitinglist/:id/archive", async ({ params, body, request }) => {
+    const session = (await getAdminSession(request))!;
+    await changeLifecycle(params.id, true, validVersion(body.version), body.reason, session.username);
     return { archived: true };
-  }, { params: t.Object({ id: t.String({ pattern: "^[a-f0-9]{32}$" }) }) })
-  .post("/api/admin/waitinglist/:id/restore", async ({ params, request, set }) => {
-    if (!originIsSame(request)) {
-      set.status = 403;
-      return { error: "Permintaan lintas situs ditolak." };
-    }
-    const session = requireAdmin(request, set);
-    if (!session) return { error: "Silakan login sebagai admin." };
-    if (!requireCsrf(request, session, set)) return { error: "Token keamanan tidak valid. Muat ulang halaman." };
-    const [record] = await db.select({ id: calonSantriWaitinglist.id, deleted_at: calonSantriWaitinglist.deleted_at })
-      .from(calonSantriWaitinglist).where(eq(calonSantriWaitinglist.id, params.id)).limit(1);
-    if (!record) {
-      set.status = 404;
-      return { error: "Data pendaftar tidak ditemukan." };
-    }
-    if (!record.deleted_at) {
-      set.status = 409;
-      return { error: "Pendaftar sudah aktif." };
-    }
-    await db.update(calonSantriWaitinglist).set({ deleted_at: null, deleted_by: null })
-      .where(and(eq(calonSantriWaitinglist.id, params.id), isNotNull(calonSantriWaitinglist.deleted_at)));
+  }, { params: t.Object({ id: t.String({ pattern: "^[a-f0-9]{32}$" }) }),
+    body: t.Object({ version: t.Integer({ minimum: 1 }), reason: t.String({ minLength: 3, maxLength: 1000 }) }) })
+  .post("/api/admin/waitinglist/:id/restore", async ({ params, body, request }) => {
+    const session = (await getAdminSession(request))!;
+    await changeLifecycle(params.id, false, validVersion(body.version), body.reason, session.username);
     return { restored: true };
-  }, { params: t.Object({ id: t.String({ pattern: "^[a-f0-9]{32}$" }) }) })
-  .get("/api/admin/waitinglist/:id/proof", async ({ params, request, set }) => {
-    if (!requireAdmin(request, set)) return { error: "Silakan login sebagai admin." };
-    const [row] = await db.select({ mime: calonSantriWaitinglist.bukti_transfer_mime })
-      .from(calonSantriWaitinglist)
-      .where(eq(calonSantriWaitinglist.id, params.id))
-      .limit(1);
-    const mime = row?.mime;
-    if (!mime || !["image/jpeg", "image/png", "application/pdf"].includes(mime)) {
-      set.status = 404;
-      return { error: "Bukti transfer tidak ditemukan." };
-    }
+  }, { params: t.Object({ id: t.String({ pattern: "^[a-f0-9]{32}$" }) }),
+    body: t.Object({ version: t.Integer({ minimum: 1 }), reason: t.String({ minLength: 3, maxLength: 1000 }) }) })
+  .get("/api/admin/waitinglist/:id/proof", async ({ params, query }) => {
+    const [row] = await db.select().from(calonSantriWaitinglist).where(eq(calonSantriWaitinglist.id, params.id)).limit(1);
+    if (!row) throw new ServiceError(404, "Data pendaftar tidak ditemukan.");
+    const { bytes, mime } = await readProof(row, query.version);
     const extension = mime === "image/jpeg" ? "jpg" : mime === "image/png" ? "png" : "pdf";
-    try {
-      const encrypted = await readFile(join(PAYMENT_PROOF_DIR, `${params.id}.enc`));
-      const proof = decryptPaymentProof(encrypted, params.id);
-      const responseBody = new Uint8Array(proof.byteLength);
-      responseBody.set(proof);
-      return new Response(responseBody, {
-        headers: {
-          "Content-Type": mime,
-          "Content-Disposition": `attachment; filename="bukti-transfer.${extension}"`,
-          "Cache-Control": "no-store, max-age=0",
-          "X-Content-Type-Options": "nosniff",
-        },
-      });
-    } catch {
-      set.status = 404;
-      return { error: "Bukti transfer tidak ditemukan atau tidak dapat dibuka." };
-    }
-  }, { params: t.Object({ id: t.String({ pattern: "^[a-f0-9]{32}$" }) }) })
+    return exportAttachment(bytes, mime, `bukti-transfer.${extension}`);
+  }, { params: t.Object({ id: t.String({ pattern: "^[a-f0-9]{32}$" }) }), query: t.Object({ version: t.Optional(t.String({ pattern: "^[a-f0-9]{32}$" })) }) })
   .get("/api/admin/waitinglist", async ({ query, request, set }) => {
-    if (!requireAdmin(request, set)) return { error: "Silakan login sebagai admin." };
+    if (!await requireAdmin(request, set)) return { error: "Silakan login sebagai admin." };
     const filterError = validateWaitinglistFilterQuery(query);
     if (filterError) {
       set.status = 400;
@@ -728,9 +656,7 @@ export const app = new Elysia({ name: "spsb-waitinglist" })
     const parsedPage = Number.parseInt(query.page ?? "1", 10);
     let page = Number.isFinite(parsedPage) ? Math.max(1, Math.min(parsedPage, 1_000_000)) : 1;
     const view = query.view ?? "active";
-    const lifecycleFilter = view === "archived"
-      ? isNotNull(calonSantriWaitinglist.deleted_at)
-      : isNull(calonSantriWaitinglist.deleted_at);
+    const lifecycleFilter = lifecycleCondition(query);
     const filtersActive = hasWaitinglistFilters(query);
     if (!filtersActive && (!query.sort || query.sort === 'newest')) {
       const totalRows = await db.select({ total: count() }).from(calonSantriWaitinglist).where(lifecycleFilter);
@@ -757,13 +683,13 @@ export const app = new Elysia({ name: "spsb-waitinglist" })
     query: t.Object({
       ...waitinglistFilterProperties(),
       page: t.Optional(t.String({ maxLength: 12 })),
-      view: t.Optional(t.Union([t.Literal("active"), t.Literal("archived")])),
+      view: t.Optional(t.Union([t.Literal("active"), t.Literal("archived"), t.Literal("all")])),
     }),
   })
   .get("/api/admin/waitinglist/:id/export.pdf", async ({ params, request, set }) => {
-    if (!requireAdmin(request, set)) return { error: "Silakan login sebagai admin." };
+    if (!await requireAdmin(request, set)) return { error: "Silakan login sebagai admin." };
     const storedRows = await db.select().from(calonSantriWaitinglist)
-      .where(and(eq(calonSantriWaitinglist.id, params.id), isNull(calonSantriWaitinglist.deleted_at))).limit(1);
+      .where(eq(calonSantriWaitinglist.id, params.id)).limit(1);
     const stored = storedRows[0];
     if (!stored) {
       set.status = 404;
@@ -774,9 +700,9 @@ export const app = new Elysia({ name: "spsb-waitinglist" })
     return exportAttachment(bytes, "application/pdf", `spsb-2027-${params.id}.pdf`);
   }, { params: t.Object({ id: t.String({ pattern: "^[a-f0-9]{32}$" }) }) })
   .get("/api/admin/waitinglist/:id/export.xlsx", async ({ params, request, set }) => {
-    if (!requireAdmin(request, set)) return { error: "Silakan login sebagai admin." };
+    if (!await requireAdmin(request, set)) return { error: "Silakan login sebagai admin." };
     const storedRows = await db.select().from(calonSantriWaitinglist)
-      .where(and(eq(calonSantriWaitinglist.id, params.id), isNull(calonSantriWaitinglist.deleted_at))).limit(1);
+      .where(eq(calonSantriWaitinglist.id, params.id)).limit(1);
     const stored = storedRows[0];
     if (!stored) {
       set.status = 404;
@@ -791,22 +717,43 @@ export const app = new Elysia({ name: "spsb-waitinglist" })
     );
   }, { params: t.Object({ id: t.String({ pattern: "^[a-f0-9]{32}$" }) }) })
   .get("/api/admin/export.xlsx", async ({ query, request, set }) => {
-    if (!requireAdmin(request, set)) return { error: "Silakan login sebagai admin." };
+    if (!await requireAdmin(request, set)) return { error: "Silakan login sebagai admin." };
     const filterError = validateWaitinglistFilterQuery(query);
     if (filterError) {
       set.status = 400;
       return { error: filterError };
     }
     const rows = (await adminDataset(query)).map(row => decryptSensitiveRecord(row));
-    const bytes = await generateParticipantsXlsx(rows);
+    const bytes = await generateParticipantsXlsx(rows, { scope: query.view === 'all' ? 'Aktif dan arsip' : query.view === 'archived' ? 'Arsip' : 'Aktif', filters: describeFilters(query) });
     return exportAttachment(
       bytes,
       "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
       `waitinglist-spsb-2027${query.view === 'archived' ? '-arsip' : ''}.xlsx`,
     );
   }, { query: t.Object(waitinglistFilterProperties()) })
+  .get('/api/admin/export.pdf', async ({ query }) => {
+    const error = validateWaitinglistFilterQuery(query); if (error) throw new ServiceError(400, error);
+    const rows = (await adminDataset(query)).map(row => decryptSensitiveRecord(row));
+    const scope = query.view === 'all' ? 'Aktif dan arsip' : query.view === 'archived' ? 'Arsip' : 'Aktif';
+    return exportAttachment(await generateParticipantsPdf(rows, { scope, filters: describeFilters(query) }), 'application/pdf', 'pendaftar-spsb-2027.pdf');
+  }, { query: t.Object(waitinglistFilterProperties()) })
+  .get('/api/admin/report.pdf', async ({ query }) => {
+    const error = validateWaitinglistFilterQuery(query); if (error) throw new ServiceError(400, error);
+    return exportAttachment(await generateReportPdf(buildWaitinglistReport(await adminDataset(query), query), query), 'application/pdf', 'laporan-spsb-2027.pdf');
+  }, { query: t.Object(waitinglistFilterProperties()) })
+  .get('/api/admin/payments/export.pdf', async ({ query }) => {
+    const filters = { ...query, view: query.view || 'all' };
+    const error = validateWaitinglistFilterQuery(filters); if (error) throw new ServiceError(400, error);
+    const rows = (await adminDataset(filters)).map(row => decryptSensitiveRecord(row));
+    return exportAttachment(await generateParticipantsPdf(rows, { scope: filters.view === 'all' ? 'Aktif dan arsip' : filters.view === 'archived' ? 'Arsip' : 'Aktif', filters: describeFilters(filters) }, true), 'application/pdf', 'pembayaran-spsb-2027.pdf');
+  }, { query: t.Object(waitinglistFilterProperties()) })
+  .get('/api/admin/payments/export.xlsx', async ({ query }) => {
+    const filters = { ...query, view: query.view || 'all' };
+    const error = validateWaitinglistFilterQuery(filters); if (error) throw new ServiceError(400, error);
+    return exportAttachment(await generatePaymentsXlsx((await adminDataset(filters)).map(row => decryptSensitiveRecord(row)), { scope: filters.view === 'all' ? 'Aktif dan arsip' : filters.view === 'archived' ? 'Arsip' : 'Aktif', filters: describeFilters(filters) }), 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'pembayaran-spsb-2027.xlsx');
+  }, { query: t.Object(waitinglistFilterProperties()) })
   .get("/api/admin/export.csv", async ({ query, request, set }) => {
-    if (!requireAdmin(request, set)) return { error: "Silakan login sebagai admin." };
+    if (!await requireAdmin(request, set)) return { error: "Silakan login sebagai admin." };
     const filterError = validateWaitinglistFilterQuery(query);
     if (filterError) {
       set.status = 400;
@@ -817,7 +764,7 @@ export const app = new Elysia({ name: "spsb-waitinglist" })
       "ID", "Nama Anak", "Jenis Kelamin", "Sekolah Asal", "Tanggal Lahir", "Umur Tercatat Saat Daftar (bulan)",
       "Status Kelayakan", "Persetujuan Ketentuan Biaya", "Nama Orang Tua", "Status Orang Tua", "Provinsi", "Kabupaten/Kota",
       "Kecamatan", "Desa/Kelurahan", "WhatsApp", "Email", "Tanggal Submit",
-      'Persetujuan Data', 'Konfirmasi Lampiran', 'Metadata Lampiran', 'Status Data', 'Waktu Arsip', 'Diarsipkan Oleh',
+      'Persetujuan Data', 'Konfirmasi Lampiran', 'Metadata Lampiran', 'Status Data', 'Waktu Arsip', 'Diarsipkan Oleh', 'Status pembayaran', 'Tanggal bayar', 'Nominal tervalidasi (Rp)', 'Pemeriksa', 'Waktu pemeriksaan', 'Catatan pembayaran',
     ]];
     for (const row of rows) {
       output.push([
@@ -831,7 +778,7 @@ export const app = new Elysia({ name: "spsb-waitinglist" })
         row.konfirmasi_data === 1 ? 'Setuju' : 'Belum dicatat',
         row.konfirmasi_bukti_transfer === 1 ? 'Dikonfirmasi' : 'Belum dicatat',
         row.bukti_transfer_mime ? 'Tercatat (belum diverifikasi)' : 'Belum dicatat',
-        row.deleted_at ? 'Arsip' : 'Aktif', csvSafe(row.deleted_at || ''), csvSafe(row.deleted_by || ''),
+        row.deleted_at ? 'Arsip' : 'Aktif', csvSafe(row.deleted_at || ''), csvSafe(row.deleted_by || ''), csvSafe(row.payment_status), csvSafe(row.payment_date || ''), row.payment_status === 'verified' ? '150000' : '0', csvSafe(row.payment_reviewer || ''), csvSafe(row.payment_reviewed_at || ''), csvSafe(row.payment_note || ''),
       ]);
     }
     const csv = `\uFEFF${output.map((line) => line.map((value) => `"${value.replaceAll('"', '""')}"`).join(",")).join("\r\n")}`;
@@ -845,7 +792,8 @@ export const app = new Elysia({ name: "spsb-waitinglist" })
       ...waitinglistFilterProperties(),
       page: t.Optional(t.String({ maxLength: 12 })),
     }),
-  });
+  })
+  .use(adminManagementRoutes);
 
 async function main(): Promise<void> {
   assertProductionSecurityConfig();
@@ -855,7 +803,8 @@ async function main(): Promise<void> {
   await migrate(db, { migrationsFolder: resolve(import.meta.dir, "../drizzle") });
   await encryptLegacyWaitinglistRows();
   await seedSystemSettings();
-  app.listen({ hostname: HOST, port: PORT, maxRequestBodySize: MAX_UPLOAD_REQUEST_BYTES });
+  await seedStaffAdmin();
+  app.listen({ hostname: HOST, port: PORT, maxRequestBodySize: MAX_BROCHURE_REQUEST_BYTES });
   console.info(`SPSB application listening on http://${app.server?.hostname ?? HOST}:${app.server?.port ?? PORT}`);
   console.info(`Environment: ${NODE_ENV}`);
   if (!ADMIN_PASSWORD_CONFIGURED) {

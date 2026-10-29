@@ -48,6 +48,10 @@ function validPayload() {
 }
 
 describe("eligibility rules", () => {
+  test("rejects independently valid region IDs that belong to different parents", () => {
+    expect(() => validateWaitinglist({ ...validPayload(), kabupaten_id: "11.01" }, settings)).toThrow("hierarki");
+    expect(() => validateWaitinglist({ ...validPayload(), desa_id: "32.74.01.1001" }, settings)).toThrow("hierarki");
+  });
   test("computes the exact birthdate boundary from system settings", () => {
     expect(eligibleBirthdate(settings)).toBe("2021-01-01");
     expect(validateWaitinglist(validPayload(), settings).umur_terhitung_bulan).toBe(78);
@@ -148,16 +152,17 @@ describe("input normalization", () => {
 });
 
 describe("admin sessions", () => {
-  test("validates signed sessions and rejects tampering", async () => {
+  test("compares CSRF tokens safely and restricts cookies", async () => {
     process.env.ADMIN_USERNAME = "test-admin";
     process.env.ADMIN_PASSWORD = "test-admin-password";
     process.env.APP_SECRET = "test-secret-with-more-than-32-characters";
     process.env.DATA_ENCRYPTION_KEY = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
-    const { clientIp, createSession, sessionCookie, validateSession } = await import("../src/lib/auth");
-    const session = createSession("test-admin");
-    expect(validateSession(session.token)?.username).toBe("test-admin");
-    expect(validateSession(`${session.token}tampered`)).toBeNull();
-    expect(sessionCookie(session.token)).toContain("SameSite=Strict");
+    const { clientIp, csrfMatches, sessionCookie } = await import("../src/lib/auth");
+    const session = { username: 'test-admin', csrfToken: 'random-token-test' };
+    expect(csrfMatches(session, session.csrfToken)).toBe(true);
+    expect(csrfMatches(session, 'tampered')).toBe(false);
+    expect(sessionCookie('opaque-session-token')).toContain('SameSite=Strict');
+    expect(sessionCookie('opaque-session-token')).toContain('HttpOnly');
     expect(clientIp(new Request("http://localhost", { headers: { "x-forwarded-for": "203.0.113.7, 10.0.0.1" } })))
       .toBe("203.0.113.7");
     expect(clientIp(new Request("http://localhost", { headers: { "x-forwarded-for": "not-an-ip" } })))
