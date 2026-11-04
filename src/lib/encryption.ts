@@ -7,6 +7,9 @@ const PAYMENT_PROOF_AAD_PREFIX = "spsb.payment-proof:v1:";
 const ENCRYPTED_FIELDS = [
   "nama_ortu",
   "status_ortu",
+  "askar_anggota",
+  "askar_divisi_bapak",
+  "askar_divisi_ibu",
   "nama_anak",
   "jenis_kelamin",
   "sekolah_asal",

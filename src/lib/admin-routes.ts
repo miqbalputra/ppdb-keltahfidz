@@ -30,6 +30,9 @@ const staffBody = { name: t.String({ minLength: 1, maxLength: 120 }), role };
 const text = (max = 120) => t.String({ minLength: 1, maxLength: max });
 const participantBody = t.Object({
   nama_ortu: text(), status_ortu: t.Union([t.Literal("bapak"), t.Literal("ibu")]), nama_anak: text(),
+  jalur_pendaftaran: t.Optional(t.Union([t.Literal("umum"), t.Literal("askar")])),
+  askar_anggota: t.Optional(t.Union([t.Literal("bapak"), t.Literal("ibu"), t.Literal("keduanya")])),
+  askar_divisi_bapak: t.Optional(t.String({ maxLength: 120 })), askar_divisi_ibu: t.Optional(t.String({ maxLength: 120 })),
   jenis_kelamin: t.Union([t.Literal("putra"), t.Literal("putri")]), sekolah_asal: t.Optional(t.String({ maxLength: 120 })),
   tanggal_lahir_anak: text(10), provinsi_id: text(20), provinsi_nama: text(), kabupaten_id: text(20), kabupaten_nama: text(),
   kecamatan_id: text(20), kecamatan_nama: text(), desa_id: text(20), desa_nama: text(), no_hp_wa: text(64), email: text(254),

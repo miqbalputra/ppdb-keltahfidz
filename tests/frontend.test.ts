@@ -42,7 +42,7 @@ describe("frontend accessibility contracts", () => {
       expect(html).toContain('href="/logo-gq.png" type="image/png"');
       expect(html).toContain('class="brand-logo" src="/logo-gq.png"');
       expect(html).toContain('name="description"');
-      expect(html).toContain(`<link rel="stylesheet" href="/app.css?v=${page === "index.html" ? "2027-brochure-minimal-v4" : page === "success.html" ? "2027-countdown-cta" : page === "admin.html" ? "2027-admin-archive-v3" : "2027-brochure-v1"}">`);
+      expect(html).toContain(`<link rel="stylesheet" href="/app.css?v=${page === "index.html" ? "2027-brochure-minimal-v5" : page === "success.html" ? "2027-countdown-cta" : page === "admin.html" ? "2027-admin-archive-v3" : "2027-brochure-v1"}">`);
       const ids = attributes(html, "id");
       const idSet = new Set(ids);
       expect(idSet.size).toBe(ids.length);
@@ -84,7 +84,7 @@ describe("frontend accessibility contracts", () => {
     expect(html).toContain('aria-live="off"');
     for (const unit of ["days", "hours", "minutes", "seconds"]) expect(html).toContain(`id="countdown-${unit}"`);
     expect(html).toContain('id="countdown-schedule" aria-live="polite"');
-    expect(html).toContain('src="/app.js?v=2027-public-clean-v2"');
+    expect(html).toContain('src="/app.js?v=2027-public-clean-v3"');
     expect(html).toContain('id="download-brochure" type="button"');
     expect(html).toContain('id="brochure-feedback" role="status" aria-live="polite"');
     expect(html).toContain('id="brochure-download-count" role="status" aria-live="polite" hidden');

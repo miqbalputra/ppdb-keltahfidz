@@ -11,6 +11,10 @@ export interface ParticipantExportRecord {
   id: string;
   nama_ortu: string;
   status_ortu: string;
+  jalur_pendaftaran?: string;
+  askar_anggota?: string | null;
+  askar_divisi_bapak?: string | null;
+  askar_divisi_ibu?: string | null;
   nama_anak: string;
   jenis_kelamin: string | null;
   sekolah_asal: string | null;
@@ -78,6 +82,10 @@ const fields: ExportField[] = [
   { key: 'payment_reviewed_at', label: 'Waktu pemeriksaan', value: r => r.payment_reviewed_at ? registrationDateLabel(r.payment_reviewed_at) : '-' },
   { key: 'payment_note', label: 'Catatan pemeriksaan', value: r => r.payment_note || '-' },
   { key: "id", label: "ID pendaftaran", value: (record) => record.id },
+  { key: "jalur_pendaftaran", label: "Jalur pendaftaran", value: (record) => record.jalur_pendaftaran === "askar" ? "Jalur Asatidz dan Karyawan (Askar) Tunas Ilmu" : "Jalur umum" },
+  { key: "askar_anggota", label: "Anggota Asatidz/Karyawan Tunas Ilmu", value: (record) => ({ bapak: "Bapak", ibu: "Ibu", keduanya: "Bapak & Ibu" }[record.askar_anggota || ""] || "-") },
+  { key: "askar_divisi_bapak", label: "Divisi karyawan Bapak", value: (record) => record.askar_divisi_bapak || "-" },
+  { key: "askar_divisi_ibu", label: "Divisi karyawan Ibu", value: (record) => record.askar_divisi_ibu || "-" },
   { key: "nama_anak", label: "Nama calon santri", value: (record) => record.nama_anak },
   {
     key: "jenis_kelamin",
@@ -174,15 +182,15 @@ export async function generateParticipantsXlsx(records: ParticipantExportRecord[
 export async function generatePaymentsXlsx(records: ParticipantExportRecord[], context: ExportContext = {}) {
   const workbook = makeWorkbook('Rekap pemeriksaan pembayaran SPSB 2027');
   const ws = workbook.addWorksheet('Pembayaran');
-  ws.columns = ['ID', 'Calon santri', 'Orang tua', 'WhatsApp', 'Email', 'Status data', 'Pembayaran', 'Biaya (Rp)', 'Nominal tervalidasi (Rp)', 'Tanggal bayar', 'Pemeriksa', 'Waktu pemeriksaan WIB', 'Catatan'].map(header => ({ header, width: 25 }));
+  ws.columns = ['ID', 'Calon santri', 'Orang tua', 'Jalur pendaftaran', 'WhatsApp', 'Email', 'Status data', 'Pembayaran', 'Biaya (Rp)', 'Nominal tervalidasi (Rp)', 'Tanggal bayar', 'Pemeriksa', 'Waktu pemeriksaan WIB', 'Catatan'].map(header => ({ header, width: 25 }));
   styleHeader(ws.getRow(1));
   records.forEach(record => {
-    const row = ws.addRow([record.id, record.nama_anak, record.nama_ortu, record.no_hp_wa, record.email, record.deleted_at ? 'Arsip' : 'Aktif',
+    const row = ws.addRow([record.id, record.nama_anak, record.nama_ortu, record.jalur_pendaftaran === 'askar' ? 'Jalur Askar' : 'Jalur umum', record.no_hp_wa, record.email, record.deleted_at ? 'Arsip' : 'Aktif',
       paymentLabel(record.payment_status), REGISTRATION_FEE, record.payment_status === 'verified' ? REGISTRATION_FEE : 0,
       record.payment_date || '', record.payment_reviewer || '', record.payment_reviewed_at ? registrationDateLabel(record.payment_reviewed_at) : '', record.payment_note || '']);
     row.eachCell(cell => { cell.alignment = { wrapText: true, vertical: 'top' }; cell.numFmt = typeof cell.value === 'number' ? '#,##0' : '@'; });
   });
-  ws.views = [{ state: 'frozen', ySplit: 1 }]; ws.autoFilter = 'A1:M1';
+  ws.views = [{ state: 'frozen', ySplit: 1 }]; ws.autoFilter = 'A1:N1';
   const metadata = workbook.addWorksheet('Cakupan'); metadata.columns = [{ width: 28 }, { width: 90 }];
   metadata.addRows([['Laporan', 'Pemeriksaan pembayaran SPSB 2027'], ['Status data', context.scope || 'Aktif dan arsip'],
     ['Filter', context.filters || 'Tanpa filter tambahan'], ['Dibuat (WIB)', registrationDateLabel(context.generatedAt || new Date().toISOString())],
@@ -207,8 +215,8 @@ export async function generateParticipantPdf(record: ParticipantExportRecord): P
   pdf.paragraph('ID pendaftaran: ' + record.id);
   pdf.paragraph('Status data: ' + (record.deleted_at ? 'Arsip' : 'Aktif') + ' | Terdaftar: ' + registrationDateLabel(record.created_at));
   const group = (title: string, keys: string[]) => { pdf.section(title); pdf.fields(fields.filter(f => keys.includes(f.key)).map(f => [f.label, f.label === 'Nominal tervalidasi (Rp)' ? Number(f.value(record)).toLocaleString('id-ID') : f.value(record)])); };
-  group('IDENTITAS CALON SANTRI', ['nama_anak', 'jenis_kelamin', 'sekolah_asal', 'tanggal_lahir_anak', 'umur_terhitung_bulan', 'status_eligibility']);
-  group('ORANG TUA DAN DOMISILI', ['nama_ortu', 'status_ortu', 'no_hp_wa', 'email', 'provinsi_nama', 'kabupaten_nama', 'kecamatan_nama', 'desa_nama']);
+  group('IDENTITAS CALON SANTRI', ['jalur_pendaftaran', 'nama_anak', 'jenis_kelamin', 'sekolah_asal', 'tanggal_lahir_anak', 'umur_terhitung_bulan', 'status_eligibility']);
+  group('ORANG TUA, KETERANGAN ASKAR DAN DOMISILI', ['nama_ortu', 'status_ortu', 'askar_anggota', 'askar_divisi_bapak', 'askar_divisi_ibu', 'no_hp_wa', 'email', 'provinsi_nama', 'kabupaten_nama', 'kecamatan_nama', 'desa_nama']);
   group('PERSETUJUAN DAN LAMPIRAN', ['konfirmasi_data', 'konfirmasi_bukti_transfer', 'konfirmasi_ketentuan_biaya', 'bukti_transfer_mime']);
   group('PEMERIKSAAN PEMBAYARAN', ['payment_status', 'payment_date', 'payment_reviewer', 'payment_reviewed_at', 'payment_note']);
   pdf.paragraph('Penerimaan formulir dan verifikasi pembayaran tidak menentukan hasil seleksi. Bukti transfer tersedia sebagai lampiran terpisah.');
@@ -221,9 +229,9 @@ export async function generateParticipantsPdf(records: ParticipantExportRecord[]
   pdf.paragraph('Filter: ' + (context.filters || 'Tanpa filter'));
   if (paymentOnly) {
     pdf.paragraph('Biaya pendaftaran Rp150.000 | Nominal tervalidasi: Rp' + (records.filter(r => r.payment_status === 'verified').length * REGISTRATION_FEE).toLocaleString('id-ID'));
-    pdf.table(['No.', 'Calon santri / orang tua', 'WhatsApp', 'Hasil pemeriksaan', 'Tanggal bayar', 'Pemeriksa / catatan'], records.map((r, i) => [i + 1, r.nama_anak + '\n' + r.nama_ortu, r.no_hp_wa, paymentLabel(r.payment_status), r.payment_date ? dateLabel(r.payment_date) : '-', (r.payment_reviewer || '-') + '\n' + (r.payment_note || '')]), [0.4, 2.1, 1.35, 1.4, 1, 2]);
+    pdf.table(['No.', 'Calon santri / jalur', 'WhatsApp', 'Hasil pemeriksaan', 'Tanggal bayar', 'Pemeriksa / catatan'], records.map((r, i) => [i + 1, r.nama_anak + '\n' + (r.jalur_pendaftaran === 'askar' ? 'Jalur Askar' : 'Jalur umum') + '\n' + r.nama_ortu, r.no_hp_wa, paymentLabel(r.payment_status), r.payment_date ? dateLabel(r.payment_date) : '-', (r.payment_reviewer || '-') + '\n' + (r.payment_note || '')]), [0.4, 2.1, 1.35, 1.4, 1, 2]);
   } else {
-    pdf.table(['No.', 'Calon santri', 'Orang tua', 'WhatsApp', 'Kabupaten/kota', 'Tanggal daftar', 'Pembayaran'], records.map((r, i) => [i + 1, r.nama_anak + '\n' + (r.jenis_kelamin === 'putra' ? 'Putra' : r.jenis_kelamin === 'putri' ? 'Putri' : '-'), r.nama_ortu, r.no_hp_wa, r.kabupaten_nama, registrationDateLabel(r.created_at), paymentLabel(r.payment_status)]), [0.4, 1.8, 1.7, 1.35, 1.6, 1.4, 1.4]);
+    pdf.table(['No.', 'Calon santri / jalur', 'Orang tua', 'WhatsApp', 'Kabupaten/kota', 'Tanggal daftar', 'Pembayaran'], records.map((r, i) => [i + 1, r.nama_anak + '\n' + (r.jenis_kelamin === 'putra' ? 'Putra' : r.jenis_kelamin === 'putri' ? 'Putri' : '-') + '\n' + (r.jalur_pendaftaran === 'askar' ? 'Askar' : 'Umum'), r.nama_ortu, r.no_hp_wa, r.kabupaten_nama, registrationDateLabel(r.created_at), paymentLabel(r.payment_status)]), [0.4, 1.8, 1.7, 1.35, 1.6, 1.4, 1.4]);
   }
   return pdf.save();
 }

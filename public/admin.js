@@ -232,7 +232,10 @@
         `${formatAge(item.umur_terhitung_bulan)} · saat mendaftar`,
         item.deleted_at ? `Diarsipkan ${formatDate(item.deleted_at, true)}` : "",
       ].filter(Boolean).join(" · ");
-      child.append(childName, childDetail);
+      const routeBadge = document.createElement('span');
+      routeBadge.className = `participant-path-badge${item.jalur_pendaftaran === 'askar' ? ' is-askar' : ''}`;
+      routeBadge.textContent = item.jalur_pendaftaran === 'askar' ? 'JALUR ASKAR' : 'JALUR UMUM';
+      child.append(childName, routeBadge, childDetail);
       const feeAccepted = Number(item.konfirmasi_ketentuan_biaya) === 1;
       if (feeAccepted) {
         const feeConsent = document.createElement("small");
@@ -501,6 +504,7 @@
       }
       document.querySelector("#participant-dialog-title").textContent = participant.nama_anak;
       setDetail('#detail-id', participant.id);
+      setDetail('#detail-registration-path', participant.jalur_pendaftaran === 'askar' ? 'Jalur Asatidz dan Karyawan (Askar) Tunas Ilmu' : 'Jalur umum');
       addCopyButton('#detail-id', participant.id);
       setDetail('#detail-archive', isArchived ? `${formatDate(participant.deleted_at, true)} WIB · ${participant.deleted_by || 'admin'}` : 'Data aktif');
       setDetail("#detail-child", participant.nama_anak);
@@ -510,6 +514,9 @@
       setDetail('#detail-age', !Number.isFinite(participant.umur_terhitung_bulan) ? 'Belum tercatat' : `${formatAge(participant.umur_terhitung_bulan)} (${participant.umur_terhitung_bulan} bulan)`);
       setDetail('#detail-eligibility', participant.status_eligibility === 'eligible' ? 'Memenuhi kriteria saat mendaftar' : participant.status_eligibility === 'not_eligible' ? 'Belum memenuhi kriteria saat mendaftar' : 'Belum tercatat');
       setDetail('#detail-parent', `${participant.nama_ortu} · ${participant.status_ortu === 'bapak' ? 'Bapak' : participant.status_ortu === 'ibu' ? 'Ibu' : participant.status_ortu || 'Belum tercatat'}`);
+      setDetail('#detail-askar-member', ({ bapak: 'Bapak', ibu: 'Ibu', keduanya: 'Bapak & Ibu' })[participant.askar_anggota] || (participant.jalur_pendaftaran === 'askar' ? 'Belum dicatat' : 'Tidak berlaku · jalur umum'));
+      setDetail('#detail-askar-father-division', participant.askar_divisi_bapak || (participant.jalur_pendaftaran === 'askar' ? 'Tidak dicatat' : 'Tidak berlaku · jalur umum'));
+      setDetail('#detail-askar-mother-division', participant.askar_divisi_ibu || (participant.jalur_pendaftaran === 'askar' ? 'Tidak dicatat' : 'Tidak berlaku · jalur umum'));
       setDetail("#detail-phone", participant.no_hp_wa);
       setDetail("#detail-email", participant.email);
       addContact('#detail-phone', participant.no_hp_wa, /^\+?[0-9]{8,16}$/.test(participant.no_hp_wa || '') ? `https://wa.me/${participant.no_hp_wa.replace(/^\+/, '')}` : null);
@@ -834,7 +841,7 @@
   function renderFilterChips() {
     const container = document.querySelector('#filter-chips');
     container.replaceChildren();
-    const basicFilterKeys = new Set(['q', 'view', 'status', 'jenis_kelamin', 'kecamatan', 'sort', 'page_size', 'trend']);
+    const basicFilterKeys = new Set(['q', 'view', 'jalur_pendaftaran', 'status', 'jenis_kelamin', 'kecamatan', 'sort', 'page_size', 'trend']);
     const activeAdditionalFilters = [...appliedFilters.keys()].filter(key => !basicFilterKeys.has(key)).length;
     const additionalCount = document.querySelector('#filter-options-count');
     additionalCount.textContent = activeAdditionalFilters ? `${activeAdditionalFilters} aktif` : 'Opsional';
@@ -855,8 +862,8 @@
     }
   }
   function filterLabel(key, value) {
-    const labels = { payment_status: 'Pembayaran', payment_reviewer: 'Pemeriksa', tanggal_bayar_mulai: 'Bayar dari', tanggal_bayar_sampai: 'Bayar sampai', q: 'Pencarian', status: 'Kelayakan saat daftar', jenis_kelamin: 'Jenis kelamin', kecamatan: 'Kecamatan', provinsi: 'Provinsi', kabupaten: 'Kabupaten/kota', sekolah: 'Sekolah', missing: 'Belum tercatat', age_group: 'Usia saat daftar', tanggal_daftar_mulai: 'Daftar dari', tanggal_daftar_sampai: 'Daftar sampai', tanggal_lahir_mulai: 'Lahir dari', tanggal_lahir_sampai: 'Lahir sampai' };
-    const values = { pending: 'Belum diperiksa', verified: 'Terverifikasi', needs_correction: 'Perlu perbaikan', eligible: 'Memenuhi', not_eligible: 'Belum memenuhi', gender: 'Jenis kelamin', school: 'Sekolah', proof: 'Metadata lampiran', consent: 'Persetujuan', any: 'Ada kekosongan', under6: '<6 tahun', '6to7': '6–<7 tahun', '7to8': '7–<8 tahun', '8plus': '≥8 tahun', unknown: 'Belum tercatat', putra: 'Putra', putri: 'Putri' };
+    const labels = { jalur_pendaftaran: 'Jalur pendaftaran', payment_status: 'Pembayaran', payment_reviewer: 'Pemeriksa', tanggal_bayar_mulai: 'Bayar dari', tanggal_bayar_sampai: 'Bayar sampai', q: 'Pencarian', status: 'Kelayakan saat daftar', jenis_kelamin: 'Jenis kelamin', kecamatan: 'Kecamatan', provinsi: 'Provinsi', kabupaten: 'Kabupaten/kota', sekolah: 'Sekolah', missing: 'Belum tercatat', age_group: 'Usia saat daftar', tanggal_daftar_mulai: 'Daftar dari', tanggal_daftar_sampai: 'Daftar sampai', tanggal_lahir_mulai: 'Lahir dari', tanggal_lahir_sampai: 'Lahir sampai' };
+    const values = { umum: 'Jalur umum', askar: 'Jalur Askar', pending: 'Belum diperiksa', verified: 'Terverifikasi', needs_correction: 'Perlu perbaikan', eligible: 'Memenuhi', not_eligible: 'Belum memenuhi', gender: 'Jenis kelamin', school: 'Sekolah', proof: 'Metadata lampiran', consent: 'Persetujuan', any: 'Ada kekosongan', under6: '<6 tahun', '6to7': '6–<7 tahun', '7to8': '7–<8 tahun', '8plus': '≥8 tahun', unknown: 'Belum tercatat', putra: 'Putra', putri: 'Putri' };
     return `${labels[key] || key}: ${Object.hasOwn(values, value) ? values[value] : value}`;
   }
   function fillOptions(id, values) {
@@ -968,7 +975,7 @@
     }
     document.querySelector('#analytics-meta').textContent = `${report.scope} · ${report.total} peserta · ${report.registrationPeriod.label} · diperbarui ${formatDate(report.generatedAt, true)} WIB`;
     document.querySelector('#analytics-filters').textContent = `Filter terapan: ${[...appliedFilters].filter(([key]) => !['sort', 'page_size', 'trend'].includes(key)).map(([key, value]) => filterLabel(key, value)).join(' · ') || 'Tanpa filter tambahan'}. Tren: ${report.trend.start} – ${report.trend.end} (${intervalLabel(report.trend.interval)}).`;
-    const names = { provinsi: 'Sebaran provinsi', kabupaten: 'Kabupaten/kota', kecamatan: 'Kecamatan', sekolah: 'Sekolah asal', usia: 'Usia tercatat saat daftar', orangTua: 'Hubungan orang tua/wali', gender: 'Jenis kelamin', eligibility: 'Kelayakan saat daftar' };
+    const names = { jalur: 'Jalur pendaftaran', provinsi: 'Sebaran provinsi', kabupaten: 'Kabupaten/kota', kecamatan: 'Kecamatan', sekolah: 'Sekolah asal', usia: 'Usia tercatat saat daftar', orangTua: 'Hubungan orang tua/wali', gender: 'Jenis kelamin', eligibility: 'Kelayakan saat daftar' };
     const sections = [
       ['Tren pendaftaran', report.trend.buckets.map(row => ({ label: row.date, total: row.total }))],
       ...(report.payments ? [['Status pembayaran', ['pending', 'verified', 'needs_correction'].map(status => ({ label: paymentLabel(status), total: report.payments[status], percent: report.total ? Math.round(report.payments[status] / report.total * 1000) / 10 : 0, filter: { payment_status: status } }))]] : []),
@@ -1168,6 +1175,19 @@
 
   const editor = document.querySelector('#participant-editor'), editorForm = document.querySelector('#participant-editor-form');
   let editingParticipant = null, editorEpoch = 0, editorBirthdateLimit = '';
+  const editorRoute = editorForm.elements.jalur_pendaftaran;
+  const editorAskarMember = editorForm.elements.askar_anggota;
+  function updateEditorAskarFields() {
+    const askar = editorRoute.value === 'askar';
+    const member = editorAskarMember.value;
+    document.querySelector('#editor-askar-member-field').hidden = !askar;
+    document.querySelector('#editor-askar-father-field').hidden = !askar || !['bapak', 'keduanya'].includes(member);
+    document.querySelector('#editor-askar-mother-field').hidden = !askar || !['ibu', 'keduanya'].includes(member);
+    editorAskarMember.required = askar;
+    if (!askar) editorAskarMember.value = '';
+  }
+  editorRoute.addEventListener('change', updateEditorAskarFields);
+  editorAskarMember.addEventListener('change', updateEditorAskarFields);
   function validateEditorBirthdate() {
     const field = editorForm.elements.tanggal_lahir_anak;
     field.setCustomValidity(field.value && field.value !== editingParticipant?.tanggal_lahir_anak && editorBirthdateLimit && field.value > editorBirthdateLimit
@@ -1263,6 +1283,11 @@
     document.querySelector('#editor-proof-hint').textContent = participant ? 'Kosongkan untuk mempertahankan bukti saat ini. Bukti baru akan mengulang pemeriksaan pembayaran.' : 'Bukti wajib diunggah.';
     document.querySelector('#editor-reason-field').hidden = !participant; editorForm.elements.reason.required = Boolean(participant);
     editorForm.elements.bukti_transfer.required = !participant?.has_proof;
+    editorRoute.value = participant?.jalur_pendaftaran === 'askar' ? 'askar' : 'umum';
+    editorAskarMember.value = participant?.askar_anggota || '';
+    editorForm.elements.askar_divisi_bapak.value = participant?.askar_divisi_bapak || '';
+    editorForm.elements.askar_divisi_ibu.value = participant?.askar_divisi_ibu || '';
+    updateEditorAskarFields();
     for (const key of ['nama_anak', 'nama_ortu', 'tanggal_lahir_anak', 'no_hp_wa', 'email', 'sekolah_asal', 'status_ortu', 'jenis_kelamin']) editorForm.elements[key].value = participant?.[key] || '';
     for (const key of ['konfirmasi_data', 'konfirmasi_bukti_transfer', 'konfirmasi_ketentuan_biaya']) editorForm.elements[key].checked = participant?.[key] === 1;
     for (let i = 0; i < 4; i++) resetEditorRegion(i);

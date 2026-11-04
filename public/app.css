@@ -768,6 +768,30 @@ td { color: #514f49; border-top-color: #efefed; }
 }
 @media (prefers-reduced-motion: reduce) { .countdown-contact { transition: none; } .countdown-contact:hover { transform: none; } }
 
+/* Jalur khusus Asatidz dan Karyawan Tunas Ilmu */
+.askar-entry-link { display: flex; width: fit-content; margin-top: 6px; color: #6f5b32; border-bottom-color: rgba(124, 99, 47, .4); }
+.askar-route .form-heading { border-bottom-color: #d9e5d7; }
+.askar-route #form-route-kicker { color: #78602f; }
+.askar-form-section { margin-top: 25px; padding: 2px 18px 18px; background: #f5f8f3; border: 1px solid #dbe6d7; border-radius: 8px; }
+.askar-form-section .form-subheading { margin-top: 19px; }
+.askar-form-intro { margin: 0 0 18px; font-size: 11px; }
+.askar-member-field legend { margin-bottom: 10px; }
+.askar-radio-row { flex-wrap: wrap; }
+.askar-radio-row .radio-option { flex: 1 1 145px; }
+.askar-radio-row .radio-option span { border-radius: 4px; }
+.askar-division-grid { grid-template-columns: 1fr 1fr; margin-top: 16px; }
+.askar-division-field { background: #fff; }
+.askar-division-hint { grid-column: 1 / -1; }
+.countdown-route-note { max-width: 620px; margin: 16px auto 0; color: #6f5b32; font-size: 14px; font-weight: 700; line-height: 1.6; }
+@media (max-width: 580px) {
+  .askar-entry-link { max-width: 310px; line-height: 1.55; }
+  .askar-form-section { padding-inline: 13px; }
+  .askar-radio-row { flex-direction: column; }
+  .askar-radio-row .radio-option { flex-basis: auto; }
+  .askar-division-grid { grid-template-columns: 1fr; }
+  .askar-division-hint { grid-column: auto; }
+}
+
 /* Brochure management */
 .brochure-admin #brochure-current { margin: 18px 22px 0; color: var(--green-dark); font-size: 14px; line-height: 1.5; }
 .brochure-admin #brochure-alert { margin: 14px 22px 0; }

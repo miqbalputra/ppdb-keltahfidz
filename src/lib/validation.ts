@@ -31,6 +31,10 @@ export function isRegistrationOpen(settings: SystemSettings, now = new Date()): 
 export interface WaitinglistRecordInput {
   nama_ortu: string;
   status_ortu: "bapak" | "ibu";
+  jalur_pendaftaran: "umum" | "askar";
+  askar_anggota: "bapak" | "ibu" | "keduanya" | null;
+  askar_divisi_bapak: string | null;
+  askar_divisi_ibu: string | null;
   nama_anak: string;
   jenis_kelamin: "putra" | "putri";
   sekolah_asal: string | null;
@@ -154,6 +158,32 @@ export function validateWaitinglist(
     throw new Error("Pilih status Bapak atau Ibu.");
   }
 
+  const jalur_pendaftaran = String(payload.jalur_pendaftaran ?? "umum").trim().toLowerCase();
+  if (jalur_pendaftaran !== "umum" && jalur_pendaftaran !== "askar") {
+    throw new Error("Jalur pendaftaran tidak valid.");
+  }
+  const anggotaRaw = String(payload.askar_anggota ?? "").trim().toLowerCase();
+  let askar_anggota: WaitinglistRecordInput["askar_anggota"] = null;
+  let askar_divisi_bapak: string | null = null;
+  let askar_divisi_ibu: string | null = null;
+  if (jalur_pendaftaran === "askar") {
+    if (!["bapak", "ibu", "keduanya"].includes(anggotaRaw)) {
+      throw new Error("Pilih anggota Asatidz/Karyawan: Bapak, Ibu, atau Bapak & Ibu.");
+    }
+    askar_anggota = anggotaRaw as NonNullable<WaitinglistRecordInput["askar_anggota"]>;
+    const division = (key: string, label: string) => {
+      const value = String(payload[key] ?? "").trim();
+      if (value.length > 120) throw new Error(`${label} maksimal 120 karakter.`);
+      return value || null;
+    };
+    if (askar_anggota === "bapak" || askar_anggota === "keduanya") {
+      askar_divisi_bapak = division("askar_divisi_bapak", "Divisi Karyawan Bapak");
+    }
+    if (askar_anggota === "ibu" || askar_anggota === "keduanya") {
+      askar_divisi_ibu = division("askar_divisi_ibu", "Divisi Karyawan Ibu");
+    }
+  }
+
   const nama_anak = requiredText(payload, "nama_anak", "Nama anak", 120);
   const jenis_kelamin = String(payload.jenis_kelamin ?? "").trim().toLowerCase();
   if (jenis_kelamin !== "putra" && jenis_kelamin !== "putri") {
@@ -210,6 +240,10 @@ export function validateWaitinglist(
   return {
     nama_ortu,
     status_ortu,
+    jalur_pendaftaran,
+    askar_anggota,
+    askar_divisi_bapak,
+    askar_divisi_ibu,
     nama_anak,
     jenis_kelamin,
     sekolah_asal: sekolah_asal || null,

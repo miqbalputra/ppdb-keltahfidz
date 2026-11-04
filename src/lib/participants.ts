@@ -75,6 +75,7 @@ export async function createParticipant(values: WaitinglistRecordInput, file: Fi
   try {
     await db.transaction(async tx => {
       await tx.insert(participants).values(encryptSensitiveRecord({ id, ...values,
+        jalur_pendaftaran: values.jalur_pendaftaran,
         umur_terhitung_bulan: String(values.umur_terhitung_bulan), bukti_transfer_mime: proof.mime, proof_id: proof.id,
         updated_at: values.created_at, updated_by: actor }));
       await tx.insert(participantProofs).values(proof);
@@ -99,6 +100,7 @@ export async function updateParticipant(id: string, payload: Record<string, unkn
       if (!proof) await readProof(stored);
       else await rememberLegacyProof(tx, stored);
       const updates: typeof participants.$inferInsert = encryptSensitiveRecord({ id, ...values, created_at: stored.created_at,
+        jalur_pendaftaran: values.jalur_pendaftaran,
         umur_terhitung_bulan: String(values.umur_terhitung_bulan), updated_at: new Date().toISOString(), updated_by: actor,
         version: stored.version + 1, ...(proof ? { proof_id: proof.id, bukti_transfer_mime: proof.mime,
           payment_status: "pending", payment_date: null, payment_reviewed_at: null, payment_reviewer: null, payment_note: null } : {}) });

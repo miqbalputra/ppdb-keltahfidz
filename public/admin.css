@@ -265,9 +265,11 @@ dialog[data-saving] .button[type="submit"]::after { content: ""; width: 14px; he
 .admin-page .button:focus-visible,
 .admin-page .dashboard-nav a:focus-visible,
 .admin-page .filter-options > summary:focus-visible { outline-offset: 2px; }
+.participant-path-badge { width: fit-content; margin-top: 6px; padding: 4px 7px; display: inline-block; color: #4e5d52; background: #edf1ed; border-radius: 4px; font-size: 9px; font-weight: 750; letter-spacing: .05em; }
+.participant-path-badge.is-askar { color: #624c20; background: #f5edd9; }
 
 @media (max-width: 1600px) {
-  .filter-primary-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .filter-primary-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); }
   .filter-primary-grid .search-field { grid-column: span 2; }
   .filter-groups { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .filter-group:first-child { grid-column: 1 / -1; }

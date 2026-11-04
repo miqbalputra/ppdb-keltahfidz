@@ -38,13 +38,16 @@
     statusBox.classList.toggle("email-warning", warning);
   }
 
+  const receivedMessage = result.jalurPendaftaran === "askar"
+    ? "Pendaftaran melalui Jalur Askar Tunas Ilmu diterima panitia."
+    : "Pendaftaran diterima panitia.";
   const emailStatus = result?.emailStatus;
   if (emailStatus === "sent") {
-    showEmailStatus("✉", "Pendaftaran diterima panitia. Informasi selanjutnya juga telah dikirim ke email yang didaftarkan.");
+    showEmailStatus("✉", `${receivedMessage} Informasi selanjutnya juga telah dikirim ke email yang didaftarkan.`);
   } else if (emailStatus === "failed") {
-    showEmailStatus("!", "Pendaftaran diterima panitia, tetapi email belum terkirim. Gunakan tautan grup di bawah atau pantau kontak yang didaftarkan.", true);
+    showEmailStatus("!", `${receivedMessage} Namun email belum terkirim. Gunakan tautan grup di bawah atau pantau kontak yang didaftarkan.`, true);
   } else {
-    showEmailStatus("✉", "Pendaftaran diterima panitia. Pemberitahuan email belum tersedia; gunakan tautan grup di bawah atau pantau kontak yang didaftarkan.", true);
+    showEmailStatus("✉", `${receivedMessage} Pemberitahuan email belum tersedia; gunakan tautan grup di bawah atau pantau kontak yang didaftarkan.`, true);
   }
 
   fetch("/api/config")

@@ -42,7 +42,7 @@ const server = createServer(async (request, response) => {
     return;
   }
 
-  const routeAliases = { "/": "/index.html", "/admin": "/admin.html", "/success": "/success.html" };
+  const routeAliases = { "/": "/index.html", "/askar": "/index.html", "/admin": "/admin.html", "/success": "/success.html" };
   const pathname = routeAliases[url.pathname] || decodeURIComponent(url.pathname);
   const filePath = resolve(publicDirectory, `.${pathname}`);
   if (!filePath.startsWith(publicDirectory + sep)) {

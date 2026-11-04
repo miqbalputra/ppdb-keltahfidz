@@ -82,6 +82,9 @@ const SESSION_HOURS = 4;
 const waitinglistBody = t.Object({
   nama_ortu: t.String({ minLength: 1, maxLength: 120 }),
   status_ortu: t.Union([t.Literal("bapak"), t.Literal("ibu")]),
+  askar_anggota: t.Optional(t.Union([t.Literal("bapak"), t.Literal("ibu"), t.Literal("keduanya")])),
+  askar_divisi_bapak: t.Optional(t.String({ maxLength: 120 })),
+  askar_divisi_ibu: t.Optional(t.String({ maxLength: 120 })),
   nama_anak: t.String({ minLength: 1, maxLength: 120 }),
   jenis_kelamin: t.Union([t.Literal("putra"), t.Literal("putri")]),
   sekolah_asal: t.Optional(t.String({ maxLength: 120 })),
@@ -127,6 +130,7 @@ function waitinglistFilterProperties() {
     tanggal_bayar_mulai: date(), tanggal_bayar_sampai: date(),
     q: t.Optional(t.String({ maxLength: 120 })),
     view: t.Optional(t.Union([t.Literal('active'), t.Literal('archived'), t.Literal('all')])),
+    jalur_pendaftaran: t.Optional(t.Union([t.Literal('all'), t.Literal('umum'), t.Literal('askar')])),
     sort: t.Optional(t.Union([t.Literal('newest'), t.Literal('oldest'), t.Literal('name'), t.Literal('age')])),
     page_size: t.Optional(t.Union([t.Literal('25'), t.Literal('50'), t.Literal('100')])),
     trend: t.Optional(t.Union([t.Literal('auto'), t.Literal('daily'), t.Literal('weekly'), t.Literal('monthly')])),
@@ -153,6 +157,7 @@ function lifecycleCondition(query: WaitinglistFilterQuery) {
 async function adminDataset(query: WaitinglistFilterQuery) {
   const bounds = registrationCreatedAtBounds(query);
   const conditions = [lifecycleCondition(query)];
+  if (query.jalur_pendaftaran && query.jalur_pendaftaran !== 'all') conditions.push(eq(calonSantriWaitinglist.jalur_pendaftaran, query.jalur_pendaftaran));
   if (query.payment_status && query.payment_status !== 'all') conditions.push(eq(calonSantriWaitinglist.payment_status, query.payment_status));
   if (query.payment_reviewer) conditions.push(eq(calonSantriWaitinglist.payment_reviewer, query.payment_reviewer));
   if (query.tanggal_bayar_mulai) conditions.push(gte(calonSantriWaitinglist.payment_date, query.tanggal_bayar_mulai));
@@ -170,6 +175,7 @@ function participantListDto(row: typeof calonSantriWaitinglist.$inferSelect) {
     nama_anak: participant.nama_anak,
     nama_ortu: participant.nama_ortu,
     status_ortu: participant.status_ortu,
+    jalur_pendaftaran: participant.jalur_pendaftaran || "umum",
     jenis_kelamin: participant.jenis_kelamin,
     sekolah_asal: participant.sekolah_asal,
     umur_terhitung_bulan: participant.umur_terhitung_bulan,
@@ -240,6 +246,10 @@ async function triggerN8n(recordId: string, values: WaitinglistRecordInput, grou
     id: recordId,
     nama_ortu: values.nama_ortu,
     status_ortu: values.status_ortu,
+    jalur_pendaftaran: values.jalur_pendaftaran,
+    askar_anggota: values.askar_anggota,
+    askar_divisi_bapak: values.askar_divisi_bapak,
+    askar_divisi_ibu: values.askar_divisi_ibu,
     nama_anak: values.nama_anak,
     no_hp_wa: values.no_hp_wa,
     email: values.email,
@@ -260,12 +270,55 @@ async function triggerN8n(recordId: string, values: WaitinglistRecordInput, grou
   }
 }
 
+async function submitPublicWaitinglist(
+  body: Record<string, unknown> & { bukti_transfer: File },
+  request: Request,
+  set: { status?: number | string },
+  route: "umum" | "askar",
+) {
+  if (!originIsSame(request)) {
+    set.status = 403;
+    return { error: "Permintaan lintas situs ditolak." };
+  }
+  const settings = await getSystemSettings();
+  if (!isRegistrationOpen(settings)) {
+    set.status = 403;
+    return { error: "Pendaftaran belum dibuka. Silakan kembali sesuai jadwal pembukaan." };
+  }
+  const ip = clientIp(request);
+  if (!allowedRate(`submit:${ip}`, 8, 10 * 60)) {
+    set.status = 429;
+    return { error: "Terlalu banyak percobaan. Silakan coba lagi beberapa menit." };
+  }
+  if (String(body.website ?? "").trim()) {
+    set.status = 201;
+    return { id: randomBytes(8).toString("hex"), emailStatus: "skipped" };
+  }
+  if (!await verifyTurnstile(String(body.turnstile_token ?? ""), ip)) {
+    set.status = 400;
+    return { error: "Verifikasi anti-spam gagal. Silakan coba lagi." };
+  }
+
+  let values: WaitinglistRecordInput;
+  try {
+    values = validateWaitinglist({ ...body, jalur_pendaftaran: route }, settings);
+  } catch (error) {
+    set.status = 400;
+    return { error: error instanceof Error ? error.message : "Data pendaftaran tidak valid." };
+  }
+
+  const { id } = await createParticipant(values, body.bukti_transfer, null);
+  const emailStatus = await triggerN8n(id, values, settings.whatsappGroupUrl);
+  set.status = 201;
+  return { id, emailStatus, whatsappGroupUrl: settings.whatsappGroupUrl, jalurPendaftaran: route };
+}
+
 export const app = new Elysia({ name: "spsb-waitinglist" })
   .onRequest(async ({ request, set }) => {
     await authorizeStaffRequest(request);
     const path = new URL(request.url).pathname;
     const isMultipart = request.headers.get("content-type")?.toLowerCase().startsWith("multipart/form-data");
-    const isProofUpload = ["POST", "PUT"].includes(request.method) && (path === "/api/waitinglist" || /^\/api\/admin\/waitinglist(?:\/[a-f0-9]{32})?$/.test(path)) && isMultipart;
+    const isProofUpload = ["POST", "PUT"].includes(request.method) && (path === "/api/waitinglist" || path === "/api/waitinglist/askar" || /^\/api\/admin\/waitinglist(?:\/[a-f0-9]{32})?$/.test(path)) && isMultipart;
     const isBrochureUpload = request.method === "POST" && path === "/api/admin/brochure" && isMultipart;
     const maxBytes = isBrochureUpload ? MAX_BROCHURE_REQUEST_BYTES : isProofUpload ? MAX_UPLOAD_REQUEST_BYTES : MAX_REQUEST_BYTES;
     const contentLength = Number(request.headers.get("content-length") ?? 0);
@@ -315,6 +368,7 @@ export const app = new Elysia({ name: "spsb-waitinglist" })
     return { error: "Terjadi kesalahan. Silakan coba kembali." };
   })
   .get("/", () => Bun.file(join(PUBLIC_DIR, "index.html")))
+  .get("/askar", () => Bun.file(join(PUBLIC_DIR, "index.html")))
   .get("/admin", () => Bun.file(join(PUBLIC_DIR, "admin.html")))
   .get("/success", () => Bun.file(join(PUBLIC_DIR, "success.html")))
   .get("/app.css", () => Bun.file(join(PUBLIC_DIR, "app.css")))
@@ -397,43 +451,8 @@ export const app = new Elysia({ name: "spsb-waitinglist" })
     params: t.Object({ level: t.String({ maxLength: 24 }) }),
     query: t.Object({ parent_id: t.Optional(t.String({ maxLength: 20 })) }),
   })
-  .post("/api/waitinglist", async ({ body, request, set }) => {
-    if (!originIsSame(request)) {
-      set.status = 403;
-      return { error: "Permintaan lintas situs ditolak." };
-    }
-    const settings = await getSystemSettings();
-    if (!isRegistrationOpen(settings)) {
-      set.status = 403;
-      return { error: "Pendaftaran belum dibuka. Silakan kembali sesuai jadwal pembukaan." };
-    }
-    const ip = clientIp(request);
-    if (!allowedRate(`submit:${ip}`, 8, 10 * 60)) {
-      set.status = 429;
-      return { error: "Terlalu banyak percobaan. Silakan coba lagi beberapa menit." };
-    }
-    if (String(body.website ?? "").trim()) {
-      set.status = 201;
-      return { id: randomBytes(8).toString("hex"), emailStatus: "skipped" };
-    }
-    if (!await verifyTurnstile(String(body.turnstile_token ?? ""), ip)) {
-      set.status = 400;
-      return { error: "Verifikasi anti-spam gagal. Silakan coba lagi." };
-    }
-
-    let values: WaitinglistRecordInput;
-    try {
-      values = validateWaitinglist(body, settings);
-    } catch (error) {
-      set.status = 400;
-      return { error: error instanceof Error ? error.message : "Data pendaftaran tidak valid." };
-    }
-
-    const { id } = await createParticipant(values, body.bukti_transfer, null);
-    const emailStatus = await triggerN8n(id, values, settings.whatsappGroupUrl);
-    set.status = 201;
-    return { id, emailStatus, whatsappGroupUrl: settings.whatsappGroupUrl };
-  }, { body: waitinglistBody })
+  .post("/api/waitinglist", ({ body, request, set }) => submitPublicWaitinglist(body, request, set, "umum"), { body: waitinglistBody })
+  .post("/api/waitinglist/askar", ({ body, request, set }) => submitPublicWaitinglist(body, request, set, "askar"), { body: waitinglistBody })
   .get("/api/admin/me", async ({ request }) => {
     const session = await getAdminSession(request);
     return { authenticated: Boolean(session), username: session?.username ?? null, csrfToken: session?.csrfToken ?? null, user: session?.user ?? null, role: session?.user.role ?? null, permissions: session?.user.permissions ?? [] };
@@ -761,14 +780,16 @@ export const app = new Elysia({ name: "spsb-waitinglist" })
     }
     const rows = (await adminDataset(query)).map(row => decryptSensitiveRecord(row));
     const output: string[][] = [[
-      "ID", "Nama Anak", "Jenis Kelamin", "Sekolah Asal", "Tanggal Lahir", "Umur Tercatat Saat Daftar (bulan)",
+      "ID", "Jalur Pendaftaran", "Anggota Asatidz/Karyawan Tunas Ilmu", "Divisi Karyawan Bapak", "Divisi Karyawan Ibu", "Nama Anak", "Jenis Kelamin", "Sekolah Asal", "Tanggal Lahir", "Umur Tercatat Saat Daftar (bulan)",
       "Status Kelayakan", "Persetujuan Ketentuan Biaya", "Nama Orang Tua", "Status Orang Tua", "Provinsi", "Kabupaten/Kota",
       "Kecamatan", "Desa/Kelurahan", "WhatsApp", "Email", "Tanggal Submit",
       'Persetujuan Data', 'Konfirmasi Lampiran', 'Metadata Lampiran', 'Status Data', 'Waktu Arsip', 'Diarsipkan Oleh', 'Status pembayaran', 'Tanggal bayar', 'Nominal tervalidasi (Rp)', 'Pemeriksa', 'Waktu pemeriksaan', 'Catatan pembayaran',
     ]];
     for (const row of rows) {
       output.push([
-        csvSafe(row.id), csvSafe(row.nama_anak),
+        csvSafe(row.id), row.jalur_pendaftaran === 'askar' ? 'Jalur Askar' : 'Jalur umum',
+        ({ bapak: 'Bapak', ibu: 'Ibu', keduanya: 'Bapak & Ibu' } as Record<string, string>)[row.askar_anggota || ''] || '',
+        csvSafe(row.askar_divisi_bapak || ''), csvSafe(row.askar_divisi_ibu || ''), csvSafe(row.nama_anak),
         csvSafe(row.jenis_kelamin === "putra" ? "Putra" : row.jenis_kelamin === "putri" ? "Putri" : "Belum dicatat"),
         csvSafe(row.sekolah_asal || ""), csvSafe(row.tanggal_lahir_anak), Number.isFinite(row.umur_terhitung_bulan) ? String(row.umur_terhitung_bulan) : 'Belum tercatat', csvSafe(row.status_eligibility),
         csvSafe(row.konfirmasi_ketentuan_biaya === 1 ? "Setuju" : "Belum dicatat"), csvSafe(row.nama_ortu),

@@ -71,7 +71,7 @@ export function buildWaitinglistReport(rows: EncryptedWaitinglistReportRow[], qu
   const gender = { putra: 0, putri: 0, unrecorded: 0 };
   const eligibilityAtSubmission = { eligible: 0, notEligible: 0, unrecorded: 0 };
   const districts = new Map<string, { district: string; regency: string; province: string; total: number }>();
-  const maps = Object.fromEntries(['provinsi', 'kabupaten', 'kecamatan', 'sekolah', 'usia', 'orangTua', 'gender', 'eligibility'].map(key => [key, new Map<string, Breakdown>()]));
+  const maps = Object.fromEntries(['provinsi', 'kabupaten', 'kecamatan', 'sekolah', 'usia', 'orangTua', 'gender', 'eligibility', 'jalur'].map(key => [key, new Map<string, Breakdown>()]));
   const add = (kind: string, key: string, label: string, filter?: WaitinglistFilterQuery) => {
     const map = maps[kind]!;
     const value = map.get(key) ?? { label, total: 0, percent: 0, filter };
@@ -97,6 +97,8 @@ export function buildWaitinglistReport(rows: EncryptedWaitinglistReportRow[], qu
     add('usia', age, ages[age]!, { age_group: age });
     const parent = dec('status_ortu');
     add('orangTua', parent, parent === 'bapak' ? 'Bapak' : parent === 'ibu' ? 'Ibu' : parent || 'Belum tercatat');
+    const route = row.jalur_pendaftaran === 'askar' ? 'askar' : 'umum';
+    add('jalur', route, route === 'askar' ? 'Jalur Askar' : 'Jalur umum', { jalur_pendaftaran: route });
     add('gender', ['putra', 'putri'].includes(g) ? g : 'unknown', g === 'putra' ? 'Putra' : g === 'putri' ? 'Putri' : 'Belum tercatat', g === 'putra' || g === 'putri' ? { jenis_kelamin: g } : { missing: 'gender' });
     add('eligibility', ['eligible', 'not_eligible'].includes(e) ? e : 'unknown', e === 'eligible' ? 'Memenuhi saat daftar' : e === 'not_eligible' ? 'Belum memenuhi saat daftar' : 'Belum tercatat', ['eligible', 'not_eligible'].includes(e) ? { status: e } : undefined);
     const missing = missingRecordFields(row);

@@ -1,6 +1,7 @@
 (() => {
   const form = document.querySelector("#waitinglist-form");
   if (!form) return;
+  const isAskarRoute = window.location.pathname.replace(/\/$/, "") === "/askar";
 
   const alertBox = document.querySelector("#form-alert");
   const validationSummary = document.querySelector("#validation-summary");
@@ -15,6 +16,8 @@
   const paymentProofInput = form.elements.bukti_transfer;
   const paymentProofFilename = document.querySelector("#bukti-transfer-filename");
   const regionSelects = [...form.querySelectorAll("select[data-region]")];
+  const askarSection = document.querySelector("#askar-form-section");
+  const askarMemberInputs = [...form.querySelectorAll('input[name="askar_anggota"]')];
   let config = null;
   let turnstileToken = "";
   let turnstileWidgetId = null;
@@ -40,11 +43,42 @@
     desa: "Desa / Kelurahan",
     no_hp_wa: "Nomor WhatsApp",
     email: "Email orang tua",
+    askar_anggota: "Anggota Asatidz/Karyawan Tunas Ilmu",
     konfirmasi_bukti_transfer: "Konfirmasi bukti transfer",
     bukti_transfer: "Bukti transfer",
     konfirmasi_data: "Konfirmasi data",
     konfirmasi_ketentuan_biaya: "Persetujuan ketentuan biaya pendaftaran",
   };
+
+  function updateAskarDivisionFields() {
+    if (!isAskarRoute) return;
+    const member = form.querySelector('input[name="askar_anggota"]:checked')?.value || "";
+    const showFather = member === "bapak" || member === "keduanya";
+    const showMother = member === "ibu" || member === "keduanya";
+    document.querySelector("#askar-division-fields").hidden = !member;
+    document.querySelector("#askar-father-division-field").hidden = !showFather;
+    document.querySelector("#askar-mother-division-field").hidden = !showMother;
+  }
+
+  function configureRegistrationRoute() {
+    if (!isAskarRoute) return;
+    document.body.classList.add("askar-route");
+    document.title = "Jalur Askar Tunas Ilmu — Pendaftaran SPSB 2027";
+    const registrationLink = document.querySelector("#registration-link");
+    registrationLink.href = "/";
+    registrationLink.innerHTML = 'Pendaftaran umum <span aria-hidden="true">↗</span>';
+    document.querySelector("#hero-kicker").textContent = "JALUR KHUSUS ASATIDZ & KARYAWAN";
+    document.querySelector("#hero-lede").textContent = "Formulir khusus Jalur Asatidz dan Karyawan (Askar) Tunas Ilmu. Lengkapi data pendaftaran Ananda dan keterangan keluarga yang menjadi bagian dari Tunas Ilmu.";
+    document.querySelector("#askar-entry-link").hidden = true;
+    document.querySelector("#form-aside-title").innerHTML = 'Jalur <em>Askar.</em>';
+    document.querySelector("#form-aside-copy").textContent = "Pendaftaran khusus keluarga Asatidz dan Karyawan Tunas Ilmu. Formulir dan ketentuan pendaftaran lainnya tetap mengikuti SPSB 2027.";
+    document.querySelector("#form-route-kicker").textContent = "JALUR KHUSUS ASATIDZ & KARYAWAN · SPSB 2027";
+    document.querySelector("#form-title").textContent = "Data calon santri — Jalur Askar";
+    askarSection.hidden = false;
+    askarMemberInputs[0].required = true;
+    document.querySelector("#countdown-route-note").hidden = false;
+    updateAskarDivisionFields();
+  }
 
   const regionLevels = ["provinces", "regencies", "districts", "villages"];
   const labels = {
@@ -249,11 +283,14 @@
     const panel = document.querySelector("#inline-success");
     const message = document.querySelector("#inline-success-message");
     const groupLink = document.querySelector("#inline-group-link");
+    const receivedMessage = result.jalurPendaftaran === "askar"
+      ? "Pendaftaran melalui Jalur Askar Tunas Ilmu diterima panitia."
+      : "Pendaftaran diterima panitia.";
     message.textContent = result.emailStatus === "sent"
-      ? "Pendaftaran diterima panitia. Informasi selanjutnya juga telah dikirim ke email yang didaftarkan."
+      ? `${receivedMessage} Informasi selanjutnya juga telah dikirim ke email yang didaftarkan.`
       : result.emailStatus === "failed"
-        ? "Pendaftaran diterima panitia, tetapi email belum terkirim. Gunakan tautan grup di bawah atau pantau kontak yang didaftarkan."
-        : "Pendaftaran diterima panitia. Pemberitahuan email belum tersedia; gunakan tautan grup di bawah atau pantau kontak yang didaftarkan.";
+        ? `${receivedMessage} Namun email belum terkirim. Gunakan tautan grup di bawah atau pantau kontak yang didaftarkan.`
+        : `${receivedMessage} Pemberitahuan email belum tersedia; gunakan tautan grup di bawah atau pantau kontak yang didaftarkan.`;
     if (result.whatsappGroupUrl) {
       groupLink.href = result.whatsappGroupUrl;
       groupLink.hidden = false;
@@ -457,6 +494,7 @@
   }
 
   async function initialize() {
+    configureRegistrationRoute();
     try {
       const response = await fetch("/api/config");
       if (!response.ok) throw new Error("Konfigurasi belum dapat dimuat.");
@@ -488,6 +526,7 @@
   });
   form.elements.nama_ortu.addEventListener("input", updateNameValidity);
   form.elements.nama_anak.addEventListener("input", updateNameValidity);
+  askarMemberInputs.forEach((input) => input.addEventListener("change", () => { updateAskarDivisionFields(); updateSubmitState(); }));
   form.addEventListener("input", updateSubmitState);
   form.addEventListener("change", updateSubmitState);
 
@@ -635,6 +674,11 @@
       konfirmasi_ketentuan_biaya: form.elements.konfirmasi_ketentuan_biaya.checked,
       turnstile_token: turnstileToken,
     };
+    if (isAskarRoute) {
+      payload.askar_anggota = form.querySelector('input[name="askar_anggota"]:checked')?.value || "";
+      payload.askar_divisi_bapak = form.elements.askar_divisi_bapak.value.trim();
+      payload.askar_divisi_ibu = form.elements.askar_divisi_ibu.value.trim();
+    }
     for (const key of ["provinsi", "kabupaten", "kecamatan", "desa"]) {
       const select = form.elements[key];
       payload[`${key}_id`] = select.value;
@@ -650,7 +694,7 @@
         formData.append(key, typeof value === "boolean" ? String(value) : String(value ?? ""));
       }
       formData.append("bukti_transfer", paymentProofInput.files[0]);
-      const response = await fetch("/api/waitinglist", {
+      const response = await fetch(isAskarRoute ? "/api/waitinglist/askar" : "/api/waitinglist", {
         method: "POST",
         body: formData,
       });
