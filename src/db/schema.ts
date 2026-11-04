@@ -100,3 +100,36 @@ export const auditEvents = mysqlTable("audit_events", {
   payload: text("payload").notNull(),
   created_at: varchar("created_at", { length: 32 }).notNull(),
 }, table => [index("idx_audit_subject").on(table.subject_id, table.created_at)]);
+
+export const paymentReceiptAttempts = mysqlTable("payment_receipt_attempts", {
+  id: varchar("id", { length: 32 }).primaryKey(),
+  participant_id: varchar("participant_id", { length: 32 }).notNull().references(() => calonSantriWaitinglist.id),
+  proof_id: varchar("proof_id", { length: 32 }).notNull(),
+  participant_version: int("participant_version", { unsigned: true }).notNull(),
+  status: varchar("status", { length: 32 }).notNull().default("queued"),
+  method: varchar("method", { length: 16 }),
+  execution_id: varchar("execution_id", { length: 80 }),
+  gmail_message_id: varchar("gmail_message_id", { length: 160 }),
+  last_error: text("last_error"),
+  created_at: varchar("created_at", { length: 32 }).notNull(),
+  updated_at: varchar("updated_at", { length: 32 }).notNull(),
+  sent_at: varchar("sent_at", { length: 32 }),
+}, table => [
+  index("idx_receipt_attempt_participant").on(table.participant_id, table.created_at),
+  index("idx_receipt_attempt_status").on(table.status, table.updated_at),
+  index("idx_receipt_attempt_proof").on(table.proof_id, table.participant_version),
+]);
+
+export const paymentReceiptEvents = mysqlTable("payment_receipt_events", {
+  id: varchar("id", { length: 32 }).primaryKey(),
+  attempt_id: varchar("attempt_id", { length: 32 }).notNull().references(() => paymentReceiptAttempts.id),
+  participant_id: varchar("participant_id", { length: 32 }).notNull().references(() => calonSantriWaitinglist.id),
+  event: varchar("event", { length: 40 }).notNull(),
+  actor: varchar("actor", { length: 120 }).notNull(),
+  execution_id: varchar("execution_id", { length: 80 }),
+  payload: text("payload").notNull(),
+  created_at: varchar("created_at", { length: 32 }).notNull(),
+}, table => [
+  index("idx_receipt_event_attempt").on(table.attempt_id, table.created_at),
+  index("idx_receipt_event_participant").on(table.participant_id, table.created_at),
+]);

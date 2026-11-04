@@ -17,6 +17,7 @@ import {
   MAX_REQUEST_BYTES,
   MAX_UPLOAD_REQUEST_BYTES,
   N8N_WEBHOOK_URL,
+  N8N_PAYMENT_WEBHOOK_URL,
   NODE_ENV,
   PORT,
   TURNSTILE_ENABLED,
@@ -36,6 +37,8 @@ import {
 } from "./lib/auth";
 import { getStaffSession, authenticateStaff, revokeSession, seedStaffAdmin, type StaffSession } from "./lib/staff-auth";
 import { adminManagementRoutes, authorizeStaffRequest } from "./lib/admin-routes";
+import { acceptManualPaymentApproval, acceptOcrPaymentVerification, queuePaymentProofCheck } from "./lib/payment-verification";
+import { recordPaymentReceiptEvent } from "./lib/payment-receipt-logs";
 import { ServiceError } from "./lib/admin-common";
 import { createParticipant, readProof, changeLifecycle, validVersion } from "./lib/participants";
 import { getRegions } from "./lib/regions";
@@ -308,9 +311,12 @@ async function submitPublicWaitinglist(
   }
 
   const { id } = await createParticipant(values, body.bukti_transfer, null);
-  const emailStatus = await triggerN8n(id, values, settings.whatsappGroupUrl);
+  const [emailStatus, paymentVerificationStatus] = await Promise.all([
+    triggerN8n(id, values, settings.whatsappGroupUrl),
+    queuePaymentProofCheck(id, request.url),
+  ]);
   set.status = 201;
-  return { id, emailStatus, whatsappGroupUrl: settings.whatsappGroupUrl, jalurPendaftaran: route };
+  return { id, emailStatus, paymentVerificationStatus, whatsappGroupUrl: settings.whatsappGroupUrl, jalurPendaftaran: route };
 }
 
 export const app = new Elysia({ name: "spsb-waitinglist" })
@@ -453,6 +459,49 @@ export const app = new Elysia({ name: "spsb-waitinglist" })
   })
   .post("/api/waitinglist", ({ body, request, set }) => submitPublicWaitinglist(body, request, set, "umum"), { body: waitinglistBody })
   .post("/api/waitinglist/askar", ({ body, request, set }) => submitPublicWaitinglist(body, request, set, "askar"), { body: waitinglistBody })
+  .post("/api/internal/payment-verification/:id", async ({ params, body }) => {
+    return acceptOcrPaymentVerification(params.id, body);
+  }, {
+    params: t.Object({ id: t.String({ pattern: "^[a-f0-9]{32}$" }) }),
+    body: t.Object({
+      version: t.Integer({ minimum: 1 }),
+      proof_id: t.String({ pattern: "^[a-f0-9]{32}$" }),
+      signature: t.String({ pattern: "^[a-f0-9]{64}$" }),
+      amount: t.Number(),
+      payment_date: t.String({ minLength: 10, maxLength: 10, pattern: "^\\d{4}-\\d{2}-\\d{2}$" }),
+      receipt_attempt_id: t.String({ pattern: "^[a-f0-9]{32}$" }),
+      receipt_signature: t.String({ pattern: "^[a-f0-9]{64}$" }),
+      execution_id: t.Optional(t.String({ minLength: 1, maxLength: 80 })),
+    }),
+  })
+  .post("/api/internal/payment-manual-approval/:id", async ({ params, body }) => {
+    return acceptManualPaymentApproval(params.id, body);
+  }, {
+    params: t.Object({ id: t.String({ pattern: "^[a-f0-9]{32}$" }) }),
+    body: t.Object({
+      version: t.Integer({ minimum: 1 }),
+      proof_id: t.String({ pattern: "^[a-f0-9]{32}$" }),
+      signature: t.String({ pattern: "^[a-f0-9]{64}$" }),
+      payment_date: t.Optional(t.String({ minLength: 10, maxLength: 10, pattern: "^\\d{4}-\\d{2}-\\d{2}$" })),
+      receipt_attempt_id: t.String({ pattern: "^[a-f0-9]{32}$" }),
+      receipt_signature: t.String({ pattern: "^[a-f0-9]{64}$" }),
+      execution_id: t.Optional(t.String({ minLength: 1, maxLength: 80 })),
+    }),
+  })
+  .post("/api/internal/payment-receipt-log/:id", ({ params, body }) => recordPaymentReceiptEvent(params.id, body), {
+    params: t.Object({ id: t.String({ pattern: "^[a-f0-9]{32}$" }) }),
+    body: t.Object({
+      attempt_id: t.String({ pattern: "^[a-f0-9]{32}$" }),
+      version: t.Integer({ minimum: 1 }),
+      proof_id: t.String({ pattern: "^[a-f0-9]{32}$" }),
+      signature: t.String({ pattern: "^[a-f0-9]{64}$" }),
+      event: t.Union([t.Literal("telegram_proof_sent"), t.Literal("telegram_proof_failed"), t.Literal("manual_review_required"), t.Literal("manual_review_not_approved"), t.Literal("email_sent"), t.Literal("email_failed")]),
+      method: t.Optional(t.Union([t.Literal("ocr"), t.Literal("telegram")])),
+      execution_id: t.String({ minLength: 1, maxLength: 80 }),
+      message_id: t.Optional(t.String({ maxLength: 160 })),
+      detail: t.Optional(t.String({ maxLength: 2000 })),
+    }),
+  })
   .get("/api/admin/me", async ({ request }) => {
     const session = await getAdminSession(request);
     return { authenticated: Boolean(session), username: session?.username ?? null, csrfToken: session?.csrfToken ?? null, user: session?.user ?? null, role: session?.user.role ?? null, permissions: session?.user.permissions ?? [] };
@@ -494,7 +543,12 @@ export const app = new Elysia({ name: "spsb-waitinglist" })
     const base = {
       app: { status: "online", runtime: `Bun ${Bun.version}`, uptimeSeconds: Math.floor(process.uptime()) },
       database: { status: "offline" as "offline" | "online" },
-      integrations: { n8nConfigured: Boolean(N8N_WEBHOOK_URL), turnstileEnabled: TURNSTILE_ENABLED },
+      integrations: {
+        n8nConfigured: Boolean(N8N_WEBHOOK_URL),
+        paymentVerificationConfigured: Boolean(N8N_PAYMENT_WEBHOOK_URL),
+        paymentReceiptConfigured: Boolean(N8N_PAYMENT_WEBHOOK_URL),
+        turnstileEnabled: TURNSTILE_ENABLED,
+      },
       settings: null as SystemSettings | null,
       settingsUpdatedAt: null as string | null,
     };

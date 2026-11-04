@@ -157,9 +157,12 @@
       setSystemStatus("#system-app-status", result.app.status === "online", result.app.status === "online" ? "Berjalan" : "Tidak aktif");
       setSystemStatus("#system-db-status", result.database.status === "online", result.database.status === "online" ? "Terhubung" : "Terputus");
       setSystemStatus("#system-n8n-status", result.integrations.n8nConfigured, result.integrations.n8nConfigured ? "Dikonfigurasi" : "Belum diatur");
+      const paymentAiConfigured = result.integrations.paymentVerificationConfigured ?? result.integrations.paymentReceiptConfigured;
+      setSystemStatus("#system-receipt-status", paymentAiConfigured, paymentAiConfigured ? "Dikonfigurasi" : "Belum diatur");
       setSystemStatus("#system-turnstile-status", result.integrations.turnstileEnabled, result.integrations.turnstileEnabled ? "Aktif" : "Nonaktif");
       document.querySelector("#system-runtime").textContent = `${result.app.runtime} · aktif ${Math.floor(result.app.uptimeSeconds / 60)} menit`;
       document.querySelector("#system-n8n-detail").textContent = result.integrations.n8nConfigured ? "Webhook diatur di environment Coolify" : "Atur URL webhook melalui environment Coolify";
+      document.querySelector("#system-receipt-detail").textContent = paymentAiConfigured ? "Bukti diperiksa AI; nominal Rp150.000 mengirim invoice HTML" : "Atur N8N_PAYMENT_WEBHOOK_URL di environment Coolify";
       if (settingsDirty) {
         settingsUpdated.textContent = "Perubahan lokal belum disimpan · formulir dipertahankan";
       } else {
@@ -472,6 +475,134 @@
       total.textContent = new Intl.NumberFormat("id-ID").format(area.total);
       item.append(name, total);
       list.append(item);
+    }
+  }
+
+  let receiptLogPage = 1;
+  let receiptLogPages = 1;
+  let receiptLogRequestId = 0;
+  let receiptLogSearchTimer = 0;
+  const receiptEventLabels = {
+    queued: 'Masuk antrean pemeriksaan',
+    not_configured: 'Workflow belum dikonfigurasi',
+    queue_failed: 'Gagal mengirim ke workflow',
+    telegram_proof_sent: 'Bukti berhasil dikirim ke Telegram',
+    telegram_proof_failed: 'Gagal mengirim bukti ke Telegram',
+    manual_review_required: 'Dikirim untuk pemeriksaan manual',
+    manual_review_not_approved: 'Tanda terima tidak disetujui',
+    payment_verified_ocr: 'Pembayaran diverifikasi OCR',
+    payment_verified_manual: 'Pembayaran disetujui panitia',
+    email_sent: 'Gmail menerima permintaan kirim',
+    email_failed: 'Gmail gagal mengirim',
+  };
+  const receiptStatusLabels = {
+    queued: 'Dalam antrean', not_configured: 'Workflow belum diatur', failed: 'Gagal',
+    waiting_approval: 'Menunggu pemeriksaan manual', not_approved: 'Tidak disetujui', payment_verified: 'Pembayaran diverifikasi', sent: 'Email terkirim',
+  };
+
+  function addReceiptLogValue(parent, label, value) {
+    if (!value) return;
+    const row = document.createElement('div'); row.className = 'receipt-log-value';
+    const key = document.createElement('span'); key.textContent = label;
+    const content = document.createElement('strong'); content.textContent = value;
+    row.append(key, content); parent.append(row);
+  }
+
+  function renderReceiptLogSummary(summary, total) {
+    const container = document.querySelector('#receipt-logs-summary'); container.replaceChildren();
+    const entries = [
+      ['Total hasil', total], ['Email terkirim', summary.sent || 0],
+      ['Menunggu manual', summary.waiting_approval || 0], ['Tidak disetujui', summary.not_approved || 0], ['Gagal', summary.failed || 0],
+    ];
+    for (const [label, value] of entries) {
+      const card = document.createElement('article'); card.className = 'receipt-log-stat';
+      const title = document.createElement('span'); title.textContent = label;
+      const count = document.createElement('strong'); count.textContent = new Intl.NumberFormat('id-ID').format(value);
+      card.append(title, count); container.append(card);
+    }
+  }
+
+  function renderReceiptLogs(items) {
+    const container = document.querySelector('#receipt-logs-list'); container.replaceChildren();
+    if (!items.length) {
+      const empty = document.createElement('div'); empty.className = 'receipt-log-empty';
+      empty.textContent = 'Belum ada log pada filter ini. Log baru muncul setelah bukti transfer masuk ke antrean pemeriksaan.';
+      container.append(empty); return;
+    }
+    for (const item of items) {
+      const card = document.createElement('article'); card.className = 'receipt-log-card';
+      const heading = document.createElement('div'); heading.className = 'receipt-log-card-heading';
+      const identity = document.createElement('div');
+      const name = document.createElement('h3'); name.textContent = item.nama_anak || 'Pendaftar';
+      const contact = document.createElement('p'); contact.textContent = [item.nama_ortu, item.email].filter(Boolean).join(' · ') || item.participant_id;
+      identity.append(name, contact);
+      const badge = document.createElement('span'); badge.className = `receipt-log-status ${item.status || ''}`;
+      badge.textContent = receiptStatusLabels[item.status] || item.status || 'Status belum diketahui';
+      heading.append(identity, badge); card.append(heading);
+      const metadata = document.createElement('div'); metadata.className = 'receipt-log-metadata';
+      addReceiptLogValue(metadata, 'Jalur', item.jalur_pendaftaran === 'askar' ? 'Askar Tunas Ilmu' : 'Umum');
+      addReceiptLogValue(metadata, 'Pemeriksaan', item.method === 'ocr' ? 'OCR otomatis' : item.method === 'telegram' ? 'Telegram / manual' : 'Belum ditentukan');
+      addReceiptLogValue(metadata, 'Cakupan data', item.archived ? 'Peserta diarsipkan' : 'Peserta aktif');
+      addReceiptLogValue(metadata, 'Dibuat', `${formatDate(item.created_at, true)} WIB`);
+      addReceiptLogValue(metadata, 'Terakhir diperbarui', `${formatDate(item.updated_at, true)} WIB`);
+      addReceiptLogValue(metadata, 'Email terkirim', item.sent_at ? `${formatDate(item.sent_at, true)} WIB` : 'Belum terkirim');
+      addReceiptLogValue(metadata, 'ID eksekusi n8n', item.execution_id || 'Belum tercatat');
+      addReceiptLogValue(metadata, 'ID pesan Gmail', item.gmail_message_id || 'Belum tersedia');
+      addReceiptLogValue(metadata, 'ID percobaan', item.id);
+      card.append(metadata);
+      if (item.proof_id) {
+        const proof = document.createElement('a'); proof.className = 'receipt-log-proof-link';
+        proof.href = `/api/admin/waitinglist/${encodeURIComponent(item.participant_id)}/proof?version=${encodeURIComponent(item.proof_id)}`;
+        proof.target = '_blank'; proof.rel = 'noopener'; proof.textContent = 'Buka bukti transfer yang diperiksa ↗';
+        card.append(proof);
+      }
+      if (item.last_error) {
+        const error = document.createElement('p'); error.className = 'receipt-log-error'; error.textContent = `Detail kendala: ${item.last_error}`; card.append(error);
+      }
+      const timelineTitle = document.createElement('h4'); timelineTitle.className = 'receipt-log-timeline-title'; timelineTitle.textContent = 'Riwayat proses'; card.append(timelineTitle);
+      const timeline = document.createElement('ol'); timeline.className = 'receipt-log-timeline';
+      for (const event of item.events || []) {
+        const entry = document.createElement('li');
+        const title = document.createElement('strong'); title.textContent = receiptEventLabels[event.event] || event.event;
+        const time = document.createElement('time'); time.dateTime = event.created_at; time.textContent = `${formatDate(event.created_at, true)} WIB · ${event.actor || 'Sistem'}`;
+        entry.append(title, time);
+        if (event.execution_id) { const execution = document.createElement('small'); execution.textContent = `ID eksekusi: ${event.execution_id}`; entry.append(execution); }
+        if (event.detail) { const detail = document.createElement('p'); detail.textContent = event.detail; entry.append(detail); }
+        timeline.append(entry);
+      }
+      if (!item.events?.length) { const empty = document.createElement('li'); empty.textContent = 'Belum ada riwayat proses.'; timeline.append(empty); }
+      card.append(timeline); container.append(card);
+    }
+  }
+
+  async function loadReceiptLogs() {
+    const requestId = ++receiptLogRequestId;
+    const container = document.querySelector('#receipt-logs-list');
+    const alert = document.querySelector('#receipt-logs-alert');
+    container.setAttribute('aria-busy', 'true');
+    showAlert(alert, 'Memuat riwayat tanda terima…', 'info');
+    const params = new URLSearchParams({ page: String(receiptLogPage), page_size: '25', status: document.querySelector('#receipt-log-status-filter').value, method: document.querySelector('#receipt-log-method-filter').value });
+    const search = document.querySelector('#receipt-log-search').value.trim(); if (search) params.set('q', search);
+    try {
+      const result = await api(`/api/admin/receipt-logs?${params}`);
+      if (requestId !== receiptLogRequestId || dashboard.hidden) return;
+      receiptLogPage = result.page; receiptLogPages = result.pages;
+      renderReceiptLogSummary(result.summary || {}, result.total || 0);
+      renderReceiptLogs(result.items || []);
+      document.querySelector('#receipt-log-page').textContent = `${new Intl.NumberFormat('id-ID').format(result.total || 0)} percobaan tanda terima`;
+      document.querySelector('#receipt-log-page-indicator').textContent = `${receiptLogPage} / ${receiptLogPages}`;
+      document.querySelector('#receipt-log-prev').disabled = receiptLogPage <= 1;
+      document.querySelector('#receipt-log-next').disabled = receiptLogPage >= receiptLogPages;
+      showAlert(alert, '');
+    } catch (error) {
+      if (requestId !== receiptLogRequestId) return;
+      renderReceiptLogSummary({}, 0);
+      renderReceiptLogs([]);
+      document.querySelector('#receipt-log-page').textContent = 'Log tidak tersedia';
+      document.querySelector('#receipt-log-page-indicator').textContent = '—';
+      showAlert(alert, `Log gagal dimuat: ${error.message}`);
+    } finally {
+      if (requestId === receiptLogRequestId) container.setAttribute('aria-busy', 'false');
     }
   }
 
@@ -810,13 +941,14 @@
   let lastOptionsView = '';
   let optionsRequestId = 0;
   let regionOptions = [];
-  const pagePanels = { pembayaran: ['payments-panel', 'waitinglist-panel'], akun: ['users-panel'], ringkasan: ['reports-panel'], peserta: ['waitinglist-panel'], analitik: ['analytics-panel'], arsip: ['waitinglist-panel'], pengaturan: ['settings-panel', 'brochure-panel', 'system-panel'] };
+  const pagePanels = { pembayaran: ['payments-panel', 'waitinglist-panel'], struk: ['receipt-logs-panel'], akun: ['users-panel'], ringkasan: ['reports-panel'], peserta: ['waitinglist-panel'], analitik: ['analytics-panel'], arsip: ['waitinglist-panel'], pengaturan: ['settings-panel', 'brochure-panel', 'system-panel'] };
 
   function navigate(focus = true) {
     const requested = (window.location.hash || '#ringkasan').slice(1);
     activePage = Object.hasOwn(pagePanels, requested) ? requested : 'ringkasan';
     if (staffUser.role !== 'admin' && ['akun', 'pengaturan'].includes(activePage)) activePage = 'pembayaran';
     if (activePage === 'akun') loadUsers();
+    if (activePage === 'struk') loadReceiptLogs();
     if (activePage === 'pengaturan' && !configurationLoaded) { configurationLoaded = true; loadSystem(); loadBrochure(); }
     if (activePage === 'peserta' || activePage === 'arsip' || activePage === 'pembayaran') {
       const next = activePage === 'pembayaran' ? (previousNavigationPage === 'pembayaran' ? currentView : 'all') : activePage === 'arsip' ? 'archived' : (currentView === 'archived' ? 'active' : currentView);
@@ -829,7 +961,7 @@
     }
     for (const id of new Set(Object.values(pagePanels).flat())) document.querySelector(`#${id}`).hidden = !pagePanels[activePage].includes(id);
     previousNavigationPage = activePage;
-    document.querySelector('.workspace-filters').hidden = ['pengaturan', 'akun'].includes(activePage);
+    document.querySelector('.workspace-filters').hidden = ['pengaturan', 'akun', 'struk'].includes(activePage);
     document.querySelector('#waitinglist-title').textContent = currentView === 'archived' ? 'Arsip pendaftar' : 'Data pendaftar';
     for (const link of document.querySelectorAll('[data-page]')) {
       if (link.dataset.page === activePage) link.setAttribute('aria-current', 'page'); else link.removeAttribute('aria-current');
@@ -1095,13 +1227,16 @@
     const button = paymentForm.querySelector('button[type="submit"]'); button.disabled = true;
     const unlock = lockDialogForm(paymentForm);
     try {
-      await api(`/api/admin/waitinglist/${participant.id}/payment`, { method: 'PUT', body: JSON.stringify(payload) });
+      const result = await api(`/api/admin/waitinglist/${participant.id}/payment`, { method: 'PUT', body: JSON.stringify(payload) });
       unlock();
       dirtyDialogForms.delete(paymentForm);
       if (!dashboard.hidden) { loadRows(); loadReport(); loadFilterOptions(); }
       if (requestId === participantRequestId && participantDialog.open) {
         await showParticipantDetail(participant.id);
-        showAlert(document.querySelector('#payment-alert'), 'Hasil pemeriksaan tersimpan dan tercatat dalam riwayat.', 'success');
+        const message = result.newlyVerified
+          ? 'Hasil pemeriksaan manual tersimpan. Invoice otomatis hanya dikirim jika AI memeriksa bukti dan menemukan nominal Rp150.000.'
+          : 'Hasil pemeriksaan tersimpan dan tercatat dalam riwayat.';
+        showAlert(document.querySelector('#payment-alert'), message, 'success');
       }
     } catch (error) { if (requestId === participantRequestId && participantDialog.open) showAlert(document.querySelector('#payment-alert'), error.message); }
     finally { unlock(); button.disabled = false; }
@@ -1395,6 +1530,21 @@
       dashboard.hidden = false; expireSession(); showAlert(loginAlert, 'Password berhasil diubah. Silakan login dengan password baru.', 'success');
     } catch (error) { showAlert(document.querySelector('#password-alert'), error.message); }
     finally { unlock(); button.disabled = false; }
+  });
+
+  document.querySelector('#receipt-log-refresh').addEventListener('click', () => loadReceiptLogs());
+  for (const id of ['receipt-log-status-filter', 'receipt-log-method-filter']) {
+    document.querySelector(`#${id}`).addEventListener('change', () => { receiptLogPage = 1; loadReceiptLogs(); });
+  }
+  document.querySelector('#receipt-log-search').addEventListener('input', () => {
+    window.clearTimeout(receiptLogSearchTimer);
+    receiptLogSearchTimer = window.setTimeout(() => { receiptLogPage = 1; loadReceiptLogs(); }, 250);
+  });
+  document.querySelector('#receipt-log-prev').addEventListener('click', () => {
+    if (receiptLogPage > 1) { receiptLogPage -= 1; loadReceiptLogs(); }
+  });
+  document.querySelector('#receipt-log-next').addEventListener('click', () => {
+    if (receiptLogPage < receiptLogPages) { receiptLogPage += 1; loadReceiptLogs(); }
   });
 
   restoreSession();

@@ -64,6 +64,13 @@
       "when": 1793761021611,
       "tag": "0008_askar_registration_path",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "5",
+      "when": 1793816876997,
+      "tag": "0009_petite_the_fallen",
+      "breakpoints": true
     }
   ]
 }

@@ -7,6 +7,7 @@ export interface ProductionSecuritySettings {
   encryptionKeyConfigured: boolean;
   databaseUrl: string;
   webhookUrl: string;
+  paymentWebhookUrl?: string;
   turnstileSiteKey: string;
   turnstileSecretKey: string;
 }
@@ -61,6 +62,15 @@ export function productionSecurityProblems(settings: ProductionSecuritySettings)
       }
     } catch {
       problems.push("N8N_WEBHOOK_URL tidak valid");
+    }
+  }
+  if (settings.paymentWebhookUrl) {
+    try {
+      if (new URL(settings.paymentWebhookUrl).protocol !== "https:") {
+        problems.push("N8N_PAYMENT_WEBHOOK_URL harus menggunakan HTTPS di production");
+      }
+    } catch {
+      problems.push("N8N_PAYMENT_WEBHOOK_URL tidak valid");
     }
   }
   return problems;

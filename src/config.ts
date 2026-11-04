@@ -22,6 +22,7 @@ export const APP_SECRET = configuredAppSecret || randomBytes(32).toString("hex")
 export const COOKIE_SECURE = /^(1|true|yes)$/i.test(env("COOKIE_SECURE", "false"));
 export const DB_SSL = /^(1|true|yes)$/i.test(env("DB_SSL", "false"));
 export const N8N_WEBHOOK_URL = env("N8N_WEBHOOK_URL");
+export const N8N_PAYMENT_WEBHOOK_URL = env("N8N_PAYMENT_WEBHOOK_URL");
 export const TURNSTILE_SITE_KEY = env("TURNSTILE_SITE_KEY");
 export const TURNSTILE_SECRET_KEY = env("TURNSTILE_SECRET_KEY");
 assertTurnstilePair(TURNSTILE_SITE_KEY, TURNSTILE_SECRET_KEY);
@@ -75,6 +76,7 @@ export function assertProductionSecurityConfig(): void {
     encryptionKeyConfigured: DATA_ENCRYPTION_KEY_CONFIGURED,
     databaseUrl: DATABASE_URL,
     webhookUrl: N8N_WEBHOOK_URL,
+    paymentWebhookUrl: N8N_PAYMENT_WEBHOOK_URL,
     turnstileSiteKey: TURNSTILE_SITE_KEY,
     turnstileSecretKey: TURNSTILE_SECRET_KEY,
   });

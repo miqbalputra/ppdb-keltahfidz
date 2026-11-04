@@ -221,7 +221,7 @@ h1, h2, h3, p { margin-top: 0; }
 .button-outline:hover { background: #eaf0e8; }
 .system-panel, .settings-card { margin-bottom: 22px; background: var(--white); border: 1px solid #e8e5da; }
 .system-panel .table-heading, .settings-card .table-heading { min-height: 72px; }
-.system-status-grid { padding: 15px; display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+.system-status-grid { padding: 15px; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; }
 .system-status-card { min-height: 83px; padding: 13px; display: flex; flex-direction: column; gap: 6px; background: #f8f8f3; }
 .system-status-card > span { color: #798075; font-size: 9px; }
 .system-status-card strong { color: #657166; font-size: 11px; font-weight: 600; }

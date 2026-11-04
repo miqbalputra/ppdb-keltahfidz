@@ -129,16 +129,20 @@ export async function changeLifecycle(id: string, archived: boolean, version: nu
     await audit(tx, id, actor, archived ? "participant_archived" : "participant_restored", { reason });
   });
 }
-export function validatePaymentChange(row: Pick<Participant, "payment_status">, input: { status: string; date?: string; note?: string }, now = new Date()) {
+export function validatePaymentChange(row: Pick<Participant, "payment_status">, input: { status: string; date?: string; note?: string; allowMissingDate?: boolean }, now = new Date()) {
   ensure(PAYMENT_STATUSES.includes(input.status as PaymentStatus), 400, "Status pembayaran tidak valid.");
   const note = (input.note ?? "").trim();
   ensure(note.length <= 1000, 400, "Catatan maksimal 1.000 karakter.");
   if (input.status === "needs_correction" || row.payment_status !== "pending") reasonText(note);
   const today = new Date(now.getTime() + 7 * 3600000).toISOString().slice(0, 10);
-  if (input.status === "verified") ensure(input.date && isValidIsoDate(input.date) && input.date <= today, 400, "Tanggal pembayaran wajib valid dan tidak boleh di masa depan (WIB).");
-  return { status: input.status, date: input.status === "verified" ? input.date! : null, note };
+  if (input.status === "verified") {
+    if (input.date) ensure(isValidIsoDate(input.date) && input.date <= today, 400, "Tanggal pembayaran wajib valid dan tidak boleh di masa depan (WIB).");
+    else ensure(input.allowMissingDate === true, 400, "Tanggal pembayaran wajib valid dan tidak boleh di masa depan (WIB).");
+  }
+  return { status: input.status, date: input.status === "verified" ? input.date ?? null : null, note };
 }
-export async function verifyPayment(id: string, input: { version: number; status: string; date?: string; note?: string; amountConfirmed?: boolean }, actor: string) {
+export async function verifyPayment(id: string, input: { version: number; status: string; date?: string; note?: string; amountConfirmed?: boolean; allowMissingDate?: boolean }, actor: string) {
+  let newlyVerified = false;
   await db.transaction(async tx => {
     const row = await findParticipant(id, tx, true); assertVersion(row, validVersion(input.version));
     const change = validatePaymentChange(row, input);
@@ -147,6 +151,7 @@ export async function verifyPayment(id: string, input: { version: number; status
       await readProof(row);
     }
     const now = new Date().toISOString();
+    newlyVerified = change.status === "verified" && row.payment_status !== "verified";
     await tx.update(participants).set({ payment_status: change.status, payment_date: change.date,
       payment_note: encryptField(change.note, "payment_note", id), payment_reviewed_at: now, payment_reviewer: actor,
       updated_at: now, updated_by: actor, version: row.version + 1 }).where(eq(participants.id, id));
@@ -154,7 +159,7 @@ export async function verifyPayment(id: string, input: { version: number; status
       reviewer: row.payment_reviewer, note: row.payment_note ? decryptField(row.payment_note, "payment_note", id) : "" },
       after: change, amount: change.status === "verified" ? REGISTRATION_FEE : 0, proofId: row.proof_id });
   });
-  return { saved: true };
+  return { saved: true, newlyVerified };
 }
 export async function participantHistory(id: string) {
   await findParticipant(id);

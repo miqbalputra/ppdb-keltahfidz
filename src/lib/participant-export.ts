@@ -222,6 +222,7 @@ export async function generateParticipantPdf(record: ParticipantExportRecord): P
   pdf.paragraph('Penerimaan formulir dan verifikasi pembayaran tidak menentukan hasil seleksi. Bukti transfer tersedia sebagai lampiran terpisah.');
   return pdf.save();
 }
+
 export interface ExportContext { scope?: string; filters?: string; generatedAt?: string }
 export async function generateParticipantsPdf(records: ParticipantExportRecord[], context: ExportContext = {}, paymentOnly = false): Promise<Uint8Array> {
   const pdf = await PdfLayout.create(paymentOnly ? 'Rekap Pemeriksaan Pembayaran' : 'Rekap Pendaftar SPSB 2027', true, context.generatedAt);

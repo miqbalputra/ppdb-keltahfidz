@@ -8,9 +8,9 @@
   <meta name="robots" content="noindex,nofollow">
   <title>Dashboard Panitia — SPSB 2027</title>
   <link rel="icon" href="/logo-gq.png" type="image/png">
-  <link rel="stylesheet" href="/app.css?v=2027-admin-archive-v3">
-  <link rel="stylesheet" href="/admin.css?v=2027-workspace-5">
-  <script src="/admin.js?v=2027-workspace-5" defer></script>
+  <link rel="stylesheet" href="/app.css?v=2027-payment-ai-v2">
+  <link rel="stylesheet" href="/admin.css?v=2027-receipt-logs-1">
+  <script src="/admin.js?v=2027-receipt-logs-1" defer></script>
 </head>
 <body class="admin-page">
   <a class="skip-link" href="#main-content">Lewati ke konten utama</a>
@@ -32,7 +32,7 @@
     <section class="dashboard" id="dashboard" hidden>
       <div class="dashboard-heading"><div><span class="section-kicker">RUANG KERJA PANITIA</span><h1 tabindex="-1">Dashboard <em>SPSB.</em></h1><p>Lihat laporan pendaftaran dan kelola data calon santri SPSB.</p></div><div class="session-actions"><span id="staff-name-label"></span><button class="button button-outline" id="change-password-button" type="button">Ganti password</button><button class="button button-outline" id="logout-button" type="button">Keluar</button></div></div>
       <div class="dashboard-alert form-alert" id="dashboard-alert" role="alert" aria-live="assertive" aria-atomic="true" hidden></div>
-      <nav class="dashboard-nav" aria-label="Navigasi dashboard"><span class="nav-caption" id="staff-role-label">SPSB 2027 · PETUGAS</span><a href="#ringkasan" id="ringkasan" data-page="ringkasan">Ringkasan</a><a href="#peserta" id="peserta" data-page="peserta">Data peserta</a><a href="#pembayaran" id="pembayaran" data-page="pembayaran">Pembayaran</a><a href="#analitik" id="analitik" data-page="analitik">Analitik &amp; laporan</a><a href="#arsip" id="arsip" data-page="arsip">Arsip</a><a href="#akun" id="akun" data-page="akun">Akun petugas</a><a href="#pengaturan" id="pengaturan" data-page="pengaturan">Pengaturan</a><small>Ruang kerja terbatas<br>Data pribadi dilindungi</small></nav>
+      <nav class="dashboard-nav" aria-label="Navigasi dashboard"><span class="nav-caption" id="staff-role-label">SPSB 2027 · PETUGAS</span><a href="#ringkasan" id="ringkasan" data-page="ringkasan">Ringkasan</a><a href="#peserta" id="peserta" data-page="peserta">Data peserta</a><a href="#pembayaran" id="pembayaran" data-page="pembayaran">Pembayaran</a><a href="#struk" id="struk" data-page="struk">Log tanda terima</a><a href="#analitik" id="analitik" data-page="analitik">Analitik &amp; laporan</a><a href="#arsip" id="arsip" data-page="arsip">Arsip</a><a href="#akun" id="akun" data-page="akun">Akun petugas</a><a href="#pengaturan" id="pengaturan" data-page="pengaturan">Pengaturan</a><small>Ruang kerja terbatas<br>Data pribadi dilindungi</small></nav>
       <section class="workspace-filters" aria-label="Cakupan data bersama">
         <div class="filter-toolbar"><strong id="scope-label">DATA AKTIF</strong><span>Filter akan diterapkan ke ringkasan, daftar, dan unduhan.</span><button class="button button-outline" id="retry-data" type="button">Muat ulang data</button></div>
         <form id="filter-form" class="filters report-filters" aria-label="Filter laporan dan data pendaftar">
@@ -110,6 +110,19 @@
         <section class="table-scroll" aria-label="Tabel pendaftar. Geser secara horizontal untuk melihat kolom lainnya." tabindex="0"><table><caption class="sr-only">Daftar calon santri SPSB 2027</caption><thead><tr><th scope="col">CALON SANTRI</th><th scope="col">ORANG TUA</th><th scope="col">UMUR SAAT DAFTAR</th><th scope="col">DOMISILI</th><th scope="col">KONTAK</th><th scope="col">STATUS SAAT DAFTAR</th><th scope="col">TANGGAL DAFTAR</th><th scope="col">PEMBAYARAN</th></tr></thead><tbody id="waitinglist-rows"><tr><td colspan="8" class="table-empty">Memuat data…</td></tr></tbody></table></section>
         <div class="table-footer"><span id="table-summary" aria-live="polite">—</span><nav class="pagination" aria-label="Navigasi halaman"><button id="previous-page" type="button" aria-label="Halaman sebelumnya">←</button><span id="page-indicator" aria-live="polite">1 / 1</span><button id="next-page" type="button" aria-label="Halaman selanjutnya">→</button></nav></div>
       </section>
+      <section class="table-card receipt-logs-panel" id="receipt-logs-panel" aria-labelledby="receipt-logs-title" hidden>
+        <div class="table-heading"><div><span class="section-kicker">PEMANTAUAN EMAIL · SPSB 2027</span><h2 id="receipt-logs-title" tabindex="-1">Log tanda terima</h2><p class="analytics-note">Riwayat lengkap pemeriksaan bukti, persetujuan manual, dan pengiriman Gmail.</p></div><button class="button button-outline" id="receipt-log-refresh" type="button">Muat ulang log</button></div>
+        <div class="receipt-log-notice" role="note"><strong>Arti status “Email terkirim”</strong><span>Gmail menerima permintaan pengiriman. Status ini tidak mengonfirmasi email sudah dibuka atau masuk ke kotak masuk penerima.</span></div>
+        <div class="receipt-log-summary" id="receipt-logs-summary" aria-live="polite"></div>
+        <div class="receipt-log-controls">
+          <label><span>Status</span><select id="receipt-log-status-filter"><option value="all">Semua status</option><option value="queued">Dalam antrean</option><option value="not_configured">Workflow belum diatur</option><option value="waiting_approval">Menunggu persetujuan</option><option value="not_approved">Tidak disetujui</option><option value="payment_verified">Pembayaran diverifikasi</option><option value="sent">Email terkirim</option><option value="failed">Gagal</option></select></label>
+          <label><span>Metode</span><select id="receipt-log-method-filter"><option value="all">Semua metode</option><option value="ocr">OCR otomatis</option><option value="telegram">Pemeriksaan Telegram</option></select></label>
+          <label class="receipt-log-search"><span>Cari pendaftar</span><input id="receipt-log-search" type="search" maxlength="120" placeholder="Nama, email, atau ID pendaftar"></label>
+        </div>
+        <div class="form-alert" id="receipt-logs-alert" role="status" aria-live="polite" hidden></div>
+        <div class="receipt-log-list" id="receipt-logs-list" aria-live="polite" aria-busy="false"></div>
+        <div class="table-footer receipt-log-footer"><span id="receipt-log-page" aria-live="polite">—</span><nav class="pagination" aria-label="Halaman log tanda terima"><button id="receipt-log-prev" type="button" aria-label="Halaman sebelumnya">←</button><span id="receipt-log-page-indicator" aria-live="polite">1 / 1</span><button id="receipt-log-next" type="button" aria-label="Halaman selanjutnya">→</button></nav></div>
+      </section>
       <section class="table-card" id="users-panel" aria-labelledby="users-title" hidden><div class="table-heading"><div><span class="section-kicker">ADMINISTRASI AKSES</span><h2 id="users-title" tabindex="-1">Akun petugas</h2></div><button class="button button-primary" id="add-user" type="button">+ Tambah akun</button></div><p class="analytics-note">Setiap petugas menggunakan akun sendiri. Perubahan role, penonaktifan, dan reset password mengakhiri sesi akun tersebut.</p><div id="users-alert" class="form-alert" role="status" hidden></div><div class="table-scroll"><table><caption class="sr-only">Daftar akun petugas</caption><thead><tr><th scope="col">Nama / username</th><th scope="col">Role</th><th scope="col">Status</th><th scope="col">Tindakan</th></tr></thead><tbody id="users-rows"></tbody></table></div></section>
 <section class="settings-card" id="settings-panel" aria-labelledby="settings-title" hidden>
         <div class="table-heading"><div><span class="section-kicker">KONFIGURASI APLIKASI</span><h2 id="settings-title" tabindex="-1">Pengaturan sistem</h2></div><span class="settings-updated" id="settings-updated">Memuat pengaturan…</span></div>
@@ -139,6 +152,7 @@
           <article class="system-status-card"><span>Aplikasi</span><strong id="system-app-status" class="system-state" aria-live="polite">Memuat…</strong><small id="system-runtime">Runtime belum diperiksa</small></article>
           <article class="system-status-card"><span>Database MariaDB</span><strong id="system-db-status" class="system-state" aria-live="polite">Memuat…</strong><small>Koneksi database aplikasi</small></article>
           <article class="system-status-card"><span>Notifikasi n8n</span><strong id="system-n8n-status" class="system-state" aria-live="polite">Memuat…</strong><small id="system-n8n-detail">Status konfigurasi webhook</small></article>
+          <article class="system-status-card"><span>Verifikasi AI & invoice</span><strong id="system-receipt-status" class="system-state" aria-live="polite">Memuat…</strong><small id="system-receipt-detail">Pemeriksaan nominal bukti transfer dan invoice otomatis</small></article>
           <article class="system-status-card"><span>Anti-spam</span><strong id="system-turnstile-status" class="system-state" aria-live="polite">Memuat…</strong><small>Cloudflare Turnstile</small></article>
         </div>
       </section>

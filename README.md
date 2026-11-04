@@ -86,7 +86,7 @@ Dashboard di `/admin` mencakup:
 
 Semua KPI merupakan **irisan filter terapan** dan cakupan aktif/arsip; misalnya “7 hari terakhir” bukan angka global ketika filter sekolah dipakai. Hari ini memakai kalender Asia/Jakarta; 7/30 hari termasuk hari ini. Total tanpa filter tanggal meliputi semua data pada cakupan tersebut, sedangkan grafik default hanya 30 hari terakhir. Dengan batas tanggal eksplisit, grafik mengikuti rentang; batas awal yang kosong memakai tanggal data pertama (atau 30 hari bila tidak ada data). Tren mengisi bucket kosong dan otomatis diperbesar menjadi mingguan/bulanan/tahunan untuk rentang panjang, maksimal sekitar 400 bucket; seluruh periode tetap dihitung, tidak dipotong diam-diam. Bucket mingguan mulai Senin, bulanan mulai tanggal 1; bucket tepi hanya menghitung data di dalam rentang terapan.
 
-Persentase rekap memakai total peserta sesuai filter sebagai denominator, bukan total global. Kategori usia: <6, 6–<7, 7–<8, ≥8 tahun, dan belum tercatat. Kelengkapan menunjukkan gender/sekolah/metadata lampiran/persetujuan yang belum tercatat; jumlah “setidaknya satu kekosongan” menghitung peserta unik, bukan penjumlahan seluruh kolom. Metadata lampiran **tidak membuktikan berkas masih tersedia atau pembayaran valid**. Null/kosong tidak diasumsikan lengkap; tidak ada statistik pendapatan, penerimaan, atau kuota rekaan. Akun Admin dan Bendahara dikelola di database. Pemeriksaan pembayaran dilakukan manual oleh petugas; sistem tidak menjalankan seleksi atau integrasi bank otomatis.
+Persentase rekap memakai total peserta sesuai filter sebagai denominator, bukan total global. Kategori usia: <6, 6–<7, 7–<8, ≥8 tahun, dan belum tercatat. Kelengkapan menunjukkan gender/sekolah/metadata lampiran/persetujuan yang belum tercatat; jumlah “setidaknya satu kekosongan” menghitung peserta unik, bukan penjumlahan seluruh kolom. Metadata lampiran **tidak membuktikan berkas masih tersedia atau pembayaran valid**. Null/kosong tidak diasumsikan lengkap; tidak ada statistik pendapatan, penerimaan, atau kuota rekaan. Akun Admin dan Bendahara dikelola di database. OCR membantu membaca nominal, tanggal, dan status transaksi; OCR tidak memverifikasi dana masuk, rekening tujuan, atau keaslian bukti. Panitia harus mencocokkan catatan bank untuk persetujuan manual; sistem tidak menjalankan seleksi atau integrasi bank.
 
 Pada landing page “Segera Dibuka”, teks **“Sudah diunduh X kali”** di bawah tombol brosur menunjukkan total respons unduhan yang berhasil dilayani server (bukan jumlah orang unik atau kepastian berkas disimpan di perangkat). Hitungan dimulai dari 0 saat fitur dipasang, tanpa menebak riwayat sebelumnya; unduhan berulang dan unduhan langsung dari endpoint yang sama, termasuk tombol admin, ikut dihitung. Nilai disimpan secara atomik di MariaDB pada kunci internal `brochureDownloadCount` dalam `system_settings`, tetap ada setelah restart/ganti/hapus brosur dan perubahan pengaturan admin. Status, HEAD, serta unduhan yang gagal sebelum respons sukses tidak menambah hitungan. Tampilan mengambil angka asli saat countdown dimuat dan memperbaruinya setelah unduhan berhasil; jika status gagal dimuat, angka disembunyikan. Jika pencatatan database gagal, endpoint unduhan mengembalikan 503 tanpa melayani attachment.
 
@@ -120,6 +120,7 @@ Salin `.env.example` sebagai titik awal. Variabel penting:
 | `CUTOFF_DATE`, `MIN_AGE_YEARS`, `MIN_AGE_MONTHS` | Nilai awal aturan usia; admin dapat mengubahnya setelah database diinisialisasi. |
 | `WHATSAPP_GROUP_URL` | Nilai awal link grup; dapat diubah dari dashboard. |
 | `N8N_WEBHOOK_URL` | Webhook notifikasi email n8n. Secret ini dikelola melalui environment. |
+| `N8N_PAYMENT_WEBHOOK_URL` | Production webhook workflow n8n untuk hasil OCR lokal, persetujuan Telegram, dan tanda terima HTML melalui Gmail. |
 | `TURNSTILE_SITE_KEY`, `TURNSTILE_SECRET_KEY` | Wajib di production: isi pasangan site key dan secret key Cloudflare Turnstile. Startup production ditolak jika salah satu atau keduanya tidak ada; pasangan parsial selalu ditolak. Development lokal dapat berjalan tanpa keduanya. |
 | `HOST`, `PORT`, `DATA_DIR` | Alamat listener, port aplikasi, serta cache wilayah, brosur publik, dan penyimpanan bukti transfer terenkripsi. Di Docker, pasang volume persisten pada `/app/data`; Dockerfile menetapkan host `0.0.0.0` dan port `8000`. |
 
@@ -148,11 +149,18 @@ Dropdown wilayah menggunakan proxy backend ke [EMSIFA API Wilayah Indonesia v2](
 - `GET /api/admin/waitinglist`, `GET /api/admin/waitinglist/:id` — daftar berhalaman dengan payload minimum dan detail peserta read-only khusus admin.
 - `GET /api/admin/export.csv`, `GET /api/admin/export.xlsx` — seluruh hasil filter, tidak dibatasi paginasi.
 - `GET /api/admin/waitinglist/:id/proof` — unduh bukti transfer, khusus admin terautentikasi.
+- `GET /api/admin/receipt-logs` — riwayat antrean, pemeriksaan OCR/Telegram, keputusan panitia, serta status dan detail pengiriman Gmail untuk Admin dan Bendahara.
 - `GET /healthz` — liveness aplikasi; `GET /readyz` — kesiapan koneksi database.
 
 Query bersama daftar/laporan/ekspor: `q`, `view=active|archived`, `jalur_pendaftaran=all|umum|askar`, `status=all|eligible|not_eligible`, `jenis_kelamin=all|putra|putri`, `provinsi`, `kabupaten`, `kecamatan`, `sekolah`, `missing=all|any|gender|school|proof|consent`, `age_group=all|under6|6to7|7to8|8plus|unknown`, `tanggal_daftar_mulai`, `tanggal_daftar_sampai`, `tanggal_lahir_mulai`, `tanggal_lahir_sampai` (tanggal ISO inklusif WIB), `trend=auto|daily|weekly|monthly`, `sort=newest|oldest|name|age`, dan `page_size=25|50|100`. `page` hanya memengaruhi daftar. Parameter tidak valid ditolak; default tetap data aktif dan urutan terbaru.
 
 `POST /api/waitinglist` menerima `multipart/form-data`, termasuk bukti transfer JPG/PNG/PDF wajib maksimal 5 MB dan konfirmasi pembayaran. Pendaftaran disimpan sebelum webhook n8n dipanggil. Jika webhook gagal atau belum diatur, record tetap tersimpan dan halaman konfirmasi menampilkan status notifikasi. Perbarui template email pada workflow n8n agar menyebut pendaftaran SPSB 2027, bukan waitinglist/pendaftaran minat. Penerimaan data bukan pengumuman hasil seleksi.
+
+Setiap bukti transfer baru dibaca secara lokal oleh Tesseract di container aplikasi (bahasa Indonesia dan Inggris); PDF teks diekstrak dengan Poppler, sedangkan PDF hasil scan dirender terlebih dahulu. Jika hanya satu nominal Rupiah terbaca dan bernilai Rp150.000, status transaksi menunjukkan berhasil, tanggal valid terbaca, dan confidence OCR minimal 75%, workflow meminta aplikasi mencatat hasil lalu mengirim tanda terima HTML ringan melalui Gmail. OCR hanya membaca teks dan tidak mengonfirmasi dana masuk, rekening tujuan, atau keaslian bukti. Karena itu, hasil yang tidak terbaca, nominal berbeda/ambigu, status gagal, tanggal tidak jelas, atau error OCR dikirim ke Telegram bersama bukti asli. Tombol Approve hanya digunakan setelah panitia mencocokkan bukti dengan catatan bank; aplikasi mencatat pemeriksa dan waktu sebelum n8n mengirim tanda terima. Penggantian bukti pada dashboard memulai pemeriksaan baru. Verifikasi manual dari dashboard tidak mengirim tanda terima otomatis.
+
+Atur `N8N_PAYMENT_WEBHOOK_URL` ke production webhook workflow OCR. Credential Gmail dan Telegram yang sudah terhubung digunakan kembali. Isi Chat ID Telegram panitia dan numeric user ID yang diizinkan pada node Telegram; workflow saat ini sengaja nonaktif sampai konfigurasi ini selesai dan harus diaktifkan di n8n. Tidak ada credential model AI. Callback otomatis dan manual ditandatangani server, mencocokkan versi data serta ID bukti, dan menolak hasil dari bukti yang sudah diganti. Jika webhook gagal, data pendaftaran tetap tersimpan; pemeriksaan tanda terima tidak berjalan otomatis.
+
+Menu **Log tanda terima** menampilkan seluruh percobaan per bukti beserta riwayat OCR, pengiriman bukti dan persetujuan Telegram, status Gmail, waktu WIB, ID eksekusi n8n, ID pesan Gmail, dan rincian kegagalan. Bukti yang diperiksa bisa dibuka langsung dari riwayatnya. Detail kesalahan disimpan terenkripsi; akses log mengikuti sesi Admin/Bendahara. “Email terkirim” berarti Gmail menerima permintaan kirim, bukan konfirmasi email dibuka atau tiba di kotak masuk. Perubahan struktur log dibuat melalui migrasi Drizzle saat aplikasi dijalankan.
 
 ## Deployment di Coolify
 
@@ -178,7 +186,7 @@ bun run verify
 
 ## Dashboard Admin dan Bendahara
 
-Dashboard tersedia di /admin dengan navigasi Ringkasan, Data peserta, Pembayaran, Analitik & laporan, Arsip, Akun petugas, dan Pengaturan. Halaman publik Segera Dibuka tetap menggunakan tampilan sebelumnya.
+Dashboard tersedia di /admin dengan navigasi Ringkasan, Data peserta, Pembayaran, Log tanda terima, Analitik & laporan, Arsip, Akun petugas, dan Pengaturan. Halaman publik Segera Dibuka tetap menggunakan tampilan sebelumnya.
 
 | Kemampuan | Admin | Bendahara |
 |---|---|---|

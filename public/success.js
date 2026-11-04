@@ -42,12 +42,18 @@
     ? "Pendaftaran melalui Jalur Askar Tunas Ilmu diterima panitia."
     : "Pendaftaran diterima panitia.";
   const emailStatus = result?.emailStatus;
+  const verificationStatus = result?.paymentVerificationStatus;
+  const verificationMessage = verificationStatus === "queued"
+    ? "Bukti pembayaran sedang diperiksa otomatis. Jika nominalnya sesuai Rp150.000, invoice akan dikirim ke email."
+    : verificationStatus === "not_configured"
+      ? "Pemeriksaan bukti otomatis belum diaktifkan; panitia perlu memeriksa pembayaran secara manual."
+      : "Pemeriksaan bukti belum terjadwal; panitia akan menindaklanjutinya secara manual.";
   if (emailStatus === "sent") {
-    showEmailStatus("✉", `${receivedMessage} Informasi selanjutnya juga telah dikirim ke email yang didaftarkan.`);
+    showEmailStatus("✉", `${receivedMessage} Informasi pendaftaran sudah dikirim ke email. ${verificationMessage}`);
   } else if (emailStatus === "failed") {
-    showEmailStatus("!", `${receivedMessage} Namun email belum terkirim. Gunakan tautan grup di bawah atau pantau kontak yang didaftarkan.`, true);
+    showEmailStatus("!", `${receivedMessage} Pemberitahuan email pendaftaran belum terkirim. ${verificationMessage}`, true);
   } else {
-    showEmailStatus("✉", `${receivedMessage} Pemberitahuan email belum tersedia; gunakan tautan grup di bawah atau pantau kontak yang didaftarkan.`, true);
+    showEmailStatus("✉", `${receivedMessage} Pemberitahuan email pendaftaran belum tersedia. ${verificationMessage}`, true);
   }
 
   fetch("/api/config")

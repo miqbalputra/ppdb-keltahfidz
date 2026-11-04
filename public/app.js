@@ -286,11 +286,17 @@
     const receivedMessage = result.jalurPendaftaran === "askar"
       ? "Pendaftaran melalui Jalur Askar Tunas Ilmu diterima panitia."
       : "Pendaftaran diterima panitia.";
-    message.textContent = result.emailStatus === "sent"
-      ? `${receivedMessage} Informasi selanjutnya juga telah dikirim ke email yang didaftarkan.`
+    const emailMessage = result.emailStatus === "sent"
+      ? "Pemberitahuan pendaftaran juga telah dikirim ke email yang didaftarkan."
       : result.emailStatus === "failed"
-        ? `${receivedMessage} Namun email belum terkirim. Gunakan tautan grup di bawah atau pantau kontak yang didaftarkan.`
-        : `${receivedMessage} Pemberitahuan email belum tersedia; gunakan tautan grup di bawah atau pantau kontak yang didaftarkan.`;
+        ? "Pemberitahuan pendaftaran belum terkirim."
+        : "Pemberitahuan email pendaftaran belum tersedia.";
+    const verificationMessage = result.paymentVerificationStatus === "queued"
+      ? "Bukti pembayaran sedang diperiksa otomatis. Jika nominalnya sesuai Rp150.000, invoice akan dikirim ke email."
+      : result.paymentVerificationStatus === "not_configured"
+        ? "Pemeriksaan bukti otomatis belum diaktifkan; panitia perlu memeriksa pembayaran secara manual."
+        : "Pemeriksaan bukti belum terjadwal; panitia akan menindaklanjutinya secara manual.";
+    message.textContent = `${receivedMessage} ${emailMessage} ${verificationMessage}`;
     if (result.whatsappGroupUrl) {
       groupLink.href = result.whatsappGroupUrl;
       groupLink.hidden = false;

@@ -16,15 +16,16 @@ export class PdfLayout {
   private pages: PDFPage[] = [];
   private charset: Set<number>;
   private constructor(readonly doc: PDFDocument, readonly regular: PDFFont, readonly bold: PDFFont,
-    readonly logo: PDFImage, readonly title: string, readonly landscape: boolean, readonly createdAt: string) {
+    readonly logo: PDFImage, readonly title: string, readonly landscape: boolean, readonly createdAt: string,
+    readonly footerText: string) {
     this.charset = new Set(regular.getCharacterSet()); this.newPage();
   }
-  static async create(title: string, landscape = false, createdAt = new Date().toISOString()) {
+  static async create(title: string, landscape = false, createdAt = new Date().toISOString(), footerText = "Internal panitia SPSB 2027") {
     const doc = await PDFDocument.create(); doc.registerFontkit(fontkit);
     const [regular, bold, logo] = await assetBytes;
     doc.setTitle(title); doc.setAuthor("Griya Qur'an Tunas Ilmu"); doc.setSubject("SPSB 2027 - Dokumen internal panitia");
     return new PdfLayout(doc, await doc.embedFont(regular, { subset: true }), await doc.embedFont(bold, { subset: true }),
-      await doc.embedPng(logo), title, landscape, createdAt);
+      await doc.embedPng(logo), title, landscape, createdAt, footerText);
   }
   get width() { return this.page.getWidth() - this.margin * 2; }
   private safe(value: unknown) {
@@ -133,7 +134,7 @@ export class PdfLayout {
     const timestamp = new Date(this.createdAt).toLocaleString("id-ID", { timeZone: "Asia/Jakarta" });
     this.pages.forEach((page, i) => {
       page.drawLine({ start: { x: this.margin, y: 35 }, end: { x: page.getWidth() - this.margin, y: 35 }, color: line, thickness: 0.5 });
-      page.drawText(`Internal panitia SPSB 2027 | ${timestamp} WIB`, { x: this.margin, y: 22, font: this.regular, size: 7, color: muted });
+      page.drawText(`${this.safe(this.footerText)} | ${timestamp} WIB`, { x: this.margin, y: 22, font: this.regular, size: 7, color: muted });
       page.drawText(`${i + 1} / ${this.pages.length}`, { x: page.getWidth() - this.margin - 36, y: 22, font: this.regular, size: 8, color: muted });
     });
     return this.doc.save();

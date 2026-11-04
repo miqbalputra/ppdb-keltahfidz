@@ -6,6 +6,8 @@ import { createParticipant, updateParticipant, verifyPayment, participantHistory
 import { getSystemSettings } from "./settings";
 import { validateWaitinglist } from "./validation";
 import { MAX_PAYMENT_PROOF_BYTES } from "../config";
+import { queuePaymentProofCheck } from "./payment-verification";
+import { listPaymentReceiptLogs } from "./payment-receipt-logs";
 
 export async function authorizeStaffRequest(request: Request) {
   const path = new URL(request.url).pathname.replace(/\/+$/, "");
@@ -61,14 +63,31 @@ export const adminManagementRoutes = new Elysia({ name: "staff-management" })
     catch (error) { throw new ServiceError(400, (error as Error).message); }
     ensure(body.bukti_transfer, 400, "Bukti transfer wajib diunggah.");
     const result = await createParticipant(values, body.bukti_transfer, (await getStaffSession(request))!.username);
-    set.status = 201; return result;
+    const paymentVerificationStatus = await queuePaymentProofCheck(result.id, request.url);
+    set.status = 201; return { ...result, paymentVerificationStatus };
   }, { body: participantBody })
   .put("/api/admin/waitinglist/:id", async ({ body, params, request }) => {
-    return updateParticipant(params.id, body, body.bukti_transfer, (await getStaffSession(request))!.username);
+    const result = await updateParticipant(params.id, body, body.bukti_transfer, (await getStaffSession(request))!.username);
+    const paymentVerificationStatus = body.bukti_transfer?.size
+      ? await queuePaymentProofCheck(params.id, request.url)
+      : "not_applicable";
+    return { ...result, paymentVerificationStatus };
   }, { params: idParams, body: participantBody })
-  .put("/api/admin/waitinglist/:id/payment", async ({ body, params, request }) => verifyPayment(params.id, body, (await getStaffSession(request))!.username), {
+  .put("/api/admin/waitinglist/:id/payment", async ({ body, params, request }) => {
+    const result = await verifyPayment(params.id, body, (await getStaffSession(request))!.username);
+    return { saved: true, newlyVerified: result.newlyVerified };
+  }, {
     params: idParams, body: t.Object({ version: t.Integer({ minimum: 1 }),
       status: t.Union([t.Literal("pending"), t.Literal("verified"), t.Literal("needs_correction")]),
       date: t.Optional(t.String({ maxLength: 10 })), note: t.Optional(t.String({ maxLength: 1000 })), amountConfirmed: t.Optional(t.Boolean()) }),
   })
-  .get("/api/admin/waitinglist/:id/history", ({ params }) => participantHistory(params.id), { params: idParams });
+  .get("/api/admin/waitinglist/:id/history", ({ params }) => participantHistory(params.id), { params: idParams })
+  .get("/api/admin/receipt-logs", ({ query }) => listPaymentReceiptLogs(query), {
+    query: t.Object({
+      page: t.Optional(t.String({ pattern: "^[1-9][0-9]{0,5}$" })),
+      page_size: t.Optional(t.String({ pattern: "^(10|25|50|100)$" })),
+      status: t.Optional(t.Union([t.Literal("all"), t.Literal("queued"), t.Literal("not_configured"), t.Literal("failed"), t.Literal("waiting_approval"), t.Literal("not_approved"), t.Literal("payment_verified"), t.Literal("sent")])),
+      method: t.Optional(t.Union([t.Literal("all"), t.Literal("ocr"), t.Literal("telegram")])),
+      q: t.Optional(t.String({ maxLength: 120 })),
+    }),
+  });
