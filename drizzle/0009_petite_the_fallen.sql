@@ -1,4 +1,4 @@
-CREATE TABLE `payment_receipt_attempts` (
+CREATE TABLE IF NOT EXISTS `payment_receipt_attempts` (
 	`id` varchar(32) NOT NULL,
 	`participant_id` varchar(32) NOT NULL,
 	`proof_id` varchar(32) NOT NULL,
@@ -14,7 +14,7 @@ CREATE TABLE `payment_receipt_attempts` (
 	CONSTRAINT `payment_receipt_attempts_id` PRIMARY KEY(`id`)
 );
 --> statement-breakpoint
-CREATE TABLE `payment_receipt_events` (
+CREATE TABLE IF NOT EXISTS `payment_receipt_events` (
 	`id` varchar(32) NOT NULL,
 	`attempt_id` varchar(32) NOT NULL,
 	`participant_id` varchar(32) NOT NULL,
@@ -26,11 +26,11 @@ CREATE TABLE `payment_receipt_events` (
 	CONSTRAINT `payment_receipt_events_id` PRIMARY KEY(`id`)
 );
 --> statement-breakpoint
-ALTER TABLE `payment_receipt_attempts` ADD CONSTRAINT `payment_receipt_attempts_participant_id_calon_santri_waitinglist_id_fk` FOREIGN KEY (`participant_id`) REFERENCES `calon_santri_waitinglist`(`id`) ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE `payment_receipt_events` ADD CONSTRAINT `payment_receipt_events_attempt_id_payment_receipt_attempts_id_fk` FOREIGN KEY (`attempt_id`) REFERENCES `payment_receipt_attempts`(`id`) ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE `payment_receipt_events` ADD CONSTRAINT `payment_receipt_events_participant_id_calon_santri_waitinglist_id_fk` FOREIGN KEY (`participant_id`) REFERENCES `calon_santri_waitinglist`(`id`) ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-CREATE INDEX `idx_receipt_attempt_participant` ON `payment_receipt_attempts` (`participant_id`,`created_at`);--> statement-breakpoint
-CREATE INDEX `idx_receipt_attempt_status` ON `payment_receipt_attempts` (`status`,`updated_at`);--> statement-breakpoint
-CREATE INDEX `idx_receipt_attempt_proof` ON `payment_receipt_attempts` (`proof_id`,`participant_version`);--> statement-breakpoint
-CREATE INDEX `idx_receipt_event_attempt` ON `payment_receipt_events` (`attempt_id`,`created_at`);--> statement-breakpoint
-CREATE INDEX `idx_receipt_event_participant` ON `payment_receipt_events` (`participant_id`,`created_at`);
+ALTER TABLE `payment_receipt_attempts` ADD CONSTRAINT `payment_receipt_attempts_participant_id_calon_santri_waitinglist_id_fk` FOREIGN KEY IF NOT EXISTS (`participant_id`) REFERENCES `calon_santri_waitinglist`(`id`) ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE `payment_receipt_events` ADD CONSTRAINT `payment_receipt_events_attempt_id_payment_receipt_attempts_id_fk` FOREIGN KEY IF NOT EXISTS (`attempt_id`) REFERENCES `payment_receipt_attempts`(`id`) ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE `payment_receipt_events` ADD CONSTRAINT `payment_receipt_events_participant_id_calon_santri_waitinglist_id_fk` FOREIGN KEY IF NOT EXISTS (`participant_id`) REFERENCES `calon_santri_waitinglist`(`id`) ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS `idx_receipt_attempt_participant` ON `payment_receipt_attempts` (`participant_id`,`created_at`);--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS `idx_receipt_attempt_status` ON `payment_receipt_attempts` (`status`,`updated_at`);--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS `idx_receipt_attempt_proof` ON `payment_receipt_attempts` (`proof_id`,`participant_version`);--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS `idx_receipt_event_attempt` ON `payment_receipt_events` (`attempt_id`,`created_at`);--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS `idx_receipt_event_participant` ON `payment_receipt_events` (`participant_id`,`created_at`);
