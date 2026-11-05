@@ -284,10 +284,10 @@
     const message = document.querySelector("#inline-success-message");
     const groupLink = document.querySelector("#inline-group-link");
     const receivedMessage = result.jalurPendaftaran === "askar"
-      ? "Pendaftaran melalui Jalur Askar Tunas Ilmu diterima panitia."
-      : "Pendaftaran diterima panitia.";
-    const emailMessage = result.emailStatus === "sent"
-      ? "Pemberitahuan pendaftaran juga telah dikirim ke email yang didaftarkan."
+      ? "Pendaftaran melalui Jalur Asatidz dan Karyawan (Askar) Tunas Ilmu berhasil diterima."
+      : "Pendaftaran berhasil diterima panitia SPSB 2027.";
+    const emailMessage = result.emailStatus === "queued"
+      ? "Email konfirmasi sedang diproses."
       : result.emailStatus === "failed"
         ? "Pemberitahuan pendaftaran belum terkirim."
         : "Pemberitahuan email pendaftaran belum tersedia.";
@@ -296,9 +296,13 @@
       : result.paymentVerificationStatus === "not_configured"
         ? "Pemeriksaan bukti otomatis belum diaktifkan; panitia perlu memeriksa pembayaran secara manual."
         : "Pemeriksaan bukti belum terjadwal; panitia akan menindaklanjutinya secara manual.";
-    message.textContent = `${receivedMessage} ${emailMessage} ${verificationMessage}`;
+    const groupMessage = result.whatsappGroupUrl
+      ? "Silakan masuk ke Group SPSB Gelombang 1 Kelompok Tahfidz Griya Qur’an melalui tombol berikut."
+      : "Link grup WhatsApp belum tersedia. Simpan nomor pendaftaran dan pantau email yang didaftarkan.";
+    message.textContent = `${receivedMessage} ${groupMessage} ${emailMessage} ${verificationMessage}`;
     if (result.whatsappGroupUrl) {
       groupLink.href = result.whatsappGroupUrl;
+      groupLink.textContent = "Masuk Group SPSB Gelombang 1 ↗";
       groupLink.hidden = false;
     }
     document.querySelector(".form-heading").hidden = true;

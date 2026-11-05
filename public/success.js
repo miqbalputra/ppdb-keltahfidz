@@ -39,8 +39,8 @@
   }
 
   const receivedMessage = result.jalurPendaftaran === "askar"
-    ? "Pendaftaran melalui Jalur Askar Tunas Ilmu diterima panitia."
-    : "Pendaftaran diterima panitia.";
+    ? "Pendaftaran melalui Jalur Asatidz dan Karyawan (Askar) Tunas Ilmu berhasil diterima."
+    : "Pendaftaran berhasil diterima panitia SPSB 2027.";
   const emailStatus = result?.emailStatus;
   const verificationStatus = result?.paymentVerificationStatus;
   const verificationMessage = verificationStatus === "queued"
@@ -48,12 +48,12 @@
     : verificationStatus === "not_configured"
       ? "Pemeriksaan bukti otomatis belum diaktifkan; panitia perlu memeriksa pembayaran secara manual."
       : "Pemeriksaan bukti belum terjadwal; panitia akan menindaklanjutinya secara manual.";
-  if (emailStatus === "sent") {
-    showEmailStatus("✉", `${receivedMessage} Informasi pendaftaran sudah dikirim ke email. ${verificationMessage}`);
+  if (emailStatus === "queued") {
+    showEmailStatus("✉", `${receivedMessage} Email konfirmasi sedang diproses. ${verificationMessage}`);
   } else if (emailStatus === "failed") {
     showEmailStatus("!", `${receivedMessage} Pemberitahuan email pendaftaran belum terkirim. ${verificationMessage}`, true);
   } else {
-    showEmailStatus("✉", `${receivedMessage} Pemberitahuan email pendaftaran belum tersedia. ${verificationMessage}`, true);
+    showEmailStatus("✉", `${receivedMessage} Pemberitahuan email belum tersedia; simpan nomor pendaftaran ini: ${result.id}. ${verificationMessage}`, true);
   }
 
   fetch("/api/config")
@@ -64,6 +64,7 @@
     .then((config) => {
       if (config.whatsappGroupUrl) {
         groupLink.href = config.whatsappGroupUrl;
+        groupLink.querySelector("span").textContent = "Masuk Group SPSB Gelombang 1";
         groupLink.hidden = false;
       } else {
         groupUnavailable.hidden = false;

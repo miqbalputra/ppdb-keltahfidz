@@ -27,7 +27,7 @@ function userValues(input: { name: string; username?: string; role: string }) {
   const name = input.name.trim();
   const username = input.username?.trim().toLowerCase();
   ensure(name.length > 0 && name.length <= 120, 400, "Nama petugas wajib diisi, maksimal 120 karakter.");
-  if (username !== undefined) ensure(/^[a-z0-9._-]{3,80}$/.test(username), 400, "Username harus 3–80 huruf, angka, titik, garis bawah, atau tanda hubung.");
+  if (username !== undefined) ensure(/^[a-z0-9._-]{8,80}$/.test(username), 400, "Username harus 8–80 karakter: huruf, angka, titik, garis bawah, atau tanda hubung.");
   ensure(["admin", "bendahara"].includes(input.role), 400, "Role tidak valid.");
   return { name, username, role: input.role };
 }

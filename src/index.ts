@@ -266,7 +266,9 @@ async function triggerN8n(recordId: string, values: WaitinglistRecordInput, grou
       body: JSON.stringify(payload),
       signal: AbortSignal.timeout(5000),
     });
-    return response.ok ? "sent" : "failed";
+    // The webhook responds as soon as n8n accepts the event; it cannot
+    // confirm that Gmail or GoWA has completed delivery.
+    return response.ok ? "queued" : "failed";
   } catch {
     console.error("n8n webhook delivery failed");
     return "failed";
