@@ -21,7 +21,7 @@ export interface StaffSession {
 const tokenHash = (token: string) => createHash("sha256").update(token).digest("hex");
 const csrf = (token: string) => createHmac("sha256", APP_SECRET).update(`csrf:${token}`).digest("hex");
 export function validatePassword(password: string) {
-  ensure(password.length >= 16 && password.length <= 256, 400, "Password harus 16–256 karakter.");
+  ensure(password.length >= 8 && password.length <= 256, 400, "Password harus 8–256 karakter.");
 }
 function userValues(input: { name: string; username?: string; role: string }) {
   const name = input.name.trim();

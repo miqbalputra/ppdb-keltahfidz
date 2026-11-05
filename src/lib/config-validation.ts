@@ -28,8 +28,8 @@ export function assertTurnstilePair(siteKey: string, secretKey: string): void {
 
 export function productionSecurityProblems(settings: ProductionSecuritySettings): string[] {
   const problems: string[] = [];
-  if (!settings.adminPasswordConfigured || settings.adminPassword.length < 16 || /^replace[-_]/i.test(settings.adminPassword)) {
-    problems.push("ADMIN_PASSWORD harus unik dan minimal 16 karakter");
+  if (!settings.adminPasswordConfigured || settings.adminPassword.length < 8 || /^replace[-_]/i.test(settings.adminPassword)) {
+    problems.push("ADMIN_PASSWORD harus diisi dengan minimal 8 karakter dan bukan nilai placeholder");
   }
   if (!settings.appSecretConfigured || settings.appSecret.length < 32 || /^replace[-_]/i.test(settings.appSecret)) {
     problems.push("APP_SECRET harus acak dan minimal 32 karakter");

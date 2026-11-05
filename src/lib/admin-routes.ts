@@ -47,16 +47,16 @@ export const adminManagementRoutes = new Elysia({ name: "staff-management" })
   .get("/api/admin/users", async () => ({ users: await listStaff() }))
   .post("/api/admin/users", async ({ body, request, set }) => {
     const result = await createStaff(body, (await getStaffSession(request))!.username); set.status = 201; return result;
-  }, { body: t.Object({ ...staffBody, username: t.String({ minLength: 8, maxLength: 80, pattern: "^[a-zA-Z0-9._-]+$" }), password: t.String({ minLength: 16, maxLength: 256 }), active: t.Optional(t.Boolean()) }) })
+  }, { body: t.Object({ ...staffBody, username: t.String({ minLength: 8, maxLength: 80, pattern: "^[a-zA-Z0-9._-]+$" }), password: t.String({ minLength: 8, maxLength: 256 }), active: t.Optional(t.Boolean()) }) })
   .put("/api/admin/users/:id", async ({ body, params, request }) => {
     await updateStaff(params.id, body, (await getStaffSession(request))!.username); return { saved: true };
   }, { params: idParams, body: t.Object({ ...staffBody, active: t.Boolean(), version: t.Integer({ minimum: 1 }) }) })
   .post("/api/admin/users/:id/reset-password", async ({ body, params, request }) => {
     await resetStaffPassword(params.id, body.password, (await getStaffSession(request))!.username, body.version); return { saved: true };
-  }, { params: idParams, body: t.Object({ password: t.String({ minLength: 16, maxLength: 256 }), version: t.Integer({ minimum: 1 }) }) })
+  }, { params: idParams, body: t.Object({ password: t.String({ minLength: 8, maxLength: 256 }), version: t.Integer({ minimum: 1 }) }) })
   .post("/api/admin/password", async ({ body, request }) => {
     await changeStaffPassword((await getStaffSession(request))!, body.currentPassword, body.password); return { saved: true, loginRequired: true };
-  }, { body: t.Object({ currentPassword: t.String({ maxLength: 256 }), password: t.String({ minLength: 16, maxLength: 256 }) }) })
+  }, { body: t.Object({ currentPassword: t.String({ maxLength: 256 }), password: t.String({ minLength: 8, maxLength: 256 }) }) })
   .post("/api/admin/waitinglist", async ({ body, request, set }) => {
     let values;
     try { values = validateWaitinglist(body, await getSystemSettings()); }
