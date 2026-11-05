@@ -1,22 +1,19 @@
-import { eq } from "drizzle-orm";
-import { ADMIN_PASSWORD, ADMIN_USERNAME } from "../config";
-import { db, closeDatabase } from "../db";
-import { staffSessions, staffUsers } from "../db/schema";
-import { audit, ensure } from "../lib/admin-common";
-import { seedStaffAdmin, validatePassword } from "../lib/staff-auth";
+import { ADMIN_PASSWORD, ADMIN_PASSWORD_CONFIGURED, ADMIN_USERNAME } from "../config";
+import { closeDatabase } from "../db";
+import { ensure, ServiceError } from "../lib/admin-common";
+import { recoverAdminFromHost } from "../lib/staff-recovery";
 
 // Host/Coolify access is required. No public password recovery endpoint is exposed.
 try {
-  validatePassword(ADMIN_PASSWORD);
-  ensure(Boolean(process.env.ADMIN_PASSWORD), 400, "Isi ADMIN_PASSWORD baru di environment sebelum pemulihan.");
-  await seedStaffAdmin();
-  const hash = await Bun.password.hash(ADMIN_PASSWORD, { algorithm: "argon2id" });
-  await db.transaction(async tx => {
-    const [user] = await tx.select().from(staffUsers).where(eq(staffUsers.username, ADMIN_USERNAME.toLowerCase())).for("update");
-    ensure(user, 404, "Username Admin tidak ditemukan.");
-    await tx.update(staffUsers).set({ password_hash: hash, role: "admin", active: 1, must_change_password: 1, version: user.version + 1 }).where(eq(staffUsers.id, user.id));
-    await tx.delete(staffSessions).where(eq(staffSessions.user_id, user.id));
-    await audit(tx, user.id, "pemulihan-host", "admin_recovered", {});
-  });
-  console.info("Akun Admin dipulihkan. Login memakai password environment, lalu ganti password di dashboard.");
+  const flags = process.argv.slice(2).filter(value => value !== "--");
+  ensure(flags.length <= 1 && flags.every(value => value === "--create"), 400, "Gunakan bun run staff:recover atau bun run staff:recover -- --create.");
+  ensure(Boolean(process.env.ADMIN_USERNAME?.trim()), 400, "Isi ADMIN_USERNAME di environment sebelum pemulihan.");
+  ensure(ADMIN_PASSWORD_CONFIGURED, 400, "Isi ADMIN_PASSWORD baru di environment sebelum pemulihan.");
+  const result = await recoverAdminFromHost({ username: ADMIN_USERNAME, password: ADMIN_PASSWORD, create: flags.includes("--create") });
+  console.info(result.created
+    ? "Admin pemulihan baru berhasil dibuat. Login memakai kredensial environment, lalu ganti password di dashboard."
+    : "Password akun Admin dipulihkan dan sesi akun tersebut dicabut. Login memakai kredensial environment, lalu ganti password di dashboard.");
+} catch (error) {
+  console.error(error instanceof ServiceError ? error.message : "Pemulihan gagal. Periksa koneksi database dan pastikan migrasi aplikasi sudah selesai.");
+  process.exitCode = 1;
 } finally { await closeDatabase(); }

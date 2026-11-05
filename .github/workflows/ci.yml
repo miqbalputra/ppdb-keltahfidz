@@ -12,6 +12,7 @@ jobs:
       NODE_ENV: test
       TEST_DATABASE_URL: mysql://waitinglist:integration-db-password-strong@127.0.0.1:3306/waitinglist_test
       MIGRATION_TEST_DATABASE_URL: mysql://waitinglist:integration-db-password-strong@127.0.0.1:3306/spsb_migration_test_ci
+      STAFF_RECOVERY_TEST_DATABASE_URL: mysql://waitinglist:integration-db-password-strong@127.0.0.1:3306/spsb_auth_test_ci
       DATABASE_URL: mysql://waitinglist:integration-db-password-strong@127.0.0.1:3306/waitinglist_test
       ADMIN_USERNAME: integration-admin
       ADMIN_PASSWORD: integration-test-password
@@ -43,11 +44,11 @@ jobs:
           bun-version: 1.4.2
       - name: Install dependencies
         run: bun install --frozen-lockfile
-      - name: Prepare isolated migration recovery database
+      - name: Prepare isolated recovery test databases
         run: >-
           docker exec "${{ job.services.mariadb.id }}" mariadb
           --user=root --password=integration-root-password-strong
-          --execute="CREATE DATABASE spsb_migration_test_ci; GRANT ALL PRIVILEGES ON spsb_migration_test_ci.* TO 'waitinglist'@'%';"
+          --execute="CREATE DATABASE spsb_migration_test_ci; GRANT ALL PRIVILEGES ON spsb_migration_test_ci.* TO 'waitinglist'@'%'; CREATE DATABASE spsb_auth_test_ci; GRANT ALL PRIVILEGES ON spsb_auth_test_ci.* TO 'waitinglist'@'%';"
       - name: Typecheck
         run: bun run typecheck
       - name: Unit and database integration tests

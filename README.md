@@ -112,7 +112,7 @@ Salin `.env.example` sebagai titik awal. Variabel penting:
 |---|---|
 | `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD` | Koneksi MariaDB. `DATABASE_URL` dapat dipakai sebagai alternatif. |
 | `DB_POOL_SIZE` | Batas koneksi pool MariaDB per instance (1–100, default 10). Sesuaikan dengan batas koneksi database dan jumlah replica. |
-| `ADMIN_USERNAME`, `ADMIN_PASSWORD` | Kredensial bootstrap Admin pertama dan pemulihan dari host. Username 8–80 karakter; setelah akun terbentuk, env tidak mengganti akun/password database saat restart. |
+| `ADMIN_USERNAME`, `ADMIN_PASSWORD` | Kredensial bootstrap Admin pertama dan pemulihan dari host. Username Admin dari env 3–80 karakter, password minimal 8; setelah akun terbentuk, env tidak mengganti akun/password database saat restart. |
 | `APP_SECRET` | Kunci sesi admin; gunakan nilai acak yang kuat dan tetap antar-restart. |
 | `DATA_ENCRYPTION_KEY` | Kunci AES-256-GCM 32 byte yang stabil untuk enkripsi field pribadi. Simpan terpisah dan aman; jangan kehilangan atau menggantinya tanpa rencana rotasi. |
 | `COOKIE_SECURE` | Set `true` di deployment HTTPS. |
@@ -199,9 +199,11 @@ Dashboard tersedia di /admin dengan navigasi Ringkasan, Data peserta, Pembayaran
 
 ### Akun dan sesi
 
-Saat tabel akun kosong, startup membuat satu Admin dari ADMIN_USERNAME/ADMIN_PASSWORD. Username harus 8–80 karakter berupa huruf, angka, titik, garis bawah, atau tanda hubung. Sesudah akun terbentuk, environment tidak mengubah username atau password yang tersimpan. Admin membuat akun petugas di menu Akun petugas; akun baru/reset wajib mengganti password sebelum membuka data. Username unik dan tidak dapat diganti; nama, role, dan status aktif dapat diubah. Password minimal 8 karakter. Penonaktifan, perubahan akun/role, reset, dan ganti password mencabut sesi terkait. Admin aktif terakhir tidak dapat dinonaktifkan atau diturunkan rolenya, termasuk pada perubahan bersamaan.
+Saat tabel akun kosong, startup membuat satu Admin dari ADMIN_USERNAME/ADMIN_PASSWORD. Username akun petugas baru di dashboard harus 8–80 karakter berupa huruf, angka, titik, garis bawah, atau tanda hubung. Untuk kompatibilitas, username Admin dari environment pada bootstrap/pemulihan menerima 3–80 karakter. Sesudah akun terbentuk, environment tidak mengubah username atau password yang tersimpan. Admin membuat akun petugas di menu Akun petugas; akun baru/reset wajib mengganti password sebelum membuka data. Username unik dan tidak dapat diganti; nama, role, dan status aktif dapat diubah. Password minimal 8 karakter. Penonaktifan, perubahan akun/role, reset, dan ganti password mencabut sesi terkait. Admin aktif terakhir tidak dapat dinonaktifkan atau diturunkan rolenya, termasuk pada perubahan bersamaan.
 
-Migrasi memerlukan login ulang; cookie versi lama tidak diterima. Jika Admin kehilangan akses, isi ADMIN_USERNAME dan ADMIN_PASSWORD baru pada environment host/Coolify lalu jalankan bun run staff:recover dari container yang sudah dimigrasikan. Script memulihkan akun tersebut dan mengharuskan penggantian password. Password tidak dicetak di log.
+Migrasi memerlukan login ulang; cookie versi lama tidak diterima. Jika Admin kehilangan akses, isi ADMIN_USERNAME dengan username Admin yang sudah ada dan ADMIN_PASSWORD dengan password sementara di environment host/Coolify. Setelah redeploy, jalankan `bun run staff:recover` dari terminal container aplikasi yang sudah dimigrasikan. Perintah ini mereset password Admin tersebut, mengaktifkannya, mencabut sesi akun itu, dan meminta ganti password setelah login. Login biasa selalu memeriksa hash akun di database.
+
+Jika username tersebut belum ada, jalankan `bun run staff:recover -- --create` untuk membuat Admin pemulihan terpisah secara eksplisit. Perintah ini tidak mengganti username akun lain dan menolak username yang sudah digunakan. Pemulihan akun Bendahara melalui perintah reset juga ditolak; pilih username Admin yang tepat atau buat Admin pemulihan baru. Perubahan akun dan audit dicatat dalam transaksi; password tidak dicetak ke log. Pengujian pemulihan menggunakan `STAFF_RECOVERY_TEST_DATABASE_URL` pada database lokal kosong bernama `spsb_auth_test_*`.
 
 ### CRUD dan audit
 

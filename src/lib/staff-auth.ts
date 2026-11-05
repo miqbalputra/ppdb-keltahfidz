@@ -23,6 +23,11 @@ const csrf = (token: string) => createHmac("sha256", APP_SECRET).update(`csrf:${
 export function validatePassword(password: string) {
   ensure(password.length >= 8 && password.length <= 256, 400, "Password harus 8–256 karakter.");
 }
+export function configuredAdminUsername(value: string): string {
+  const username = value.trim().toLowerCase();
+  ensure(/^[a-z0-9._-]{3,80}$/.test(username), 400, "Username Admin dari environment harus 3–80 karakter: huruf, angka, titik, garis bawah, atau tanda hubung.");
+  return username;
+}
 function userValues(input: { name: string; username?: string; role: string }) {
   const name = input.name.trim();
   const username = input.username?.trim().toLowerCase();
@@ -35,11 +40,12 @@ function userValues(input: { name: string; username?: string; role: string }) {
 export async function seedStaffAdmin() {
   const [existing] = await db.select({ id: staffUsers.id }).from(staffUsers).limit(1);
   if (existing) return;
-  const values = userValues({ name: "Administrator SPSB", username: ADMIN_USERNAME, role: "admin" });
-  await db.insert(staffUsers).values({ ...values, username: values.username!, id: newId(),
+  const username = configuredAdminUsername(ADMIN_USERNAME);
+  validatePassword(ADMIN_PASSWORD);
+  await db.insert(staffUsers).values({ name: "Administrator SPSB", role: "admin", username, id: newId(),
     password_hash: await Bun.password.hash(ADMIN_PASSWORD, { algorithm: "argon2id" }),
     must_change_password: 0, created_at: new Date().toISOString() })
-    .onDuplicateKeyUpdate({ set: { username: values.username! } });
+    .onDuplicateKeyUpdate({ set: { username } });
 }
 
 export async function authenticateStaff(username: string, password: string) {
