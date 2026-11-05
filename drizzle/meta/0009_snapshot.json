@@ -599,8 +599,8 @@
         }
       },
       "foreignKeys": {
-        "payment_receipt_attempts_participant_id_calon_santri_waitinglist_id_fk": {
-          "name": "payment_receipt_attempts_participant_id_calon_santri_waitinglist_id_fk",
+        "fk_receipt_attempt_participant": {
+          "name": "fk_receipt_attempt_participant",
           "tableFrom": "payment_receipt_attempts",
           "tableTo": "calon_santri_waitinglist",
           "columnsFrom": [
@@ -703,8 +703,8 @@
         }
       },
       "foreignKeys": {
-        "payment_receipt_events_attempt_id_payment_receipt_attempts_id_fk": {
-          "name": "payment_receipt_events_attempt_id_payment_receipt_attempts_id_fk",
+        "fk_receipt_event_attempt": {
+          "name": "fk_receipt_event_attempt",
           "tableFrom": "payment_receipt_events",
           "tableTo": "payment_receipt_attempts",
           "columnsFrom": [
@@ -716,8 +716,8 @@
           "onDelete": "no action",
           "onUpdate": "no action"
         },
-        "payment_receipt_events_participant_id_calon_santri_waitinglist_id_fk": {
-          "name": "payment_receipt_events_participant_id_calon_santri_waitinglist_id_fk",
+        "fk_receipt_event_participant": {
+          "name": "fk_receipt_event_participant",
           "tableFrom": "payment_receipt_events",
           "tableTo": "calon_santri_waitinglist",
           "columnsFrom": [

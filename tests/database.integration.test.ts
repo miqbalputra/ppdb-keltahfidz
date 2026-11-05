@@ -39,6 +39,7 @@ test.skipIf(!testDatabaseUrl)("MariaDB-backed public, admin, security, and notif
   process.env.DATA_ENCRYPTION_KEY = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
   process.env.COOKIE_SECURE = "false";
   process.env.N8N_WEBHOOK_URL = `http://127.0.0.1:${webhookServer.port}/webhook`;
+  process.env.N8N_PAYMENT_WEBHOOK_URL = "";
   process.env.TURNSTILE_SITE_KEY = "integration-site-key";
   process.env.TURNSTILE_SECRET_KEY = "integration-secret-key";
   process.env.CUTOFF_DATE = "2027-07-01";
@@ -256,7 +257,7 @@ test.skipIf(!testDatabaseUrl)("MariaDB-backed public, admin, security, and notif
     };
     insertedIds.push(successResult.id);
     expect(successResult).toMatchObject({
-      emailStatus: "sent",
+      emailStatus: "queued",
       whatsappGroupUrl: testSettings.whatsappGroupUrl,
     });
     expect(turnstileRequests).toBe(1);
@@ -534,8 +535,10 @@ test.skipIf(!testDatabaseUrl)("MariaDB-backed public, admin, security, and notif
         import("../src/db/schema"),
         import("drizzle-orm"),
       ]);
-      const { participantProofs, auditEvents } = await import('../src/db/schema');
+      const { participantProofs, auditEvents, paymentReceiptEvents, paymentReceiptAttempts } = await import('../src/db/schema');
       const savedProofs = await db.select().from(participantProofs).where(inArray(participantProofs.participant_id, insertedIds));
+      await db.delete(paymentReceiptEvents).where(inArray(paymentReceiptEvents.participant_id, insertedIds));
+      await db.delete(paymentReceiptAttempts).where(inArray(paymentReceiptAttempts.participant_id, insertedIds));
       await db.delete(participantProofs).where(inArray(participantProofs.participant_id, insertedIds));
       await db.delete(auditEvents).where(inArray(auditEvents.subject_id, insertedIds));
       await Promise.all(savedProofs.map(p => unlink(join(resolve(process.env.DATA_DIR ?? './data', 'payment-proofs'), p.storage_key)).catch(() => undefined)));

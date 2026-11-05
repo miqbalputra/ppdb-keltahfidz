@@ -1,4 +1,5 @@
 import {
+  foreignKey,
   index,
   int,
   mysqlTable,
@@ -103,7 +104,7 @@ export const auditEvents = mysqlTable("audit_events", {
 
 export const paymentReceiptAttempts = mysqlTable("payment_receipt_attempts", {
   id: varchar("id", { length: 32 }).primaryKey(),
-  participant_id: varchar("participant_id", { length: 32 }).notNull().references(() => calonSantriWaitinglist.id),
+  participant_id: varchar("participant_id", { length: 32 }).notNull(),
   proof_id: varchar("proof_id", { length: 32 }).notNull(),
   participant_version: int("participant_version", { unsigned: true }).notNull(),
   status: varchar("status", { length: 32 }).notNull().default("queued"),
@@ -115,6 +116,7 @@ export const paymentReceiptAttempts = mysqlTable("payment_receipt_attempts", {
   updated_at: varchar("updated_at", { length: 32 }).notNull(),
   sent_at: varchar("sent_at", { length: 32 }),
 }, table => [
+  foreignKey({ name: "fk_receipt_attempt_participant", columns: [table.participant_id], foreignColumns: [calonSantriWaitinglist.id] }).onDelete("no action").onUpdate("no action"),
   index("idx_receipt_attempt_participant").on(table.participant_id, table.created_at),
   index("idx_receipt_attempt_status").on(table.status, table.updated_at),
   index("idx_receipt_attempt_proof").on(table.proof_id, table.participant_version),
@@ -122,14 +124,16 @@ export const paymentReceiptAttempts = mysqlTable("payment_receipt_attempts", {
 
 export const paymentReceiptEvents = mysqlTable("payment_receipt_events", {
   id: varchar("id", { length: 32 }).primaryKey(),
-  attempt_id: varchar("attempt_id", { length: 32 }).notNull().references(() => paymentReceiptAttempts.id),
-  participant_id: varchar("participant_id", { length: 32 }).notNull().references(() => calonSantriWaitinglist.id),
+  attempt_id: varchar("attempt_id", { length: 32 }).notNull(),
+  participant_id: varchar("participant_id", { length: 32 }).notNull(),
   event: varchar("event", { length: 40 }).notNull(),
   actor: varchar("actor", { length: 120 }).notNull(),
   execution_id: varchar("execution_id", { length: 80 }),
   payload: text("payload").notNull(),
   created_at: varchar("created_at", { length: 32 }).notNull(),
 }, table => [
+  foreignKey({ name: "fk_receipt_event_attempt", columns: [table.attempt_id], foreignColumns: [paymentReceiptAttempts.id] }).onDelete("no action").onUpdate("no action"),
+  foreignKey({ name: "fk_receipt_event_participant", columns: [table.participant_id], foreignColumns: [calonSantriWaitinglist.id] }).onDelete("no action").onUpdate("no action"),
   index("idx_receipt_event_attempt").on(table.attempt_id, table.created_at),
   index("idx_receipt_event_participant").on(table.participant_id, table.created_at),
 ]);

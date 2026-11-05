@@ -26,9 +26,9 @@ CREATE TABLE IF NOT EXISTS `payment_receipt_events` (
 	CONSTRAINT `payment_receipt_events_id` PRIMARY KEY(`id`)
 );
 --> statement-breakpoint
-ALTER TABLE `payment_receipt_attempts` ADD CONSTRAINT `payment_receipt_attempts_participant_id_calon_santri_waitinglist_id_fk` FOREIGN KEY IF NOT EXISTS (`participant_id`) REFERENCES `calon_santri_waitinglist`(`id`) ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE `payment_receipt_events` ADD CONSTRAINT `payment_receipt_events_attempt_id_payment_receipt_attempts_id_fk` FOREIGN KEY IF NOT EXISTS (`attempt_id`) REFERENCES `payment_receipt_attempts`(`id`) ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE `payment_receipt_events` ADD CONSTRAINT `payment_receipt_events_participant_id_calon_santri_waitinglist_id_fk` FOREIGN KEY IF NOT EXISTS (`participant_id`) REFERENCES `calon_santri_waitinglist`(`id`) ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE `payment_receipt_attempts` ADD CONSTRAINT `fk_receipt_attempt_participant` FOREIGN KEY IF NOT EXISTS (`participant_id`) REFERENCES `calon_santri_waitinglist`(`id`) ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE `payment_receipt_events` ADD CONSTRAINT `fk_receipt_event_attempt` FOREIGN KEY IF NOT EXISTS (`attempt_id`) REFERENCES `payment_receipt_attempts`(`id`) ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE `payment_receipt_events` ADD CONSTRAINT `fk_receipt_event_participant` FOREIGN KEY IF NOT EXISTS (`participant_id`) REFERENCES `calon_santri_waitinglist`(`id`) ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS `idx_receipt_attempt_participant` ON `payment_receipt_attempts` (`participant_id`,`created_at`);--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS `idx_receipt_attempt_status` ON `payment_receipt_attempts` (`status`,`updated_at`);--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS `idx_receipt_attempt_proof` ON `payment_receipt_attempts` (`proof_id`,`participant_version`);--> statement-breakpoint

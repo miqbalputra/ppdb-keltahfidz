@@ -11,12 +11,12 @@ test.skipIf(!process.env.TEST_DATABASE_URL)("dashboard roles, CRUD, financial au
   const directory = await mkdtemp(join(tmpdir(), "spsb-dashboard-test-"));
   Object.assign(process.env, { DATABASE_URL: url, NODE_ENV: "test", DATA_DIR: directory,
     ADMIN_USERNAME: "integration-admin", ADMIN_PASSWORD: "integration-test-password", APP_SECRET: "integration-test-session-secret-with-32-chars",
-    DATA_ENCRYPTION_KEY: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef", COOKIE_SECURE: "false", N8N_WEBHOOK_URL: "", TURNSTILE_SITE_KEY: "", TURNSTILE_SECRET_KEY: "" });
+    DATA_ENCRYPTION_KEY: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef", COOKIE_SECURE: "false", N8N_WEBHOOK_URL: "", N8N_PAYMENT_WEBHOOK_URL: "", TURNSTILE_SITE_KEY: "", TURNSTILE_SECRET_KEY: "" });
   const [{ db, closeDatabase }, schema, { migrate }, { eq, inArray }, auth, settings, encryption] = await Promise.all([
     import("../src/db"), import("../src/db/schema"), import("drizzle-orm/mysql2/migrator"), import("drizzle-orm"),
     import("../src/lib/staff-auth"), import("../src/lib/settings"), import("../src/lib/encryption"),
   ]);
-  const { calonSantriWaitinglist: participants, staffUsers, staffSessions, participantProofs, auditEvents } = schema;
+  const { calonSantriWaitinglist: participants, staffUsers, staffSessions, participantProofs, auditEvents, paymentReceiptEvents, paymentReceiptAttempts } = schema;
   const ids: string[] = [], userIds: string[] = [];
   let bootstrapId: string | undefined;
   let previousSettings: Awaited<ReturnType<typeof settings.getSystemSettings>> | undefined;
@@ -167,6 +167,8 @@ test.skipIf(!process.env.TEST_DATABASE_URL)("dashboard roles, CRUD, financial au
     if (previousSettings) await settings.saveSystemSettings(previousSettings);
     if (ids.length) {
       const proofs = await db.select().from(participantProofs).where(inArray(participantProofs.participant_id, ids));
+      await db.delete(paymentReceiptEvents).where(inArray(paymentReceiptEvents.participant_id, ids));
+      await db.delete(paymentReceiptAttempts).where(inArray(paymentReceiptAttempts.participant_id, ids));
       await db.delete(participantProofs).where(inArray(participantProofs.participant_id, ids));
       await db.delete(auditEvents).where(inArray(auditEvents.subject_id, ids));
       await db.delete(participants).where(inArray(participants.id, ids));

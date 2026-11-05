@@ -184,6 +184,8 @@ bun run verify
 
 `tests/database.integration.test.ts` menjalankan alur pendaftaran, enkripsi, login admin, filter/ekspor, pengaturan, Turnstile, dan webhook terhadap MariaDB sungguhan serta mock untuk layanan eksternal. Tes ini hanya aktif bila `TEST_DATABASE_URL` diarahkan ke database khusus yang namanya memuat `test`; migrasi dan penghapusan record uji dilakukan di database tersebut, jadi jangan arahkan ke database produksi. Workflow GitHub Actions menjalankannya dengan MariaDB sementara, memeriksa audit dependency, migrasi, impor SQLite dry-run, dan build Docker.
 
+`tests/migrations.test.ts` memeriksa batas nama identifier database dan kesamaan foreign key antara skema, SQL, dan snapshot. Pengujian pemulihan migrasi aktif bila `MIGRATION_TEST_DATABASE_URL` menunjuk database lokal kosong bernama `spsb_migration_test_*`. Tes ini mencoba ulang migrasi tanda terima dari setiap batas perintah DDL, memastikan data peserta aktif/arsip dan log tetap utuh, serta memeriksa foreign key dan index. CI menjalankannya pada database terpisah dari tes aplikasi.
+
 ## Dashboard Admin dan Bendahara
 
 Dashboard tersedia di /admin dengan navigasi Ringkasan, Data peserta, Pembayaran, Log tanda terima, Analitik & laporan, Arsip, Akun petugas, dan Pengaturan. Halaman publik Segera Dibuka tetap menggunakan tampilan sebelumnya.
