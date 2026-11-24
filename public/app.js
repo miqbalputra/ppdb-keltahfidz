@@ -2,6 +2,7 @@
   const form = document.querySelector("#waitinglist-form");
   if (!form) return;
   const isAskarRoute = window.location.pathname.replace(/\/$/, "") === "/askar";
+  const configUrl = isAskarRoute ? "/api/config?jalur=askar" : "/api/config";
 
   const alertBox = document.querySelector("#form-alert");
   const validationSummary = document.querySelector("#validation-summary");
@@ -70,6 +71,7 @@
     document.querySelector("#hero-kicker").textContent = "JALUR KHUSUS ASATIDZ & KARYAWAN";
     document.querySelector("#hero-lede").textContent = "Formulir khusus Jalur Asatidz dan Karyawan (Askar) Tunas Ilmu. Lengkapi data pendaftaran Ananda dan keterangan keluarga yang menjadi bagian dari Tunas Ilmu.";
     document.querySelector("#askar-entry-link").hidden = true;
+    document.querySelector("#countdown-askar-link").hidden = true;
     document.querySelector("#form-aside-title").innerHTML = 'Jalur <em>Askar.</em>';
     document.querySelector("#form-aside-copy").textContent = "Pendaftaran khusus keluarga Asatidz dan Karyawan Tunas Ilmu. Formulir dan ketentuan pendaftaran lainnya tetap mengikuti SPSB 2027.";
     document.querySelector("#form-route-kicker").textContent = "JALUR KHUSUS ASATIDZ & KARYAWAN · SPSB 2027";
@@ -469,7 +471,7 @@
     const schedule = document.querySelector("#countdown-schedule");
     panel.hidden = false;
     document.body.classList.add("countdown-mode");
-    refreshBrochureDownloadCount();
+    refreshBrochureViewCount();
     if (timestamp === null) {
       document.querySelector("#countdown-clock").hidden = true;
       schedule.textContent = "Jadwal pembukaan belum tersedia. Silakan hubungi panitia.";
@@ -481,7 +483,7 @@
       if (remaining <= 0) {
         clearInterval(countdownTimer);
         try {
-          const response = await fetch("/api/config", { cache: "no-store" });
+          const response = await fetch(configUrl, { cache: "no-store" });
           const latestConfig = await response.json();
           if (response.ok && latestConfig.registrationOpen) {
             await initializeForm();
@@ -506,7 +508,7 @@
   async function initialize() {
     configureRegistrationRoute();
     try {
-      const response = await fetch("/api/config");
+      const response = await fetch(configUrl, { cache: "no-store" });
       if (!response.ok) throw new Error("Konfigurasi belum dapat dimuat.");
       config = await response.json();
       document.body.classList.remove("config-pending");
@@ -580,28 +582,65 @@
     }
   });
 
-  const brochureButton = document.querySelector("#download-brochure");
+  const viewBrochure = document.querySelector("#view-brochure");
+  const brochureDialog = document.querySelector("#brochure-dialog");
+  const brochureImage = document.createElement("img");
+  brochureImage.alt = "Brosur pendaftaran SPSB 2027 Griya Qur’an Tunas Ilmu";
+  brochureImage.hidden = true;
+  document.querySelector("#brochure-image-area").append(brochureImage);
+  const brochurePreviewStatus = document.querySelector("#brochure-preview-status");
+  const brochureActions = document.querySelector("#brochure-dialog-actions");
+  const downloadBrochure = document.querySelector("#download-brochure");
   const brochureFeedback = document.querySelector("#brochure-feedback");
-  const brochureDownloadCount = document.querySelector("#brochure-download-count");
-  const brochureDownloadNumber = document.querySelector("#brochure-download-number");
+  const brochureViewCount = document.querySelector("#brochure-view-count");
+  const brochureViewNumber = document.querySelector("#brochure-view-number");
+  let brochureCountRequest;
+  let brochureOpenCount = 0;
 
-  async function refreshBrochureDownloadCount() {
+  async function refreshBrochureViewCount() {
+    brochureCountRequest?.abort();
+    const { signal } = (brochureCountRequest = new AbortController());
     try {
-      const response = await fetch("/api/brochure/status", { cache: "no-store" });
+      const response = await fetch("/api/brochure/status", { cache: "no-store", signal });
       if (!response.ok) throw new Error("Status unavailable");
-      const { downloadCount } = await response.json();
-      if (!Number.isSafeInteger(downloadCount) || downloadCount < 0) throw new Error("Invalid count");
-      brochureDownloadNumber.textContent = new Intl.NumberFormat("id-ID").format(downloadCount);
-      brochureDownloadCount.hidden = false;
+      const { viewCount } = await response.json();
+      if (!Number.isSafeInteger(viewCount) || viewCount < 0) throw new Error("Invalid count");
+      if (signal.aborted) return;
+      brochureViewNumber.textContent = new Intl.NumberFormat("id-ID").format(viewCount);
+      brochureViewCount.hidden = false;
     } catch {
-      // Never substitute a guessed number or turn a completed download into an
-      // error just because refreshing its metric failed.
-      brochureDownloadCount.hidden = true;
+      if (!signal.aborted) brochureViewCount.hidden = true;
     }
   }
 
-  brochureButton.addEventListener("click", async () => {
-    brochureButton.disabled = true;
+  viewBrochure.addEventListener("click", () => {
+    brochureImage.hidden = true;
+    brochureActions.hidden = true;
+    brochurePreviewStatus.hidden = false;
+    brochurePreviewStatus.textContent = "Memuat brosur…";
+    brochureFeedback.hidden = true;
+    brochureDialog.showModal();
+    brochureOpenCount += 1;
+    brochureImage.src = `/api/brochure?preview=view&open=${brochureOpenCount}`;
+  });
+
+  brochureImage.addEventListener("load", () => {
+    brochureImage.hidden = false;
+    brochureActions.hidden = false;
+    brochurePreviewStatus.hidden = true;
+    refreshBrochureViewCount();
+  });
+
+  brochureImage.addEventListener("error", () => {
+    brochurePreviewStatus.textContent = "Brosur belum dapat ditampilkan. Silakan coba lagi atau hubungi admin.";
+  });
+
+  brochureDialog.addEventListener("close", () => {
+    if (!brochureDialog.open) brochureImage.removeAttribute("src");
+  });
+
+  downloadBrochure.addEventListener("click", async () => {
+    downloadBrochure.disabled = true;
     brochureFeedback.hidden = false;
     brochureFeedback.textContent = "Menyiapkan brosur…";
     try {
@@ -624,11 +663,10 @@
       setTimeout(() => URL.revokeObjectURL(url), 60_000);
       brochureFeedback.hidden = true;
       brochureFeedback.textContent = "";
-      await refreshBrochureDownloadCount();
     } catch {
       brochureFeedback.textContent = "Brosur belum dapat diunduh. Silakan coba lagi.";
     } finally {
-      brochureButton.disabled = false;
+      downloadBrochure.disabled = false;
     }
   });
 

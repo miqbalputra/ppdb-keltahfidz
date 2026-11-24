@@ -7,8 +7,8 @@
   <meta name="description" content="Formulir pendaftaran santri baru SPSB 2027 Kelompok Tahfidz Griya Qur'an Tunas Ilmu.">
   <title>Pendaftaran SPSB 2027 — Griya Qur'an Tunas Ilmu</title>
   <link rel="icon" href="/logo-gq.png" type="image/png">
-  <link rel="stylesheet" href="/app.css?v=2027-brochure-minimal-v5">
-  <script src="/app.js?v=2027-registration-notification-v1" defer></script>
+  <link rel="stylesheet" href="/app.css?v=2027-askar-schedule-v1">
+  <script src="/app.js?v=2027-askar-schedule-v1" defer></script>
 </head>
 <body class="public-page config-pending">
   <a class="skip-link" href="#main-content">Lewati ke konten utama</a>
@@ -36,6 +36,7 @@
           <div class="countdown-unit"><strong id="countdown-seconds">00</strong><span>Detik</span></div>
         </div>
         <p class="countdown-schedule" id="countdown-schedule" aria-live="polite">Pendaftaran dibuka sesuai jadwal WIB.</p>
+        <a class="text-link countdown-askar-link" id="countdown-askar-link" href="/askar">Pendaftaran Jalur Asatidz dan Karyawan <span aria-hidden="true">↗</span></a>
         <div class="opening-contact"><p>Punya pertanyaan seputar pendaftaran?</p>
           <a class="countdown-contact" href="https://wa.me/6285173394373" target="_blank" rel="noopener noreferrer" aria-label="Pertanyaan/Informasi: 085173394373 (Admin Griya Qur'an), buka WhatsApp">
             <span class="contact-symbol" aria-hidden="true">?</span>
@@ -45,12 +46,27 @@
             </span>
             <span class="contact-arrow" aria-hidden="true">↗</span>
           </a>
-          <button class="countdown-brochure" id="download-brochure" type="button"><span aria-hidden="true">↓</span> Download Brosur</button>
-          <p class="brochure-download-count" id="brochure-download-count" role="status" aria-live="polite" hidden>Sudah diunduh <strong id="brochure-download-number"></strong> kali</p>
-          <p class="brochure-feedback" id="brochure-feedback" role="status" aria-live="polite" hidden></p>
+          <button class="countdown-brochure" id="view-brochure" type="button" aria-haspopup="dialog" aria-controls="brochure-dialog">Lihat Brosur <span aria-hidden="true">›</span></button>
+          <p class="brochure-view-count" id="brochure-view-count" role="status" aria-live="polite" hidden>Sudah dilihat <strong id="brochure-view-number"></strong> kali</p>
         </div>
       </div>
     </section>
+    <dialog class="brochure-dialog" id="brochure-dialog" aria-labelledby="brochure-title">
+      <header class="brochure-dialog-header">
+        <h2 id="brochure-title">Brosur SPSB 2027</h2>
+        <form method="dialog">
+          <button class="brochure-close" type="submit" aria-label="Tutup brosur" autofocus>×</button>
+        </form>
+      </header>
+      <div class="brochure-image-area" id="brochure-image-area">
+        <p class="brochure-feedback" id="brochure-preview-status" role="status"></p>
+      </div>
+      <div class="brochure-dialog-actions" id="brochure-dialog-actions" hidden>
+        <a class="brochure-full-size" id="brochure-full-size" href="/api/brochure?preview=1" target="_blank" rel="noopener">Buka ukuran penuh <span aria-hidden="true">↗</span></a>
+        <button class="button button-primary" id="download-brochure" type="button"><span aria-hidden="true">↓</span> Download Brosur</button>
+        <p class="brochure-feedback" id="brochure-feedback" role="status" aria-live="polite" hidden></p>
+      </div>
+    </dialog>
     <section class="hero shell">
       <div class="hero-copy">
         <div class="eyebrow"><span class="eyebrow-dot"></span> <span id="hero-kicker">SISTEM PENERIMAAN SANTRI BARU</span></div>

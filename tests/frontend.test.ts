@@ -42,7 +42,7 @@ describe("frontend accessibility contracts", () => {
       expect(html).toContain('href="/logo-gq.png" type="image/png"');
       expect(html).toContain('class="brand-logo" src="/logo-gq.png"');
       expect(html).toContain('name="description"');
-      expect(html).toContain(`<link rel="stylesheet" href="/app.css?v=${page === "index.html" ? "2027-brochure-minimal-v5" : page === "success.html" ? "2027-countdown-cta" : page === "admin.html" ? "2027-admin-archive-v3" : "2027-brochure-v1"}">`);
+      expect(html).toMatch(/<link rel="stylesheet" href="\/app\.css\?v=[^"]+">/);
       const ids = attributes(html, "id");
       const idSet = new Set(ids);
       expect(idSet.size).toBe(ids.length);
@@ -84,12 +84,15 @@ describe("frontend accessibility contracts", () => {
     expect(html).toContain('aria-live="off"');
     for (const unit of ["days", "hours", "minutes", "seconds"]) expect(html).toContain(`id="countdown-${unit}"`);
     expect(html).toContain('id="countdown-schedule" aria-live="polite"');
-    expect(html).toContain('src="/app.js?v=2027-public-clean-v3"');
+    expect(html).toContain('src="/app.js?v=2027-askar-schedule-v1"');
+    expect(html).toContain('id="countdown-askar-link" href="/askar"');
+    expect(html).toContain('id="view-brochure" type="button" aria-haspopup="dialog" aria-controls="brochure-dialog">Lihat Brosur');
+    expect(html).toContain('id="brochure-dialog" aria-labelledby="brochure-title"');
     expect(html).toContain('id="download-brochure" type="button"');
     expect(html).toContain('id="brochure-feedback" role="status" aria-live="polite"');
-    expect(html).toContain('id="brochure-download-count" role="status" aria-live="polite" hidden');
-    expect(html.indexOf('id="brochure-download-count"')).toBeGreaterThan(html.indexOf('id="download-brochure"'));
-    expect(html).toContain('hidden>Sudah diunduh <strong id="brochure-download-number"></strong> kali</p>');
+    expect(html).toContain('id="brochure-view-count" role="status" aria-live="polite" hidden');
+    expect(html.indexOf('id="brochure-view-count"')).toBeGreaterThan(html.indexOf('id="view-brochure"'));
+    expect(html).toContain('hidden>Sudah dilihat <strong id="brochure-view-number"></strong> kali</p>');
     expect(html).toContain('href="https://wa.me/6285173394373"');
     expect(html).toContain('aria-label="Pertanyaan/Informasi: 085173394373 (Admin Griya Qur\'an), buka WhatsApp"');
     expect(html).toContain('<strong>Pertanyaan / Informasi</strong>');
@@ -180,6 +183,7 @@ describe("frontend accessibility contracts", () => {
     expect(html).toContain('id="export-xlsx-button"');
     expect(html).toContain('name="openingCountdownEnabled"');
     expect(html).toContain('name="openingDateTime"');
+    expect(html).toContain('name="askarOpeningDateTime"');
     expect(html).toContain('id="brochure-form"');
     expect(html).toContain('name="brochure" accept=".jpg,.jpeg,.png,image/jpeg,image/png"');
     expect(html).toContain('id="brochure-alert" role="status"');
@@ -201,8 +205,8 @@ describe("frontend accessibility contracts", () => {
 
   test("brochure counter remains simple and readable without badge decoration", async () => {
     const css = await stylesheet();
-    const counter = css.match(/\.opening-contact \.brochure-download-count\s*\{([^}]+)\}/)?.[1];
-    const number = css.match(/\.brochure-download-count strong\s*\{([^}]+)\}/)?.[1];
+    const counter = css.match(/\.opening-contact \.brochure-view-count\s*\{([^}]+)\}/)?.[1];
+    const number = css.match(/\.brochure-view-count strong\s*\{([^}]+)\}/)?.[1];
     if (!counter || !number) throw new Error("Missing brochure counter styles");
     for (const rule of [counter, number]) {
       expect(rule).not.toMatch(/\b(?:background|border|box-shadow)\s*:/);

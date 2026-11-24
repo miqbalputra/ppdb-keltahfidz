@@ -7,6 +7,7 @@ export interface SystemSettings {
   whatsappGroupUrl: string;
   openingCountdownEnabled: boolean;
   openingDateTime: string;
+  askarOpeningDateTime?: string;
 }
 
 export function openingTimestamp(value: string): number | null {
@@ -22,16 +23,25 @@ export function openingTimestamp(value: string): number | null {
   return Date.UTC(year, month - 1, day, hour - 7, minute);
 }
 
-export function isRegistrationOpen(settings: SystemSettings, now = new Date()): boolean {
-  if (!settings.openingCountdownEnabled) return true;
-  const timestamp = openingTimestamp(settings.openingDateTime);
+export type RegistrationPath = "umum" | "askar";
+
+export function registrationSchedule(settings: SystemSettings, path: RegistrationPath) {
+  if (path === "askar" && settings.askarOpeningDateTime) {
+    return { openingCountdownEnabled: true, openingDateTime: settings.askarOpeningDateTime };
+  }
+  return { openingCountdownEnabled: settings.openingCountdownEnabled, openingDateTime: settings.openingDateTime };
+}
+
+export function isRegistrationOpen(schedule: Pick<SystemSettings, "openingCountdownEnabled" | "openingDateTime">, now = new Date()): boolean {
+  if (!schedule.openingCountdownEnabled) return true;
+  const timestamp = openingTimestamp(schedule.openingDateTime);
   return timestamp !== null && now.getTime() >= timestamp;
 }
 
 export interface WaitinglistRecordInput {
   nama_ortu: string;
   status_ortu: "bapak" | "ibu";
-  jalur_pendaftaran: "umum" | "askar";
+  jalur_pendaftaran: RegistrationPath;
   askar_anggota: "bapak" | "ibu" | "keduanya" | null;
   askar_divisi_bapak: string | null;
   askar_divisi_ibu: string | null;
@@ -269,6 +279,7 @@ export function validateSettings(input: unknown): SystemSettings {
   const whatsappGroupUrl = String(value.whatsappGroupUrl ?? "").trim();
   const openingCountdownEnabled = value.openingCountdownEnabled === true;
   const openingDateTime = String(value.openingDateTime ?? "").trim();
+  const askarOpeningDateTime = value.askarOpeningDateTime === undefined ? undefined : String(value.askarOpeningDateTime).trim();
 
   if (!isValidIsoDate(cutoffDate)) throw new Error("Tanggal acuan tidak valid.");
   if (!Number.isInteger(minAgeYears) || minAgeYears < 0 || minAgeYears > 18) {
@@ -284,6 +295,9 @@ export function validateSettings(input: unknown): SystemSettings {
   if (openingDateTime && openingTimestamp(openingDateTime) === null) {
     throw new Error("Tanggal dan jam pembukaan WIB tidak valid.");
   }
+  if (askarOpeningDateTime && openingTimestamp(askarOpeningDateTime) === null) {
+    throw new Error("Tanggal dan jam pembukaan Jalur Askar (WIB) tidak valid.");
+  }
   if (whatsappGroupUrl) {
     try {
       const parsed = new URL(whatsappGroupUrl);
@@ -295,7 +309,7 @@ export function validateSettings(input: unknown): SystemSettings {
     }
   }
 
-  return { cutoffDate, minAgeYears, minAgeMonths, whatsappGroupUrl, openingCountdownEnabled, openingDateTime };
+  return { cutoffDate, minAgeYears, minAgeMonths, whatsappGroupUrl, openingCountdownEnabled, openingDateTime, askarOpeningDateTime };
 }
 
 export function csvSafe(value: unknown): string {

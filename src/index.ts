@@ -48,7 +48,7 @@ import {
 import { buildWaitinglistReport } from "./lib/waitinglist-report";
 import { generateReportXlsx, generateReportPdf } from "./lib/report-export";
 import { brochureStatus, deleteBrochure, detectBrochureMime, readBrochure, saveBrochure, validateBrochure } from "./lib/brochure";
-import { getBrochureDownloadCount, recordBrochureDownload } from "./lib/brochure-downloads";
+import { BROCHURE_DOWNLOAD_COUNT_KEY, BROCHURE_VIEW_COUNT_KEY, getBrochureCount, recordBrochureCount } from "./lib/brochure-metrics";
 import {
   generateParticipantPdf,
   generateParticipantXlsx,
@@ -72,8 +72,10 @@ import {
   csvSafe,
   eligibleBirthdate,
   isRegistrationOpen,
+  registrationSchedule,
   validateSettings,
   validateWaitinglist,
+  type RegistrationPath,
   type SystemSettings,
   type WaitinglistRecordInput,
 } from "./lib/validation";
@@ -119,6 +121,7 @@ const adminSettingsBody = t.Object({
   whatsappGroupUrl: t.String({ maxLength: 500 }),
   openingCountdownEnabled: t.Boolean(),
   openingDateTime: t.String({ maxLength: 16 }),
+  askarOpeningDateTime: t.Optional(t.String({ maxLength: 16 })),
 });
 
 function waitinglistFilterProperties() {
@@ -279,14 +282,14 @@ async function submitPublicWaitinglist(
   body: Record<string, unknown> & { bukti_transfer: File },
   request: Request,
   set: { status?: number | string },
-  route: "umum" | "askar",
+  route: RegistrationPath,
 ) {
   if (!originIsSame(request)) {
     set.status = 403;
     return { error: "Permintaan lintas situs ditolak." };
   }
   const settings = await getSystemSettings();
-  if (!isRegistrationOpen(settings)) {
+  if (!isRegistrationOpen(registrationSchedule(settings, route))) {
     set.status = 403;
     return { error: "Pendaftaran belum dibuka. Silakan kembali sesuai jadwal pembukaan." };
   }
@@ -396,29 +399,37 @@ export const app = new Elysia({ name: "spsb-waitinglist" })
       return { status: "not_ready", database: "disconnected" };
     }
   })
-  .get("/api/config", async () => {
+  .get("/api/config", async ({ query, set }) => {
     const settings = await getSystemSettings();
+    const schedule = registrationSchedule(settings, query.jalur === "askar" ? "askar" : "umum");
+    set.headers["Cache-Control"] = "no-store";
     return {
       cutoffDate: settings.cutoffDate,
       eligibleBirthdate: eligibleBirthdate(settings),
       minAgeYears: settings.minAgeYears,
       minAgeMonths: settings.minAgeMonths,
       whatsappGroupUrl: settings.whatsappGroupUrl,
-      registrationOpen: isRegistrationOpen(settings),
-      openingCountdownEnabled: settings.openingCountdownEnabled,
-      openingDateTime: settings.openingDateTime,
+      registrationOpen: isRegistrationOpen(schedule),
+      ...schedule,
       turnstileSiteKey: TURNSTILE_ENABLED ? TURNSTILE_SITE_KEY : "",
     };
   })
   .get("/api/brochure/status", async ({ set }) => {
     try {
-      return { available: (await brochureStatus()).available, downloadCount: await getBrochureDownloadCount() };
+      const [brochure, downloadCount, viewCount] = await Promise.all([
+        brochureStatus(),
+        getBrochureCount(BROCHURE_DOWNLOAD_COUNT_KEY),
+        getBrochureCount(BROCHURE_VIEW_COUNT_KEY),
+      ]);
+      return { available: brochure.available, downloadCount, viewCount };
     } catch {
       set.status = 503;
       return { error: "Informasi brosur belum dapat dimuat." };
     }
   })
-  .get("/api/brochure", async ({ request, set }) => {
+  .get("/api/brochure", async ({ query, request, set }) => {
+    const countedView = query.preview === "view";
+    const preview = countedView || query.preview === "1";
     const bytes = await readBrochure();
     if (!bytes) {
       set.status = 404;
@@ -433,14 +444,20 @@ export const app = new Elysia({ name: "spsb-waitinglist" })
     const response = new Response(new Uint8Array(bytes), {
       headers: {
         "Content-Type": mime,
-        "Content-Disposition": `attachment; filename="brosur-spsb-2027.${extension}"`,
+        "Content-Disposition": `${preview ? "inline" : "attachment"}; filename="brosur-spsb-2027.${extension}"`,
         "Cache-Control": "no-store, max-age=0",
         "X-Content-Type-Options": "nosniff",
       },
     });
-    if (request.method === "GET") {
+    if (countedView && request.method === "GET") {
       try {
-        await recordBrochureDownload();
+        await recordBrochureCount(BROCHURE_VIEW_COUNT_KEY);
+      } catch {
+        console.error("Failed to record brochure view");
+      }
+    } else if (!preview && request.method === "GET") {
+      try {
+        await recordBrochureCount(BROCHURE_DOWNLOAD_COUNT_KEY);
       } catch {
         set.status = 503;
         return { error: "Brosur belum dapat diunduh. Silakan coba lagi." };

@@ -4,7 +4,7 @@ import { db } from "../db";
 import { systemSettings } from "../db/schema";
 import { validateSettings, type SystemSettings } from "./validation";
 
-const settingKeys = ["cutoffDate", "minAgeYears", "minAgeMonths", "whatsappGroupUrl", "openingCountdownEnabled", "openingDateTime"] as const;
+const settingKeys = ["cutoffDate", "minAgeYears", "minAgeMonths", "whatsappGroupUrl", "openingCountdownEnabled", "openingDateTime", "askarOpeningDateTime"] as const;
 
 export async function getSystemSettings(): Promise<SystemSettings> {
   const rows = await db.select().from(systemSettings);
@@ -22,6 +22,7 @@ export async function getSystemSettings(): Promise<SystemSettings> {
     ...coreSettings,
     openingCountdownEnabled: saved.get("openingCountdownEnabled") === "true",
     openingDateTime: saved.get("openingDateTime") ?? "",
+    askarOpeningDateTime: saved.get("askarOpeningDateTime") ?? "",
   };
 }
 
@@ -36,6 +37,7 @@ export async function seedSystemSettings(): Promise<void> {
     whatsappGroupUrl: defaults.whatsappGroupUrl,
     openingCountdownEnabled: "false",
     openingDateTime: "",
+    askarOpeningDateTime: "",
   };
   const missing = settingKeys.filter((key) => !keys.has(key));
   if (!missing.length) return;
@@ -47,14 +49,18 @@ export async function seedSystemSettings(): Promise<void> {
 
 export async function saveSystemSettings(settings: SystemSettings): Promise<void> {
   const now = new Date().toISOString();
-  await db.insert(systemSettings).values([
+  const rows = [
     { setting_key: "cutoffDate", setting_value: settings.cutoffDate, updated_at: now },
     { setting_key: "minAgeYears", setting_value: String(settings.minAgeYears), updated_at: now },
     { setting_key: "minAgeMonths", setting_value: String(settings.minAgeMonths), updated_at: now },
     { setting_key: "whatsappGroupUrl", setting_value: settings.whatsappGroupUrl, updated_at: now },
     { setting_key: "openingCountdownEnabled", setting_value: String(settings.openingCountdownEnabled), updated_at: now },
     { setting_key: "openingDateTime", setting_value: settings.openingDateTime, updated_at: now },
-  ]).onDuplicateKeyUpdate({
+  ];
+  if (settings.askarOpeningDateTime !== undefined) {
+    rows.push({ setting_key: "askarOpeningDateTime", setting_value: settings.askarOpeningDateTime, updated_at: now });
+  }
+  await db.insert(systemSettings).values(rows).onDuplicateKeyUpdate({
     set: {
       setting_value: sql`values(${systemSettings.setting_value})`,
       updated_at: now,

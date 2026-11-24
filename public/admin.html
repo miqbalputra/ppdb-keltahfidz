@@ -9,8 +9,8 @@
   <title>Dashboard Panitia — SPSB 2027</title>
   <link rel="icon" href="/logo-gq.png" type="image/png">
   <link rel="stylesheet" href="/app.css?v=2027-payment-ai-v2">
-  <link rel="stylesheet" href="/admin.css?v=2027-receipt-logs-1">
-  <script src="/admin.js?v=2027-receipt-logs-1" defer></script>
+  <link rel="stylesheet" href="/admin.css?v=2027-askar-schedule-v1">
+  <script src="/admin.js?v=2027-askar-schedule-v1" defer></script>
 </head>
 <body class="admin-page">
   <a class="skip-link" href="#main-content">Lewati ke konten utama</a>
@@ -133,7 +133,12 @@
           <label class="field"><span>Usia minimum (tahun)</span><input type="number" name="minAgeYears" min="0" max="18" required></label>
           <label class="field"><span>Usia minimum (bulan)</span><input type="number" name="minAgeMonths" min="0" max="11" required></label>
           <label class="field settings-wide"><span>Link grup WhatsApp SPSB</span><input type="url" name="whatsappGroupUrl" placeholder="https://chat.whatsapp.com/…"><small class="field-hint">Ditampilkan setelah pendaftaran berhasil dan disertakan pada email serta pengumuman pendaftar di grup.</small></label>
-          <fieldset class="opening-settings settings-wide"><legend>Jadwal pembukaan pendaftaran</legend><label class="opening-toggle"><input type="checkbox" name="openingCountdownEnabled"><span>Aktifkan halaman “Segera Dibuka” dan kunci pendaftaran sampai jadwal</span></label><label class="field opening-datetime"><span>Tanggal dan jam pembukaan (WIB)</span><input type="datetime-local" name="openingDateTime"><small class="field-hint">Formulir terbuka otomatis pada waktu ini. Nonaktifkan toggle untuk membuka pendaftaran lebih awal.</small></label></fieldset>
+          <fieldset class="opening-settings settings-wide">
+            <legend>Jadwal pembukaan pendaftaran</legend>
+            <label class="opening-toggle"><input type="checkbox" name="openingCountdownEnabled"><span>Kunci Jalur Umum hingga jadwal pembukaan</span></label>
+            <label class="field opening-datetime"><span>Jalur Umum (WIB)</span><input type="datetime-local" name="openingDateTime"><small class="field-hint">Formulir terbuka otomatis pada waktu ini. Hapus centang untuk membuka Jalur Umum lebih awal.</small></label>
+            <label class="field opening-datetime"><span>Jalur Asatidz dan Karyawan (WIB)</span><input type="datetime-local" name="askarOpeningDateTime" aria-describedby="askar-opening-hint"><small class="field-hint" id="askar-opening-hint">Isi untuk membuka Jalur Askar pada waktu tersendiri. Kosongkan jika ingin mengikuti Jalur Umum.</small></label>
+          </fieldset>
           <div class="settings-actions"><p class="field-hint">Perubahan aturan usia berlaku untuk pendaftaran baru dan koreksi tanggal lahir.</p><button class="button button-primary" id="save-settings" type="submit">Simpan pengaturan</button></div>
         </form>
       </section>
@@ -153,7 +158,7 @@
           <article class="system-status-card"><span>Aplikasi</span><strong id="system-app-status" class="system-state" aria-live="polite">Memuat…</strong><small id="system-runtime">Runtime belum diperiksa</small></article>
           <article class="system-status-card"><span>Database MariaDB</span><strong id="system-db-status" class="system-state" aria-live="polite">Memuat…</strong><small>Koneksi database aplikasi</small></article>
           <article class="system-status-card"><span>Notifikasi n8n</span><strong id="system-n8n-status" class="system-state" aria-live="polite">Memuat…</strong><small id="system-n8n-detail">Status konfigurasi webhook</small></article>
-          <article class="system-status-card"><span>Verifikasi AI & invoice</span><strong id="system-receipt-status" class="system-state" aria-live="polite">Memuat…</strong><small id="system-receipt-detail">Pemeriksaan nominal bukti transfer dan invoice otomatis</small></article>
+          <article class="system-status-card"><span>Verifikasi AI &amp; invoice</span><strong id="system-receipt-status" class="system-state" aria-live="polite">Memuat…</strong><small id="system-receipt-detail">Pemeriksaan nominal bukti transfer dan invoice otomatis</small></article>
           <article class="system-status-card"><span>Anti-spam</span><strong id="system-turnstile-status" class="system-state" aria-live="polite">Memuat…</strong><small>Cloudflare Turnstile</small></article>
         </div>
       </section>

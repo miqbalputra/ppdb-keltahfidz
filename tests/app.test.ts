@@ -1,12 +1,23 @@
-import { describe, expect, test } from "bun:test";
+import { beforeAll, describe, expect, mock, test } from "bun:test";
+
+const generalSettings = {
+  cutoffDate: "2027-07-01", minAgeYears: 6, minAgeMonths: 6, whatsappGroupUrl: "",
+  openingCountdownEnabled: false, openingDateTime: "",
+};
+let currentSettings = { ...generalSettings, askarOpeningDateTime: "" };
 
 describe("Elysia application", () => {
-  test("serves health status with security headers", async () => {
+  beforeAll(async () => {
     process.env.ADMIN_USERNAME = "test-admin";
     process.env.ADMIN_PASSWORD = "test-admin-password";
     process.env.APP_SECRET = "test-secret-with-more-than-32-characters";
     process.env.DATA_ENCRYPTION_KEY = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
     await (await import("./helpers/staff-mock")).mockStaffAuthentication();
+    const settings = await import("../src/lib/settings");
+    mock.module("../src/lib/settings", () => ({ ...settings, getSystemSettings: async () => currentSettings }));
+  });
+
+  test("serves health status with security headers", async () => {
     const { app } = await import("../src/index");
     const response = await app.handle(new Request("http://localhost/healthz"));
 
@@ -26,7 +37,7 @@ describe("Elysia application", () => {
       expect(response.status).toBe(200);
       expect(bodies[index]!.length).toBeGreaterThan(0);
     }
-    expect(bodies[1]).toContain("Pengaturan sistem");
+    expect(bodies[2]).toContain("Pengaturan sistem");
   });
 
   test("rejects unknown routes, oversized requests, and invalid region queries safely", async () => {
@@ -49,6 +60,49 @@ describe("Elysia application", () => {
 
   test("parses valid multipart registration data before enforcing same-origin submission", async () => {
     const { app } = await import("../src/index");
+    const response = await app.handle(new Request("http://localhost/api/waitinglist", {
+      method: "POST",
+      headers: { host: "localhost", origin: "https://attacker.example" },
+      body: registrationForm(),
+    }));
+    expect(response.status).toBe(403);
+  });
+
+  test("config and public submissions enforce separate schedules for the two paths", async () => {
+    const { app } = await import("../src/index");
+    const readConfig = async (query: string) => (await app.handle(new Request(`http://localhost/api/config${query}`))).json();
+    const submit = (path: string) => {
+      const body = registrationForm();
+      body.set("website", "honeypot-test");
+      return app.handle(new Request(`http://localhost/api/waitinglist${path}`, {
+        method: "POST", headers: { host: "localhost", origin: "http://localhost" }, body,
+      }));
+    };
+    try {
+      const futureOpening = "2099-01-01T08:00";
+      currentSettings = { ...generalSettings, openingCountdownEnabled: true, openingDateTime: futureOpening, askarOpeningDateTime: "2000-01-01T08:00" };
+      expect(await readConfig("")).toMatchObject({ registrationOpen: false, openingDateTime: futureOpening });
+      expect(await readConfig("?jalur=askar")).toMatchObject({ registrationOpen: true, openingDateTime: "2000-01-01T08:00" });
+      expect((await submit("")).status).toBe(403);
+      expect((await submit("/askar")).status).toBe(201);
+
+      currentSettings = { ...generalSettings, askarOpeningDateTime: futureOpening };
+      expect(await readConfig("")).toMatchObject({ registrationOpen: true });
+      expect(await readConfig("?jalur=askar")).toMatchObject({ registrationOpen: false, openingDateTime: futureOpening });
+      expect((await submit("")).status).toBe(201);
+      const closed = await submit("/askar");
+      expect(closed.status).toBe(403);
+      expect(await closed.json()).toMatchObject({ error: expect.stringContaining("belum dibuka") });
+
+      currentSettings = { ...generalSettings, openingCountdownEnabled: true, openingDateTime: futureOpening, askarOpeningDateTime: "" };
+      expect(await readConfig("?jalur=askar")).toMatchObject({ registrationOpen: false, openingDateTime: futureOpening });
+      expect((await submit("/askar")).status).toBe(403);
+    } finally {
+      currentSettings = { ...generalSettings, askarOpeningDateTime: "" };
+    }
+  });
+
+  function registrationForm() {
     const form = new FormData();
     const fields = {
       nama_ortu: "Aminah",
@@ -72,13 +126,8 @@ describe("Elysia application", () => {
     };
     for (const [key, value] of Object.entries(fields)) form.append(key, value);
     form.append("bukti_transfer", new Blob(["%PDF-1.7\\nproof"], { type: "application/pdf" }), "proof.pdf");
-    const response = await app.handle(new Request("http://localhost/api/waitinglist", {
-      method: "POST",
-      headers: { host: "localhost", origin: "https://attacker.example" },
-      body: form,
-    }));
-    expect(response.status).toBe(403);
-  });
+    return form;
+  }
 
   test("rejects payment proof uploads larger than 5 MB", async () => {
     const { app } = await import("../src/index");

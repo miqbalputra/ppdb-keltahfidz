@@ -4,17 +4,19 @@ import { runInNewContext } from "node:vm";
 
 const script = await readFile(new URL("../public/app.js", import.meta.url), "utf8");
 
-function browserHarness(openingDateTime: string, start: string, initialCount = 0) {
+function browserHarness(openingDateTime: string, start: string, initialViews = 0, pathname = "/") {
   let now = new Date(start).getTime();
   let serverOpen = false;
   let brochureAvailable = false;
   let downloads = 0;
-  let totalDownloads = initialCount;
+  let previewRequests = 0;
+  let totalViews = initialViews;
   let brochureStatusAvailable = true;
   let brochureDownloadFails = false;
   let copiedAccount = "";
   let interval: (() => void) | undefined;
   let retry: (() => void) | undefined;
+  const configRequests: string[] = [];
   const nodes = new Map<string, any>();
   const classes = new Set(["config-pending"]);
   const node = (selector: string): any => {
@@ -24,17 +26,28 @@ function browserHarness(openingDateTime: string, start: string, initialCount = 0
       listeners: {} as Record<string, () => void>,
       addEventListener(event: string, fn: () => void) { this.listeners[event] = fn; },
       setCustomValidity: () => {}, setAttribute: () => {}, removeAttribute: () => {},
-      replaceChildren: () => {}, closest: () => ({ querySelector: () => null }),
+      append: () => {}, replaceChildren: () => {}, closest: () => ({ querySelector: () => null }),
       click: () => { downloads += 1; }, remove: () => {},
     });
     return nodes.get(selector);
   };
-  const metric = node("#brochure-download-count");
+  const metric = node("#brochure-view-count");
+  const brochureDialog = node("#brochure-dialog");
+  brochureDialog.showModal = () => { brochureDialog.open = true; };
+  const brochureImage = node("#brochure-image");
+  Object.defineProperty(brochureImage, "src", {
+    set(url) {
+      previewRequests += 1;
+      if (url !== `/api/brochure?preview=view&open=${previewRequests}`) throw new Error("Unexpected preview URL");
+      if (brochureAvailable) totalViews += 1;
+      Promise.resolve().then(() => brochureImage.listeners[brochureAvailable ? "load" : "error"]());
+    },
+  });
   metric.hidden = true;
   // Match the real paragraph's text nodes and styled <strong>. Reading the
   // parent's textContent aggregates descendants, as it does in a browser.
   metric.childNodes = [
-    { textContent: "Sudah diunduh " }, node("#brochure-download-number"), { textContent: " kali" },
+    { textContent: "Sudah dilihat " }, node("#brochure-view-number"), { textContent: " kali" },
   ];
   Object.defineProperty(metric, "textContent", {
     get: () => metric.childNodes.map((child: { textContent: string }) => child.textContent).join(""),
@@ -43,17 +56,21 @@ function browserHarness(openingDateTime: string, start: string, initialCount = 0
   node("#payment-account-number").textContent = "7355331193";
   const form = node("#waitinglist-form");
   form.elements = new Proxy({}, { get: (_, key: string) => node(`#input-${key}`) });
-  form.querySelectorAll = (selector: string) => selector === "select[data-region]" ? [region] : [];
+  form.querySelectorAll = (selector: string) => {
+    if (selector === "select[data-region]") return [region];
+    return selector === 'input[name="askar_anggota"]' ? [node("#askar-member")] : [];
+  };
+  form.querySelector = () => null;
   const document = {
     body: { classList: { add: (name: string) => classes.add(name), remove: (name: string) => classes.delete(name) }, append: () => {} },
     querySelector: node,
-    createElement: () => node("#created"),
+    querySelectorAll: () => [],
+    createElement: (tag: string) => node(tag === "img" ? "#brochure-image" : "#created"),
   };
   const FakeDate = class extends Date { static now() { return now; } };
   const fetch = async (url: string) => {
     if (url === "/api/brochure") {
       const ok = brochureAvailable && !brochureDownloadFails;
-      if (ok) totalDownloads += 1;
       return {
         ok, status: brochureDownloadFails ? 503 : brochureAvailable ? 200 : 404,
         blob: async () => new Blob(["\x89PNG\r\n\x1a\n"], { type: "image/png" }),
@@ -61,11 +78,13 @@ function browserHarness(openingDateTime: string, start: string, initialCount = 0
     }
     if (url === "/api/brochure/status") return {
       ok: brochureStatusAvailable,
-      json: async () => ({ available: brochureAvailable, downloadCount: totalDownloads }),
+      json: async () => ({ available: brochureAvailable, viewCount: totalViews }),
     };
+    const isConfigRequest = url.startsWith("/api/config");
+    if (isConfigRequest) configRequests.push(url);
     return {
       ok: true,
-      json: async () => url === "/api/config"
+      json: async () => isConfigRequest
         ? {
           cutoffDate: "2027-07-01", eligibleBirthdate: "2021-01-01", minAgeYears: 6, minAgeMonths: 6,
           openingCountdownEnabled: true, openingDateTime, registrationOpen: serverOpen, turnstileSiteKey: "",
@@ -74,7 +93,7 @@ function browserHarness(openingDateTime: string, start: string, initialCount = 0
     };
   };
   runInNewContext(script, {
-    document, Date: FakeDate, fetch, Intl, AbortController,
+    document, window: { location: { pathname } }, Date: FakeDate, fetch, Intl, AbortController,
     navigator: { clipboard: { writeText: async (value: string) => { copiedAccount = value; } } },
     URL: { createObjectURL: () => "blob:test-brochure", revokeObjectURL: () => {} },
     Option: class { dataset = {}; constructor(public text: string, public value: string) {} },
@@ -84,7 +103,7 @@ function browserHarness(openingDateTime: string, start: string, initialCount = 0
   });
   const settle = async () => { for (let i = 0; i < 15; i += 1) await Promise.resolve(); };
   return {
-    node, classes, settle,
+    node, classes, settle, configRequests,
     setTime: (time: string) => { now = new Date(time).getTime(); },
     openOnServer: () => { serverOpen = true; },
     brochureIsAvailable: () => { brochureAvailable = true; },
@@ -93,7 +112,10 @@ function browserHarness(openingDateTime: string, start: string, initialCount = 0
     downloadCount: () => downloads,
     clickCopyAccount: async () => { await node("#copy-account-number").listeners.click(); await settle(); },
     copiedAccount: () => copiedAccount,
-    clickBrochure: async () => { node("#download-brochure").listeners.click(); await settle(); },
+    previewRequests: () => previewRequests,
+    openBrochure: async () => { node("#view-brochure").listeners.click(); await settle(); },
+    closeBrochure: () => { brochureDialog.open = false; brochureDialog.listeners.close(); },
+    downloadBrochure: async () => { node("#download-brochure").listeners.click(); await settle(); },
     tick: async () => { interval?.(); await settle(); },
     retry: async () => { retry?.(); await settle(); },
   };
@@ -116,35 +138,48 @@ describe("browser opening countdown", () => {
     expect(browser.classes.has("config-pending")).toBe(false);
   });
 
-  test("brochure button stays available and reports absence until an image is uploaded", async () => {
+  test("loads the brochure on demand and counts successful previews without counting downloads", async () => {
     const browser = browserHarness("2027-01-01T00:01", "2026-12-31T17:00:00Z");
     await browser.settle();
-    expect(browser.node("#brochure-download-count").textContent).toBe("Sudah diunduh 0 kali");
-    expect(browser.node("#brochure-download-count").hidden).toBe(false);
-    await browser.clickBrochure();
-    expect(browser.node("#brochure-feedback").textContent).toContain("Brosur belum tersedia");
-    expect(browser.node("#download-brochure").disabled).toBe(false);
+    expect(browser.node("#brochure-view-count").textContent).toBe("Sudah dilihat 0 kali");
+    expect(browser.node("#brochure-view-count").hidden).toBe(false);
+    expect(browser.previewRequests()).toBe(0);
+    await browser.openBrochure();
+    expect(browser.node("#brochure-dialog").open).toBe(true);
+    expect(browser.node("#brochure-preview-status").textContent).toContain("Brosur belum dapat ditampilkan");
+    expect(browser.node("#brochure-dialog-actions").hidden).toBe(true);
     expect(browser.downloadCount()).toBe(0);
-    expect(browser.node("#brochure-download-count").textContent).toBe("Sudah diunduh 0 kali");
+    expect(browser.node("#brochure-view-count").textContent).toBe("Sudah dilihat 0 kali");
+    browser.closeBrochure();
     browser.brochureIsAvailable();
-    await browser.clickBrochure();
+    await browser.openBrochure();
+    expect(browser.previewRequests()).toBe(2);
+    expect(browser.node("#brochure-image").hidden).toBe(false);
+    expect(browser.node("#brochure-dialog-actions").hidden).toBe(false);
+    expect(browser.downloadCount()).toBe(0);
+    expect(browser.node("#brochure-view-count").textContent).toBe("Sudah dilihat 1 kali");
+    await browser.downloadBrochure();
     expect(browser.downloadCount()).toBe(1);
     expect(browser.node("#brochure-feedback").hidden).toBe(true);
-    expect(browser.node("#brochure-download-count").textContent).toBe("Sudah diunduh 1 kali");
-    await browser.clickBrochure();
+    expect(browser.node("#brochure-view-count").textContent).toBe("Sudah dilihat 1 kali");
+    await browser.downloadBrochure();
     expect(browser.downloadCount()).toBe(2);
-    expect(browser.node("#brochure-download-count").textContent).toBe("Sudah diunduh 2 kali");
+    expect(browser.node("#brochure-view-count").textContent).toBe("Sudah dilihat 1 kali");
+    browser.closeBrochure();
+    await browser.openBrochure();
+    expect(browser.node("#brochure-view-count").textContent).toBe("Sudah dilihat 2 kali");
   });
 
   test("formats the persisted total in Indonesian and does not increment a failed download", async () => {
     const browser = browserHarness("2027-01-01T00:01", "2026-12-31T17:00:00Z", 1234);
     await browser.settle();
-    expect(browser.node("#brochure-download-count").textContent).toBe("Sudah diunduh 1.234 kali");
+    expect(browser.node("#brochure-view-count").textContent).toBe("Sudah dilihat 1.234 kali");
     browser.brochureIsAvailable();
     browser.downloadFails();
-    await browser.clickBrochure();
+    await browser.openBrochure();
+    await browser.downloadBrochure();
     expect(browser.downloadCount()).toBe(0);
-    expect(browser.node("#brochure-download-count").textContent).toBe("Sudah diunduh 1.234 kali");
+    expect(browser.node("#brochure-view-count").textContent).toBe("Sudah dilihat 1.235 kali");
     expect(browser.node("#brochure-feedback").textContent).toContain("coba lagi");
     expect(browser.node("#download-brochure").disabled).toBe(false);
   });
@@ -153,13 +188,14 @@ describe("browser opening countdown", () => {
     const browser = browserHarness("2027-01-01T00:01", "2026-12-31T17:00:00Z");
     browser.statusFails();
     await browser.settle();
-    expect(browser.node("#brochure-download-count").hidden).toBe(true);
-    expect(browser.node("#brochure-download-number").textContent).toBe("");
+    expect(browser.node("#brochure-view-count").hidden).toBe(true);
+    expect(browser.node("#brochure-view-number").textContent).toBe("");
     browser.brochureIsAvailable();
-    await browser.clickBrochure();
+    await browser.openBrochure();
+    await browser.downloadBrochure();
     expect(browser.downloadCount()).toBe(1);
     expect(browser.node("#brochure-feedback").hidden).toBe(true);
-    expect(browser.node("#brochure-download-count").hidden).toBe(true);
+    expect(browser.node("#brochure-view-count").hidden).toBe(true);
     expect(browser.node("#download-brochure").disabled).toBe(false);
   });
 
@@ -182,6 +218,20 @@ describe("browser opening countdown", () => {
     browser.openOnServer();
     await browser.retry();
     expect(browser.node("#opening-countdown").hidden).toBe(true);
+    expect(browser.classes.has("countdown-mode")).toBe(false);
+  });
+
+  test("uses the Askar schedule on initial load and rechecks the same path at opening", async () => {
+    const start = "2026-12-31T17:00:59Z";
+    const browser = browserHarness("2027-01-01T00:01", start, 0, "/askar");
+    await browser.settle();
+    expect(browser.configRequests).toEqual(["/api/config?jalur=askar"]);
+    expect(browser.node("#countdown-route-note").hidden).toBe(false);
+    expect(browser.node("#countdown-askar-link").hidden).toBe(true);
+    browser.openOnServer();
+    browser.setTime("2026-12-31T17:01:00Z");
+    await browser.tick();
+    expect(browser.configRequests).toEqual(["/api/config?jalur=askar", "/api/config?jalur=askar"]);
     expect(browser.classes.has("countdown-mode")).toBe(false);
   });
 });

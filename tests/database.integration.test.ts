@@ -9,7 +9,7 @@ let closeDb: (() => Promise<void>) | undefined;
 let webhookServer: ReturnType<typeof Bun.serve> | undefined;
 let originalFetch: typeof fetch | undefined;
 const insertedIds: string[] = [];
-let previousSettings: { cutoffDate: string; minAgeYears: number; minAgeMonths: number; whatsappGroupUrl: string; openingCountdownEnabled: boolean; openingDateTime: string } | undefined;
+let previousSettings: import("../src/lib/validation").SystemSettings | undefined;
 
 // This suite is opt-in because it runs destructive migrations against its database.
 test.skipIf(!testDatabaseUrl)("MariaDB-backed public, admin, security, and notification flows", async () => {
@@ -84,6 +84,7 @@ test.skipIf(!testDatabaseUrl)("MariaDB-backed public, admin, security, and notif
       whatsappGroupUrl: "https://chat.whatsapp.com/integration-default",
       openingCountdownEnabled: false,
       openingDateTime: "",
+      askarOpeningDateTime: "",
     };
     await settingsModule.saveSystemSettings(testSettings);
 
@@ -120,64 +121,70 @@ test.skipIf(!testDatabaseUrl)("MariaDB-backed public, admin, security, and notif
     expect(decryptSensitiveRecord(encryptedLegacyRows[0]!).nama_anak).toBe("Legacy Integration Child");
 
     const { app } = await import("../src/index");
-    // Exercise the new metric against real MariaDB, including concurrent first
+    // Exercise both metrics against real MariaDB, including concurrent first
     // inserts and an independent connection (no in-memory counter can pass).
     {
       const { systemSettings } = await import("../src/db/schema");
-      const { BROCHURE_DOWNLOAD_COUNT_KEY, getBrochureDownloadCount } = await import("../src/lib/brochure-downloads");
+      const { BROCHURE_DOWNLOAD_COUNT_KEY, BROCHURE_VIEW_COUNT_KEY, getBrochureCount } = await import("../src/lib/brochure-metrics");
       const { saveBrochure, deleteBrochure } = await import("../src/lib/brochure");
-      const [previousCount] = await db.select().from(systemSettings)
-        .where(eq(systemSettings.setting_key, BROCHURE_DOWNLOAD_COUNT_KEY));
-      const brochurePath = resolve(process.env.DATA_DIR!, "spsb-brochure.image");
-      const previousBrochure = await readFile(brochurePath).catch((error: NodeJS.ErrnoException) => {
-        if (error.code === "ENOENT") return null;
-        throw error;
-      });
-      try {
-        await db.delete(systemSettings).where(eq(systemSettings.setting_key, BROCHURE_DOWNLOAD_COUNT_KEY));
-        expect(await getBrochureDownloadCount()).toBe(0);
-        await saveBrochure(Buffer.from([0xff, 0xd8, 0xff, 1]));
-        const downloads = await Promise.all(Array.from({ length: 12 }, () =>
-          app.handle(new Request("http://localhost/api/brochure"))));
-        for (const response of downloads) {
-          expect(response.status).toBe(200);
-          expect(Buffer.from(await response.arrayBuffer())).toEqual(Buffer.from([0xff, 0xd8, 0xff, 1]));
-        }
-        expect(await getBrochureDownloadCount()).toBe(12);
-        const status = await app.handle(new Request("http://localhost/api/brochure/status"));
-        expect(await status.json()).toEqual({ available: true, downloadCount: 12 });
-        await settingsModule.saveSystemSettings(testSettings);
-        await settingsModule.seedSystemSettings();
-        expect(await getBrochureDownloadCount()).toBe(12);
-        await saveBrochure(Buffer.from([0xff, 0xd8, 0xff, 2]));
-        expect(await getBrochureDownloadCount()).toBe(12);
-        const repeated = await app.handle(new Request("http://localhost/api/brochure"));
-        expect(repeated.status).toBe(200);
-        await repeated.arrayBuffer();
-        await deleteBrochure();
-        expect((await app.handle(new Request("http://localhost/api/brochure"))).status).toBe(404);
-        expect(await getBrochureDownloadCount()).toBe(13);
-        const mysql = await import("mysql2/promise");
-        const connection = await mysql.createConnection(testDatabaseUrl!);
-        try {
-          const [rows] = await connection.query<import("mysql2").RowDataPacket[]>(
-            "SELECT setting_value FROM system_settings WHERE setting_key = ?", [BROCHURE_DOWNLOAD_COUNT_KEY]);
-          expect(rows[0]!.setting_value).toBe("13");
-        } finally {
-          await connection.end();
-        }
-      } finally {
-        if (previousCount) {
-          await db.insert(systemSettings).values(previousCount).onDuplicateKeyUpdate({
-            set: { setting_value: previousCount.setting_value, updated_at: previousCount.updated_at },
-          });
-        } else {
-          await db.delete(systemSettings).where(eq(systemSettings.setting_key, BROCHURE_DOWNLOAD_COUNT_KEY));
-        }
-        if (previousBrochure) await writeFile(brochurePath, previousBrochure);
-        else await unlink(brochurePath).catch((error: NodeJS.ErrnoException) => {
-          if (error.code !== "ENOENT") throw error;
+      for (const [countKey, query, field] of [
+        [BROCHURE_DOWNLOAD_COUNT_KEY, "", "downloadCount"],
+        [BROCHURE_VIEW_COUNT_KEY, "?preview=view", "viewCount"],
+      ] as const) {
+        const [previousCount] = await db.select().from(systemSettings)
+          .where(eq(systemSettings.setting_key, countKey));
+        const brochureUrl = `http://localhost/api/brochure${query}`;
+        const brochurePath = resolve(process.env.DATA_DIR!, "spsb-brochure.image");
+        const previousBrochure = await readFile(brochurePath).catch((error: NodeJS.ErrnoException) => {
+          if (error.code === "ENOENT") return null;
+          throw error;
         });
+        try {
+          await db.delete(systemSettings).where(eq(systemSettings.setting_key, countKey));
+          expect(await getBrochureCount(countKey)).toBe(0);
+          await saveBrochure(Buffer.from([0xff, 0xd8, 0xff, 1]));
+          const responses = await Promise.all(Array.from({ length: 12 }, () =>
+            app.handle(new Request(brochureUrl))));
+          for (const response of responses) {
+            expect(response.status).toBe(200);
+            expect(Buffer.from(await response.arrayBuffer())).toEqual(Buffer.from([0xff, 0xd8, 0xff, 1]));
+          }
+          expect(await getBrochureCount(countKey)).toBe(12);
+          const status = await app.handle(new Request("http://localhost/api/brochure/status"));
+          expect(await status.json()).toMatchObject({ available: true, [field]: 12 });
+          await settingsModule.saveSystemSettings(testSettings);
+          await settingsModule.seedSystemSettings();
+          expect(await getBrochureCount(countKey)).toBe(12);
+          await saveBrochure(Buffer.from([0xff, 0xd8, 0xff, 2]));
+          expect(await getBrochureCount(countKey)).toBe(12);
+          const repeated = await app.handle(new Request(brochureUrl));
+          expect(repeated.status).toBe(200);
+          await repeated.arrayBuffer();
+          await deleteBrochure();
+          expect((await app.handle(new Request(brochureUrl))).status).toBe(404);
+          expect(await getBrochureCount(countKey)).toBe(13);
+          const mysql = await import("mysql2/promise");
+          const connection = await mysql.createConnection(testDatabaseUrl!);
+          try {
+            const [rows] = await connection.query<import("mysql2").RowDataPacket[]>(
+              "SELECT setting_value FROM system_settings WHERE setting_key = ?", [countKey]);
+            expect(rows[0]!.setting_value).toBe("13");
+          } finally {
+            await connection.end();
+          }
+        } finally {
+          if (previousCount) {
+            await db.insert(systemSettings).values(previousCount).onDuplicateKeyUpdate({
+              set: { setting_value: previousCount.setting_value, updated_at: previousCount.updated_at },
+            });
+          } else {
+            await db.delete(systemSettings).where(eq(systemSettings.setting_key, countKey));
+          }
+          if (previousBrochure) await writeFile(brochurePath, previousBrochure);
+          else await unlink(brochurePath).catch((error: NodeJS.ErrnoException) => {
+            if (error.code !== "ENOENT") throw error;
+          });
+        }
       }
     }
     const nonce = crypto.randomUUID().slice(0, 8);
@@ -503,12 +510,20 @@ test.skipIf(!testDatabaseUrl)("MariaDB-backed public, admin, security, and notif
         whatsappGroupUrl: newGroupUrl,
         openingCountdownEnabled: true,
         openingDateTime: "2030-01-01T10:00",
+        askarOpeningDateTime: "2030-01-02T10:00",
       }),
     }));
     expect(updateSettings.status).toBe(200);
     expect((await updateSettings.json() as { saved: boolean }).saved).toBe(true);
     expect(await (await app.handle(new Request("http://localhost/api/config"))).json())
       .toMatchObject({ whatsappGroupUrl: newGroupUrl, registrationOpen: false, openingCountdownEnabled: true, openingDateTime: "2030-01-01T10:00" });
+    expect(await (await app.handle(new Request("http://localhost/api/config?jalur=askar"))).json())
+      .toMatchObject({ registrationOpen: false, openingCountdownEnabled: true, openingDateTime: "2030-01-02T10:00" });
+    const savedSettings = await app.handle(new Request("http://localhost/api/admin/settings", { headers: adminHeaders }));
+    expect(await savedSettings.json()).toMatchObject({ settings: { askarOpeningDateTime: "2030-01-02T10:00" } });
+    const persistedSettings = await settingsModule.getSystemSettings();
+    await settingsModule.saveSystemSettings({ ...persistedSettings, askarOpeningDateTime: undefined });
+    expect((await settingsModule.getSystemSettings()).askarOpeningDateTime).toBe("2030-01-02T10:00");
     const closedSubmission = await app.handle(new Request("http://localhost/api/waitinglist", {
       method: "POST",
       headers: uploadHeaders,

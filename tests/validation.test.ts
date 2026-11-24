@@ -9,6 +9,7 @@ import {
   openingTimestamp,
   nextEligibleCohort,
   normalizePhone,
+  registrationSchedule,
   validateSettings,
   validateWaitinglist,
   type SystemSettings,
@@ -150,6 +151,23 @@ describe("input normalization", () => {
       .toThrow("Tanggal dan jam pembukaan WIB wajib diisi");
     expect(() => validateSettings({ ...settings, openingDateTime: "2027-02-30T09:30" }))
       .toThrow("Tanggal dan jam pembukaan WIB tidak valid");
+    expect(() => validateSettings({ ...settings, askarOpeningDateTime: "2027-02-30T09:30" }))
+      .toThrow("Tanggal dan jam pembukaan Jalur Askar (WIB) tidak valid");
+    expect(validateSettings({ ...settings, askarOpeningDateTime: "" }).askarOpeningDateTime).toBe("");
+  });
+
+  test("opens each path independently and falls back to the general schedule when Askar is blank", () => {
+    const general = { ...settings, openingCountdownEnabled: true, openingDateTime: "2027-07-01T10:00" };
+    const independent = { ...general, askarOpeningDateTime: "2027-07-01T09:00" };
+    const opening = new Date("2027-07-01T02:00:00Z");
+    expect(isRegistrationOpen(registrationSchedule(independent, "askar"), new Date(opening.getTime() - 1))).toBe(false);
+    expect(isRegistrationOpen(registrationSchedule(independent, "askar"), opening)).toBe(true);
+    expect(isRegistrationOpen(registrationSchedule(independent, "umum"), opening)).toBe(false);
+    expect(registrationSchedule({ ...general, askarOpeningDateTime: "" }, "askar")).toEqual(registrationSchedule(general, "umum"));
+
+    const generalAlreadyOpen = { ...independent, openingCountdownEnabled: false, askarOpeningDateTime: "2027-07-01T11:00" };
+    expect(isRegistrationOpen(registrationSchedule(generalAlreadyOpen, "umum"), opening)).toBe(true);
+    expect(isRegistrationOpen(registrationSchedule(generalAlreadyOpen, "askar"), opening)).toBe(false);
   });
 
   test("neutralizes CSV formulas", () => {

@@ -148,6 +148,7 @@
     settingsForm.elements.whatsappGroupUrl.value = settings.whatsappGroupUrl || "";
     settingsForm.elements.openingCountdownEnabled.checked = settings.openingCountdownEnabled === true;
     settingsForm.elements.openingDateTime.value = settings.openingDateTime || "";
+    settingsForm.elements.askarOpeningDateTime.value = settings.askarOpeningDateTime || "";
     settingsDirty = false;
   }
 
@@ -823,6 +824,7 @@
       whatsappGroupUrl: formData.get("whatsappGroupUrl"),
       openingCountdownEnabled: formData.get("openingCountdownEnabled") === "on",
       openingDateTime: formData.get("openingDateTime"),
+      askarOpeningDateTime: formData.get("askarOpeningDateTime"),
     };
   }
 

@@ -77,12 +77,16 @@ function dashboardHarness(
     deleted_by: archivedParticipant ? "admin" : null,
   };
   const requests: Array<{ path: string; method: string }> = [];
+  let savedAskarOpening = "2027-01-02T09:00";
   let releaseSettingsSave: (() => void) | null = null;
   let releaseParticipantRequest: (() => void) | null = null;
   const fetch = async (path: string, requestOptions: RequestInit = {}) => {
     requests.push({ path, method: requestOptions.method ?? "GET" });
     if (path === "/api/admin/settings" && options.deferSettingsSave) {
       await new Promise<void>((resolve) => { releaseSettingsSave = resolve; });
+    }
+    if (path === "/api/admin/settings" && requestOptions.method === "PUT") {
+      savedAskarOpening = JSON.parse(String(requestOptions.body)).askarOpeningDateTime;
     }
     if (path === `/api/admin/waitinglist/${participantId}` && options.deferParticipantRequest) {
       await new Promise<void>((resolve) => { releaseParticipantRequest = resolve; });
@@ -98,6 +102,7 @@ function dashboardHarness(
             settings: {
               cutoffDate: "2027-07-01", minAgeYears: 6, minAgeMonths: 6,
               whatsappGroupUrl: "https://chat.whatsapp.com/saved", openingCountdownEnabled: false, openingDateTime: "",
+              askarOpeningDateTime: savedAskarOpening,
             }, settingsUpdatedAt: "2027-01-01T00:00:00.000Z",
           }
         : path === "/api/admin/brochure"
@@ -129,6 +134,7 @@ function dashboardHarness(
   const settle = async () => { for (let i = 0; i < 30; i += 1) await Promise.resolve(); };
   return {
     node: makeNode, settle, participantId, requests, windowListeners,
+    savedAskarOpening: () => savedAskarOpening,
     completeSettingsSave: () => releaseSettingsSave?.(),
     completeParticipantRequest: () => releaseParticipantRequest?.(),
   };
@@ -195,6 +201,21 @@ describe("admin settings draft safety", () => {
     expect(browser.node("#settings-minAgeYears").value).toBe("7");
     expect(browser.node("#settings-updated").textContent).toContain("belum disimpan");
     expect(browser.node("#settings-alert").textContent).toContain("perubahan yang dibuat setelahnya");
+  });
+
+  test("loads, saves, and clears the separate Askar opening time", async () => {
+    const browser = dashboardHarness();
+    await browser.settle();
+    const form = browser.node("#settings-form");
+    const field = form.elements.askarOpeningDateTime;
+    expect(field.value).toBe("2027-01-02T09:00");
+    for (const opening of ["2027-01-01T08:30", ""]) {
+      field.value = opening;
+      form.listeners.input();
+      await form.listeners.submit({ preventDefault() {} });
+      expect(browser.savedAskarOpening()).toBe(opening);
+      expect(field.value).toBe(opening);
+    }
   });
 
   test("rejects reversed date filters before starting list or report requests", async () => {
