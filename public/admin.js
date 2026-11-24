@@ -149,6 +149,10 @@
     settingsForm.elements.openingCountdownEnabled.checked = settings.openingCountdownEnabled === true;
     settingsForm.elements.openingDateTime.value = settings.openingDateTime || "";
     settingsForm.elements.askarOpeningDateTime.value = settings.askarOpeningDateTime || "";
+    settingsForm.elements.registrationClosed.checked = settings.registrationClosed === true;
+    settingsForm.elements.closingDateTime.value = settings.closingDateTime || "";
+    settingsForm.elements.askarRegistrationClosed.checked = settings.askarRegistrationClosed === true;
+    settingsForm.elements.askarClosingDateTime.value = settings.askarClosingDateTime || "";
     settingsDirty = false;
   }
 
@@ -825,6 +829,10 @@
       openingCountdownEnabled: formData.get("openingCountdownEnabled") === "on",
       openingDateTime: formData.get("openingDateTime"),
       askarOpeningDateTime: formData.get("askarOpeningDateTime"),
+      registrationClosed: formData.has("registrationClosed"),
+      closingDateTime: formData.get("closingDateTime"),
+      askarRegistrationClosed: formData.has("askarRegistrationClosed"),
+      askarClosingDateTime: formData.get("askarClosingDateTime"),
     };
   }
 

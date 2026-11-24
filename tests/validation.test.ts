@@ -10,6 +10,7 @@ import {
   nextEligibleCohort,
   normalizePhone,
   registrationSchedule,
+  registrationStatus,
   validateSettings,
   validateWaitinglist,
   type SystemSettings,
@@ -168,6 +169,20 @@ describe("input normalization", () => {
     const generalAlreadyOpen = { ...independent, openingCountdownEnabled: false, askarOpeningDateTime: "2027-07-01T11:00" };
     expect(isRegistrationOpen(registrationSchedule(generalAlreadyOpen, "umum"), opening)).toBe(true);
     expect(isRegistrationOpen(registrationSchedule(generalAlreadyOpen, "askar"), opening)).toBe(false);
+  });
+
+  test("applies each closure independently at the exact WIB cut-off", () => {
+    const closingDateTime = "2027-07-01T09:00";
+    const boundary = new Date("2027-07-01T02:00:00Z");
+    const scheduled = { ...settings, closingDateTime };
+    expect(registrationStatus(scheduled, "umum", new Date(boundary.getTime() - 1)).registrationOpen).toBe(true);
+    expect(registrationStatus(scheduled, "umum", boundary)).toMatchObject({ registrationOpen: false, registrationClosed: true });
+    expect(registrationStatus(scheduled, "askar", boundary)).toMatchObject({ registrationOpen: true, registrationClosed: false });
+    const manual = { ...settings, askarRegistrationClosed: true, askarClosingDateTime: "2027-07-01T12:00" };
+    expect(registrationStatus(manual, "askar", boundary)).toMatchObject({ registrationOpen: false, registrationClosed: true });
+    expect(registrationStatus(manual, "umum", boundary).registrationOpen).toBe(true);
+    expect(() => validateSettings({ ...settings, closingDateTime: "2027-02-30T09:00" })).toThrow("penutupan Jalur Umum");
+    expect(() => validateSettings({ ...settings, askarClosingDateTime: "2027-07-01T25:00" })).toThrow("penutupan Jalur Askar");
   });
 
   test("neutralizes CSV formulas", () => {

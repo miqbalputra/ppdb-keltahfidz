@@ -4,7 +4,14 @@ import { db } from "../db";
 import { systemSettings } from "../db/schema";
 import { validateSettings, type SystemSettings } from "./validation";
 
-const settingKeys = ["cutoffDate", "minAgeYears", "minAgeMonths", "whatsappGroupUrl", "openingCountdownEnabled", "openingDateTime", "askarOpeningDateTime"] as const;
+const optionalSettingDefaults = {
+  askarOpeningDateTime: "",
+  registrationClosed: "false",
+  closingDateTime: "",
+  askarRegistrationClosed: "false",
+  askarClosingDateTime: "",
+};
+const optionalSettingKeys = Object.keys(optionalSettingDefaults) as (keyof typeof optionalSettingDefaults)[];
 
 export async function getSystemSettings(): Promise<SystemSettings> {
   const rows = await db.select().from(systemSettings);
@@ -23,6 +30,10 @@ export async function getSystemSettings(): Promise<SystemSettings> {
     openingCountdownEnabled: saved.get("openingCountdownEnabled") === "true",
     openingDateTime: saved.get("openingDateTime") ?? "",
     askarOpeningDateTime: saved.get("askarOpeningDateTime") ?? "",
+    registrationClosed: saved.get("registrationClosed") === "true",
+    closingDateTime: saved.get("closingDateTime") ?? "",
+    askarRegistrationClosed: saved.get("askarRegistrationClosed") === "true",
+    askarClosingDateTime: saved.get("askarClosingDateTime") ?? "",
   };
 }
 
@@ -30,16 +41,16 @@ export async function seedSystemSettings(): Promise<void> {
   const existing = await db.select({ setting_key: systemSettings.setting_key }).from(systemSettings);
   const keys = new Set(existing.map((row) => row.setting_key));
   const defaults = validateSettings(getInitialSettings());
-  const values: Record<(typeof settingKeys)[number], string> = {
+  const values = {
     cutoffDate: defaults.cutoffDate,
     minAgeYears: String(defaults.minAgeYears),
     minAgeMonths: String(defaults.minAgeMonths),
     whatsappGroupUrl: defaults.whatsappGroupUrl,
     openingCountdownEnabled: "false",
     openingDateTime: "",
-    askarOpeningDateTime: "",
+    ...optionalSettingDefaults,
   };
-  const missing = settingKeys.filter((key) => !keys.has(key));
+  const missing = (Object.keys(values) as (keyof typeof values)[]).filter((key) => !keys.has(key));
   if (!missing.length) return;
   const now = new Date().toISOString();
   await db.insert(systemSettings).values(
@@ -57,8 +68,10 @@ export async function saveSystemSettings(settings: SystemSettings): Promise<void
     { setting_key: "openingCountdownEnabled", setting_value: String(settings.openingCountdownEnabled), updated_at: now },
     { setting_key: "openingDateTime", setting_value: settings.openingDateTime, updated_at: now },
   ];
-  if (settings.askarOpeningDateTime !== undefined) {
-    rows.push({ setting_key: "askarOpeningDateTime", setting_value: settings.askarOpeningDateTime, updated_at: now });
+  for (const key of optionalSettingKeys) {
+    if (settings[key] !== undefined) {
+      rows.push({ setting_key: key, setting_value: String(settings[key]), updated_at: now });
+    }
   }
   await db.insert(systemSettings).values(rows).onDuplicateKeyUpdate({
     set: {

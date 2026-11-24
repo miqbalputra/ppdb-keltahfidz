@@ -4,9 +4,10 @@ import { runInNewContext } from "node:vm";
 
 const script = await readFile(new URL("../public/app.js", import.meta.url), "utf8");
 
-function browserHarness(openingDateTime: string, start: string, initialViews = 0, pathname = "/") {
+function browserHarness(openingDateTime: string, start: string, initialViews = 0, pathname = "/", closingDateTime = "", initiallyClosed = false) {
   let now = new Date(start).getTime();
   let serverOpen = false;
+  let serverClosed = initiallyClosed;
   let brochureAvailable = false;
   let downloads = 0;
   let previewRequests = 0;
@@ -15,7 +16,8 @@ function browserHarness(openingDateTime: string, start: string, initialViews = 0
   let brochureDownloadFails = false;
   let copiedAccount = "";
   let interval: (() => void) | undefined;
-  let retry: (() => void) | undefined;
+  const timeouts = new Map<number, { fn: () => void; delay: number }>();
+  let nextTimeout = 2;
   const configRequests: string[] = [];
   const nodes = new Map<string, any>();
   const classes = new Set(["config-pending"]);
@@ -25,13 +27,14 @@ function browserHarness(openingDateTime: string, start: string, initialViews = 0
       classList: { add: (name: string) => classes.add(name), remove: (name: string) => classes.delete(name), toggle: () => {} },
       listeners: {} as Record<string, () => void>,
       addEventListener(event: string, fn: () => void) { this.listeners[event] = fn; },
-      setCustomValidity: () => {}, setAttribute: () => {}, removeAttribute: () => {},
+      setCustomValidity: () => {}, setAttribute: () => {}, removeAttribute: () => {}, focus() { this.focused = true; },
       append: () => {}, replaceChildren: () => {}, closest: () => ({ querySelector: () => null }),
       click: () => { downloads += 1; }, remove: () => {},
     });
     return nodes.get(selector);
   };
   const metric = node("#brochure-view-count");
+  node("#registration-closed").hidden = true;
   const brochureDialog = node("#brochure-dialog");
   brochureDialog.showModal = () => { brochureDialog.open = true; };
   const brochureImage = node("#brochure-image");
@@ -88,6 +91,7 @@ function browserHarness(openingDateTime: string, start: string, initialViews = 0
         ? {
           cutoffDate: "2027-07-01", eligibleBirthdate: "2021-01-01", minAgeYears: 6, minAgeMonths: 6,
           openingCountdownEnabled: true, openingDateTime, registrationOpen: serverOpen, turnstileSiteKey: "",
+          registrationClosed: serverClosed, closingDateTime,
         }
         : { items: [] },
     };
@@ -99,13 +103,26 @@ function browserHarness(openingDateTime: string, start: string, initialViews = 0
     Option: class { dataset = {}; constructor(public text: string, public value: string) {} },
     setInterval: (fn: () => void) => { interval = fn; return 1; },
     clearInterval: () => { interval = undefined; },
-    setTimeout: (fn: () => void) => { retry = fn; return 2; },
+    setTimeout: (fn: () => void, delay: number) => {
+      const id = nextTimeout++;
+      timeouts.set(id, { fn, delay });
+      return id;
+    },
+    clearTimeout: (id: number) => timeouts.delete(id),
   });
   const settle = async () => { for (let i = 0; i < 15; i += 1) await Promise.resolve(); };
+  const runTimeout = async (delay: number) => {
+    const timeout = [...timeouts].find(([, timer]) => timer.delay === delay);
+    if (!timeout) throw new Error(`No timer with delay ${delay}`);
+    timeouts.delete(timeout[0]);
+    timeout[1].fn();
+    await settle();
+  };
   return {
     node, classes, settle, configRequests,
     setTime: (time: string) => { now = new Date(time).getTime(); },
     openOnServer: () => { serverOpen = true; },
+    closeOnServer: () => { serverOpen = false; serverClosed = true; },
     brochureIsAvailable: () => { brochureAvailable = true; },
     statusFails: () => { brochureStatusAvailable = false; },
     downloadFails: () => { brochureDownloadFails = true; },
@@ -117,7 +134,8 @@ function browserHarness(openingDateTime: string, start: string, initialViews = 0
     closeBrochure: () => { brochureDialog.open = false; brochureDialog.listeners.close(); },
     downloadBrochure: async () => { node("#download-brochure").listeners.click(); await settle(); },
     tick: async () => { interval?.(); await settle(); },
-    retry: async () => { retry?.(); await settle(); },
+    retry: () => runTimeout(5_000),
+    runTimeout,
   };
 }
 
@@ -233,5 +251,28 @@ describe("browser opening countdown", () => {
     await browser.tick();
     expect(browser.configRequests).toEqual(["/api/config?jalur=askar", "/api/config?jalur=askar"]);
     expect(browser.classes.has("countdown-mode")).toBe(false);
+  });
+
+  test("shows the closure page instead of the opening countdown when the route is already closed", async () => {
+    const browser = browserHarness("2027-01-01T00:01", "2026-12-31T17:00:00Z", 0, "/askar", "", true);
+    await browser.settle();
+    expect(browser.node("#registration-closed").hidden).toBe(false);
+    expect(browser.node("#opening-countdown").hidden).toBe(true);
+    expect(browser.node("#closed-askar-link").hidden).toBe(true);
+    expect(browser.classes.has("registration-closed-mode")).toBe(true);
+  });
+
+  test.each([
+    ["2027-01-01T00:02", 1_000],
+    ["", 30_000],
+  ])("shows the closure on an active page when the server reports it", async (closingDateTime, delay) => {
+    const browser = browserHarness("2027-01-01T00:01", "2026-12-31T17:01:59Z", 0, "/", closingDateTime);
+    browser.openOnServer();
+    await browser.settle();
+    expect(browser.node("#registration-closed").hidden).toBe(true);
+    browser.closeOnServer();
+    await browser.runTimeout(delay);
+    expect(browser.node("#registration-closed").hidden).toBe(false);
+    expect(browser.node("#registration-closed-title").focused).toBe(true);
   });
 });

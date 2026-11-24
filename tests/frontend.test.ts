@@ -84,7 +84,10 @@ describe("frontend accessibility contracts", () => {
     expect(html).toContain('aria-live="off"');
     for (const unit of ["days", "hours", "minutes", "seconds"]) expect(html).toContain(`id="countdown-${unit}"`);
     expect(html).toContain('id="countdown-schedule" aria-live="polite"');
-    expect(html).toContain('src="/app.js?v=2027-askar-schedule-v1"');
+    expect(html).toContain('src="/app.js?v=2027-registration-closing-v1"');
+    expect(html).toContain('Mohon Maaf Kuota Sudah Terpenuhi');
+    expect(html).toContain('Bapak/Ibu bisa mendaftarkan Ananda di Tahun Ajaran depan <em>InyaaAllah</em>.');
+    expect(html).toContain('Terima kasih<br><em>Baarakallahu fiikum</em>');
     expect(html).toContain('id="countdown-askar-link" href="/askar"');
     expect(html).toContain('id="view-brochure" type="button" aria-haspopup="dialog" aria-controls="brochure-dialog">Lihat Brosur');
     expect(html).toContain('id="brochure-dialog" aria-labelledby="brochure-title"');
@@ -184,6 +187,9 @@ describe("frontend accessibility contracts", () => {
     expect(html).toContain('name="openingCountdownEnabled"');
     expect(html).toContain('name="openingDateTime"');
     expect(html).toContain('name="askarOpeningDateTime"');
+    for (const field of ["registrationClosed", "closingDateTime", "askarRegistrationClosed", "askarClosingDateTime"]) {
+      expect(html).toContain(`name="${field}"`);
+    }
     expect(html).toContain('id="brochure-form"');
     expect(html).toContain('name="brochure" accept=".jpg,.jpeg,.png,image/jpeg,image/png"');
     expect(html).toContain('id="brochure-alert" role="status"');

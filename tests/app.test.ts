@@ -1,10 +1,11 @@
 import { beforeAll, describe, expect, mock, test } from "bun:test";
+import type { SystemSettings } from "../src/lib/validation";
 
 const generalSettings = {
   cutoffDate: "2027-07-01", minAgeYears: 6, minAgeMonths: 6, whatsappGroupUrl: "",
   openingCountdownEnabled: false, openingDateTime: "",
 };
-let currentSettings = { ...generalSettings, askarOpeningDateTime: "" };
+let currentSettings: SystemSettings = { ...generalSettings, askarOpeningDateTime: "" };
 
 describe("Elysia application", () => {
   beforeAll(async () => {
@@ -97,6 +98,22 @@ describe("Elysia application", () => {
       currentSettings = { ...generalSettings, openingCountdownEnabled: true, openingDateTime: futureOpening, askarOpeningDateTime: "" };
       expect(await readConfig("?jalur=askar")).toMatchObject({ registrationOpen: false, openingDateTime: futureOpening });
       expect((await submit("/askar")).status).toBe(403);
+
+      currentSettings = { ...generalSettings, registrationClosed: true, askarClosingDateTime: futureOpening };
+      expect(await readConfig("")).toMatchObject({ registrationOpen: false, registrationClosed: true });
+      expect(await readConfig("?jalur=askar")).toMatchObject({ registrationOpen: true, registrationClosed: false, closingDateTime: futureOpening });
+      const generalClosed = await submit("");
+      expect(generalClosed.status).toBe(403);
+      expect(await generalClosed.json()).toMatchObject({ code: "REGISTRATION_CLOSED" });
+      expect((await submit("/askar")).status).toBe(201);
+
+      currentSettings = { ...generalSettings, askarClosingDateTime: "2000-01-01T08:00" };
+      expect(await readConfig("")).toMatchObject({ registrationOpen: true, registrationClosed: false });
+      expect(await readConfig("?jalur=askar")).toMatchObject({ registrationOpen: false, registrationClosed: true });
+      const askarClosed = await submit("/askar");
+      expect(askarClosed.status).toBe(403);
+      expect(await askarClosed.json()).toMatchObject({ code: "REGISTRATION_CLOSED" });
+      expect((await submit("")).status).toBe(201);
     } finally {
       currentSettings = { ...generalSettings, askarOpeningDateTime: "" };
     }

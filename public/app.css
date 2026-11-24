@@ -716,6 +716,8 @@ td { color: #514f49; border-top-color: #efefed; }
 .opening-inner { width: min(760px, 100%); margin-inline: auto; }
 .opening-countdown h1 { margin: 0; color: #254832; font-size: clamp(51px, 8vw, 88px); font-weight: 850; letter-spacing: -.065em; line-height: 1.06; }
 .opening-countdown h1 em { color: #96702c; font-style: normal; }
+.registration-closed h1 { max-width: 680px; margin-inline: auto; font-size: clamp(36px, 7vw, 64px); line-height: 1.12; letter-spacing: -.045em; }
+.registration-closed-copy { max-width: 560px; margin: 18px auto 0; color: #3c4e42; font-size: clamp(16px, 2.4vw, 20px); line-height: 1.6; }
 .countdown-campaign { margin: 22px 0 0; color: #3c4e42; font-size: clamp(16px, 2.4vw, 21px); line-height: 1.6; }
 .countdown-campaign strong { color: #244831; font-weight: 750; }
 .opening-year { margin: 12px 0 0; color: #715422; font-size: clamp(12px, 1.6vw, 15px); font-weight: 800; letter-spacing: .09em; line-height: 1.5; }
@@ -762,6 +764,7 @@ body:has(.brochure-dialog[open]) { overflow: hidden; }
 .brochure-dialog-actions .brochure-feedback { flex-basis: 100%; }
 .brochure-full-size { display: inline-flex; align-items: center; gap: 5px; min-height: 44px; color: #254832; font-size: 14px; font-weight: 700; }
 .countdown-mode .topbar-link, .countdown-mode .hero, .countdown-mode .steps-band, .countdown-mode .form-section,
+.registration-closed-mode .topbar-link, .registration-closed-mode .hero, .registration-closed-mode .steps-band, .registration-closed-mode .form-section,
 .config-pending .topbar-link, .config-pending .hero, .config-pending .steps-band, .config-pending .form-section { display: none !important; }
 @media (max-width: 560px) {
   .opening-countdown { min-height: calc(100svh - 69px); padding: 42px 18px 56px; }
@@ -839,6 +842,7 @@ body:has(.brochure-dialog[open]) { overflow: hidden; }
 .individual-export-link:hover { background: var(--green-soft); }
 .individual-export-link:focus-visible { outline: 3px solid #856126; outline-offset: 2px; }
 .opening-settings { min-width: 0; padding: 16px; border: 1px solid var(--border); border-radius: 6px; }
+.registration-closing-settings { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 255px), 1fr)); gap: 16px; }
 .opening-settings legend { padding: 0 7px; color: var(--ink); font-size: 13px; font-weight: 700; }
 .opening-toggle { display: flex; align-items: flex-start; gap: 10px; color: var(--ink); font-size: 13px; line-height: 1.5; }
 .opening-toggle input { width: 18px; height: 18px; margin: 1px 0 0; accent-color: var(--green); }

@@ -85,6 +85,10 @@ test.skipIf(!testDatabaseUrl)("MariaDB-backed public, admin, security, and notif
       openingCountdownEnabled: false,
       openingDateTime: "",
       askarOpeningDateTime: "",
+      registrationClosed: false,
+      closingDateTime: "",
+      askarRegistrationClosed: false,
+      askarClosingDateTime: "",
     };
     await settingsModule.saveSystemSettings(testSettings);
 
@@ -511,6 +515,10 @@ test.skipIf(!testDatabaseUrl)("MariaDB-backed public, admin, security, and notif
         openingCountdownEnabled: true,
         openingDateTime: "2030-01-01T10:00",
         askarOpeningDateTime: "2030-01-02T10:00",
+        registrationClosed: false,
+        closingDateTime: "2030-02-01T10:00",
+        askarRegistrationClosed: true,
+        askarClosingDateTime: "2030-02-02T10:00",
       }),
     }));
     expect(updateSettings.status).toBe(200);
@@ -518,9 +526,12 @@ test.skipIf(!testDatabaseUrl)("MariaDB-backed public, admin, security, and notif
     expect(await (await app.handle(new Request("http://localhost/api/config"))).json())
       .toMatchObject({ whatsappGroupUrl: newGroupUrl, registrationOpen: false, openingCountdownEnabled: true, openingDateTime: "2030-01-01T10:00" });
     expect(await (await app.handle(new Request("http://localhost/api/config?jalur=askar"))).json())
-      .toMatchObject({ registrationOpen: false, openingCountdownEnabled: true, openingDateTime: "2030-01-02T10:00" });
+      .toMatchObject({ registrationOpen: false, registrationClosed: true, openingCountdownEnabled: true, openingDateTime: "2030-01-02T10:00" });
     const savedSettings = await app.handle(new Request("http://localhost/api/admin/settings", { headers: adminHeaders }));
-    expect(await savedSettings.json()).toMatchObject({ settings: { askarOpeningDateTime: "2030-01-02T10:00" } });
+    expect(await savedSettings.json()).toMatchObject({ settings: {
+      askarOpeningDateTime: "2030-01-02T10:00", closingDateTime: "2030-02-01T10:00",
+      askarRegistrationClosed: true, askarClosingDateTime: "2030-02-02T10:00",
+    } });
     const persistedSettings = await settingsModule.getSystemSettings();
     await settingsModule.saveSystemSettings({ ...persistedSettings, askarOpeningDateTime: undefined });
     expect((await settingsModule.getSystemSettings()).askarOpeningDateTime).toBe("2030-01-02T10:00");

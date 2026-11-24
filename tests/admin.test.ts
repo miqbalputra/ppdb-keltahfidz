@@ -50,8 +50,11 @@ function dashboardHarness(
     get(key: string) {
       const field = this.form?.elements?.[key];
       if (!field) return null;
-      return key === "openingCountdownEnabled" ? (field.checked ? "on" : null) : field.value;
+      return ["openingCountdownEnabled", "registrationClosed", "askarRegistrationClosed"].includes(key)
+        ? (field.checked ? "on" : null)
+        : field.value;
     }
+    has(key: string) { return this.get(key) !== null; }
     *[Symbol.iterator](): IterableIterator<[string, string]> {
       if (this.form !== filter) return;
       for (const key of ["q", "view", "status", "jenis_kelamin", "kecamatan", "tanggal_daftar_mulai", "tanggal_daftar_sampai", "tanggal_lahir_mulai", "tanggal_lahir_sampai"]) {
@@ -78,6 +81,7 @@ function dashboardHarness(
   };
   const requests: Array<{ path: string; method: string }> = [];
   let savedAskarOpening = "2027-01-02T09:00";
+  let savedClosure = { registrationClosed: false, closingDateTime: "", askarRegistrationClosed: false, askarClosingDateTime: "" };
   let releaseSettingsSave: (() => void) | null = null;
   let releaseParticipantRequest: (() => void) | null = null;
   const fetch = async (path: string, requestOptions: RequestInit = {}) => {
@@ -86,7 +90,10 @@ function dashboardHarness(
       await new Promise<void>((resolve) => { releaseSettingsSave = resolve; });
     }
     if (path === "/api/admin/settings" && requestOptions.method === "PUT") {
-      savedAskarOpening = JSON.parse(String(requestOptions.body)).askarOpeningDateTime;
+      const { askarOpeningDateTime, registrationClosed, closingDateTime, askarRegistrationClosed, askarClosingDateTime } =
+        JSON.parse(String(requestOptions.body));
+      savedAskarOpening = askarOpeningDateTime;
+      savedClosure = { registrationClosed, closingDateTime, askarRegistrationClosed, askarClosingDateTime };
     }
     if (path === `/api/admin/waitinglist/${participantId}` && options.deferParticipantRequest) {
       await new Promise<void>((resolve) => { releaseParticipantRequest = resolve; });
@@ -103,6 +110,7 @@ function dashboardHarness(
               cutoffDate: "2027-07-01", minAgeYears: 6, minAgeMonths: 6,
               whatsappGroupUrl: "https://chat.whatsapp.com/saved", openingCountdownEnabled: false, openingDateTime: "",
               askarOpeningDateTime: savedAskarOpening,
+              ...savedClosure,
             }, settingsUpdatedAt: "2027-01-01T00:00:00.000Z",
           }
         : path === "/api/admin/brochure"
@@ -135,6 +143,7 @@ function dashboardHarness(
   return {
     node: makeNode, settle, participantId, requests, windowListeners,
     savedAskarOpening: () => savedAskarOpening,
+    savedClosure: () => savedClosure,
     completeSettingsSave: () => releaseSettingsSave?.(),
     completeParticipantRequest: () => releaseParticipantRequest?.(),
   };
@@ -216,6 +225,26 @@ describe("admin settings draft safety", () => {
       expect(browser.savedAskarOpening()).toBe(opening);
       expect(field.value).toBe(opening);
     }
+  });
+
+  test("saves immediate and scheduled closures separately for each path", async () => {
+    const browser = dashboardHarness();
+    await browser.settle();
+    const form = browser.node("#settings-form");
+    form.elements.registrationClosed.checked = true;
+    form.elements.askarClosingDateTime.value = "2027-01-10T18:00";
+    form.listeners.input();
+    await form.listeners.submit({ preventDefault() {} });
+    expect(browser.savedClosure()).toEqual({
+      registrationClosed: true, closingDateTime: "", askarRegistrationClosed: false, askarClosingDateTime: "2027-01-10T18:00",
+    });
+    form.elements.registrationClosed.checked = false;
+    form.elements.askarClosingDateTime.value = "";
+    form.listeners.input();
+    await form.listeners.submit({ preventDefault() {} });
+    expect(browser.savedClosure()).toEqual({
+      registrationClosed: false, closingDateTime: "", askarRegistrationClosed: false, askarClosingDateTime: "",
+    });
   });
 
   test("rejects reversed date filters before starting list or report requests", async () => {

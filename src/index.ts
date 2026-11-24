@@ -71,8 +71,7 @@ import { encryptLegacyWaitinglistRows } from "./lib/security-migration";
 import {
   csvSafe,
   eligibleBirthdate,
-  isRegistrationOpen,
-  registrationSchedule,
+  registrationStatus,
   validateSettings,
   validateWaitinglist,
   type RegistrationPath,
@@ -122,6 +121,10 @@ const adminSettingsBody = t.Object({
   openingCountdownEnabled: t.Boolean(),
   openingDateTime: t.String({ maxLength: 16 }),
   askarOpeningDateTime: t.Optional(t.String({ maxLength: 16 })),
+  registrationClosed: t.Optional(t.Boolean()),
+  closingDateTime: t.Optional(t.String({ maxLength: 16 })),
+  askarRegistrationClosed: t.Optional(t.Boolean()),
+  askarClosingDateTime: t.Optional(t.String({ maxLength: 16 })),
 });
 
 function waitinglistFilterProperties() {
@@ -289,7 +292,12 @@ async function submitPublicWaitinglist(
     return { error: "Permintaan lintas situs ditolak." };
   }
   const settings = await getSystemSettings();
-  if (!isRegistrationOpen(registrationSchedule(settings, route))) {
+  const status = registrationStatus(settings, route);
+  if (status.registrationClosed) {
+    set.status = 403;
+    return { error: "Mohon Maaf Kuota Sudah Terpenuhi", code: "REGISTRATION_CLOSED" };
+  }
+  if (!status.registrationOpen) {
     set.status = 403;
     return { error: "Pendaftaran belum dibuka. Silakan kembali sesuai jadwal pembukaan." };
   }
@@ -401,7 +409,7 @@ export const app = new Elysia({ name: "spsb-waitinglist" })
   })
   .get("/api/config", async ({ query, set }) => {
     const settings = await getSystemSettings();
-    const schedule = registrationSchedule(settings, query.jalur === "askar" ? "askar" : "umum");
+    const status = registrationStatus(settings, query.jalur === "askar" ? "askar" : "umum");
     set.headers["Cache-Control"] = "no-store";
     return {
       cutoffDate: settings.cutoffDate,
@@ -409,8 +417,7 @@ export const app = new Elysia({ name: "spsb-waitinglist" })
       minAgeYears: settings.minAgeYears,
       minAgeMonths: settings.minAgeMonths,
       whatsappGroupUrl: settings.whatsappGroupUrl,
-      registrationOpen: isRegistrationOpen(schedule),
-      ...schedule,
+      ...status,
       turnstileSiteKey: TURNSTILE_ENABLED ? TURNSTILE_SITE_KEY : "",
     };
   })

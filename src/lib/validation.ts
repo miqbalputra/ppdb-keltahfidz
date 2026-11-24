@@ -8,6 +8,10 @@ export interface SystemSettings {
   openingCountdownEnabled: boolean;
   openingDateTime: string;
   askarOpeningDateTime?: string;
+  registrationClosed?: boolean;
+  closingDateTime?: string;
+  askarRegistrationClosed?: boolean;
+  askarClosingDateTime?: string;
 }
 
 export function openingTimestamp(value: string): number | null {
@@ -36,6 +40,20 @@ export function isRegistrationOpen(schedule: Pick<SystemSettings, "openingCountd
   if (!schedule.openingCountdownEnabled) return true;
   const timestamp = openingTimestamp(schedule.openingDateTime);
   return timestamp !== null && now.getTime() >= timestamp;
+}
+
+export function registrationStatus(settings: SystemSettings, path: RegistrationPath, now = new Date()) {
+  const schedule = registrationSchedule(settings, path);
+  const manuallyClosed = path === "askar" ? settings.askarRegistrationClosed : settings.registrationClosed;
+  const closingDateTime = (path === "askar" ? settings.askarClosingDateTime : settings.closingDateTime) ?? "";
+  const closingTimestamp = openingTimestamp(closingDateTime);
+  const registrationClosed = manuallyClosed === true || (closingTimestamp !== null && now.getTime() >= closingTimestamp);
+  return {
+    ...schedule,
+    closingDateTime,
+    registrationClosed,
+    registrationOpen: !registrationClosed && isRegistrationOpen(schedule, now),
+  };
 }
 
 export interface WaitinglistRecordInput {
@@ -280,6 +298,8 @@ export function validateSettings(input: unknown): SystemSettings {
   const openingCountdownEnabled = value.openingCountdownEnabled === true;
   const openingDateTime = String(value.openingDateTime ?? "").trim();
   const askarOpeningDateTime = value.askarOpeningDateTime === undefined ? undefined : String(value.askarOpeningDateTime).trim();
+  const closingDateTime = value.closingDateTime === undefined ? undefined : String(value.closingDateTime).trim();
+  const askarClosingDateTime = value.askarClosingDateTime === undefined ? undefined : String(value.askarClosingDateTime).trim();
 
   if (!isValidIsoDate(cutoffDate)) throw new Error("Tanggal acuan tidak valid.");
   if (!Number.isInteger(minAgeYears) || minAgeYears < 0 || minAgeYears > 18) {
@@ -298,6 +318,12 @@ export function validateSettings(input: unknown): SystemSettings {
   if (askarOpeningDateTime && openingTimestamp(askarOpeningDateTime) === null) {
     throw new Error("Tanggal dan jam pembukaan Jalur Askar (WIB) tidak valid.");
   }
+  if (closingDateTime && openingTimestamp(closingDateTime) === null) {
+    throw new Error("Tanggal dan jam penutupan Jalur Umum (WIB) tidak valid.");
+  }
+  if (askarClosingDateTime && openingTimestamp(askarClosingDateTime) === null) {
+    throw new Error("Tanggal dan jam penutupan Jalur Askar (WIB) tidak valid.");
+  }
   if (whatsappGroupUrl) {
     try {
       const parsed = new URL(whatsappGroupUrl);
@@ -309,7 +335,13 @@ export function validateSettings(input: unknown): SystemSettings {
     }
   }
 
-  return { cutoffDate, minAgeYears, minAgeMonths, whatsappGroupUrl, openingCountdownEnabled, openingDateTime, askarOpeningDateTime };
+  return {
+    cutoffDate, minAgeYears, minAgeMonths, whatsappGroupUrl, openingCountdownEnabled, openingDateTime, askarOpeningDateTime,
+    registrationClosed: value.registrationClosed === undefined ? undefined : value.registrationClosed === true,
+    closingDateTime,
+    askarRegistrationClosed: value.askarRegistrationClosed === undefined ? undefined : value.askarRegistrationClosed === true,
+    askarClosingDateTime,
+  };
 }
 
 export function csvSafe(value: unknown): string {

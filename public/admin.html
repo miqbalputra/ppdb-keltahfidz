@@ -8,9 +8,9 @@
   <meta name="robots" content="noindex,nofollow">
   <title>Dashboard Panitia — SPSB 2027</title>
   <link rel="icon" href="/logo-gq.png" type="image/png">
-  <link rel="stylesheet" href="/app.css?v=2027-payment-ai-v2">
-  <link rel="stylesheet" href="/admin.css?v=2027-askar-schedule-v1">
-  <script src="/admin.js?v=2027-askar-schedule-v1" defer></script>
+  <link rel="stylesheet" href="/app.css?v=2027-registration-closing-v1">
+  <link rel="stylesheet" href="/admin.css?v=2027-registration-closing-v1">
+  <script src="/admin.js?v=2027-registration-closing-v1" defer></script>
 </head>
 <body class="admin-page">
   <a class="skip-link" href="#main-content">Lewati ke konten utama</a>
@@ -139,6 +139,19 @@
             <label class="field opening-datetime"><span>Jalur Umum (WIB)</span><input type="datetime-local" name="openingDateTime"><small class="field-hint">Formulir terbuka otomatis pada waktu ini. Hapus centang untuk membuka Jalur Umum lebih awal.</small></label>
             <label class="field opening-datetime"><span>Jalur Asatidz dan Karyawan (WIB)</span><input type="datetime-local" name="askarOpeningDateTime" aria-describedby="askar-opening-hint"><small class="field-hint" id="askar-opening-hint">Isi untuk membuka Jalur Askar pada waktu tersendiri. Kosongkan jika ingin mengikuti Jalur Umum.</small></label>
           </fieldset>
+          <div class="registration-closing-settings settings-wide">
+            <fieldset class="opening-settings">
+              <legend>Penutupan Jalur Umum</legend>
+              <label class="opening-toggle"><input type="checkbox" name="registrationClosed"><span>Tutup Jalur Umum sekarang</span></label>
+              <label class="field opening-datetime"><span>Tanggal dan jam tutup (WIB)</span><input type="datetime-local" name="closingDateTime"></label>
+            </fieldset>
+            <fieldset class="opening-settings">
+              <legend>Penutupan Jalur Asatidz dan Karyawan</legend>
+              <label class="opening-toggle"><input type="checkbox" name="askarRegistrationClosed"><span>Tutup Jalur Askar sekarang</span></label>
+              <label class="field opening-datetime"><span>Tanggal dan jam tutup (WIB)</span><input type="datetime-local" name="askarClosingDateTime"></label>
+            </fieldset>
+          </div>
+          <p class="field-hint settings-wide">Untuk menutup sesuai jadwal, isi tanggal dan jam lalu simpan. Untuk membuka kembali, hapus centang dan kosongkan atau ubah jadwal penutupan yang sudah lewat.</p>
           <div class="settings-actions"><p class="field-hint">Perubahan aturan usia berlaku untuk pendaftaran baru dan koreksi tanggal lahir.</p><button class="button button-primary" id="save-settings" type="submit">Simpan pengaturan</button></div>
         </form>
       </section>

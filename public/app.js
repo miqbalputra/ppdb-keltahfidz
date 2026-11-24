@@ -27,6 +27,7 @@
   let validationAttempted = false;
   let cutoffDateLabel = "tanggal acuan";
   let countdownTimer = null;
+  let closureTimer = null;
   let formInitialized = false;
   const regionRequests = new Map();
   const fieldErrors = new Map([...form.querySelectorAll("[data-error-for]")]
@@ -72,6 +73,7 @@
     document.querySelector("#hero-lede").textContent = "Formulir khusus Jalur Asatidz dan Karyawan (Askar) Tunas Ilmu. Lengkapi data pendaftaran Ananda dan keterangan keluarga yang menjadi bagian dari Tunas Ilmu.";
     document.querySelector("#askar-entry-link").hidden = true;
     document.querySelector("#countdown-askar-link").hidden = true;
+    document.querySelector("#closed-askar-link").hidden = true;
     document.querySelector("#form-aside-title").innerHTML = 'Jalur <em>Askar.</em>';
     document.querySelector("#form-aside-copy").textContent = "Pendaftaran khusus keluarga Asatidz dan Karyawan Tunas Ilmu. Formulir dan ketentuan pendaftaran lainnya tetap mengikuti SPSB 2027.";
     document.querySelector("#form-route-kicker").textContent = "JALUR KHUSUS ASATIDZ & KARYAWAN · SPSB 2027";
@@ -444,7 +446,7 @@
     }
   }
 
-  function openingTime(value) {
+  function wibTimestamp(value) {
     const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/.exec(value || "");
     if (!match) return null;
     const [y, m, d, h, min] = match.slice(1).map(Number);
@@ -466,6 +468,46 @@
     updateSubmitState();
   }
 
+  async function loadRegistrationConfig() {
+    const response = await fetch(configUrl, { cache: "no-store" });
+    if (!response.ok) throw new Error("Konfigurasi belum dapat dimuat.");
+    return response.json();
+  }
+
+  function showRegistrationClosed(moveFocus = false) {
+    const closed = document.querySelector("#registration-closed");
+    if (!closed.hidden) return;
+    clearTimeout(closureTimer);
+    clearTimeout(countdownTimer);
+    clearInterval(countdownTimer);
+    document.body.classList.remove("countdown-mode");
+    document.body.classList.add("registration-closed-mode");
+    document.querySelector("#opening-countdown").hidden = true;
+    closed.hidden = false;
+    if (brochureDialog.open) brochureDialog.close();
+    if (moveFocus) document.querySelector("#registration-closed-title").focus();
+  }
+
+  function monitorRegistrationClosure(closingDateTime) {
+    const closingTime = wibTimestamp(closingDateTime);
+    const remaining = closingTime === null ? 30_000 : closingTime - Date.now();
+    const delay = remaining > 0 ? Math.min(remaining, 30_000) : 5_000;
+    closureTimer = setTimeout(async () => {
+      let latestConfig;
+      try {
+        latestConfig = await loadRegistrationConfig();
+      } catch {
+        // Try again without changing the current page if the connection failed.
+      }
+      if (!document.querySelector("#registration-closed").hidden) return;
+      if (latestConfig?.registrationClosed) {
+        showRegistrationClosed(true);
+        return;
+      }
+      monitorRegistrationClosure(latestConfig ? latestConfig.closingDateTime : closingDateTime);
+    }, delay);
+  }
+
   function showCountdown(timestamp) {
     const panel = document.querySelector("#opening-countdown");
     const schedule = document.querySelector("#countdown-schedule");
@@ -483,16 +525,19 @@
       if (remaining <= 0) {
         clearInterval(countdownTimer);
         try {
-          const response = await fetch(configUrl, { cache: "no-store" });
-          const latestConfig = await response.json();
-          if (response.ok && latestConfig.registrationOpen) {
+          const latestConfig = await loadRegistrationConfig();
+          if (latestConfig.registrationClosed) {
+            showRegistrationClosed(true);
+            return;
+          }
+          if (latestConfig.registrationOpen && document.querySelector("#registration-closed").hidden) {
             await initializeForm();
             return;
           }
         } catch {
           // Keep the countdown closed until the server confirms the opening time.
         }
-        countdownTimer = setTimeout(tick, 5000);
+        if (document.querySelector("#registration-closed").hidden) countdownTimer = setTimeout(tick, 5000);
         return;
       }
       const values = [Math.floor(remaining / 86400000), Math.floor(remaining / 3600000) % 24,
@@ -508,16 +553,19 @@
   async function initialize() {
     configureRegistrationRoute();
     try {
-      const response = await fetch(configUrl, { cache: "no-store" });
-      if (!response.ok) throw new Error("Konfigurasi belum dapat dimuat.");
-      config = await response.json();
+      config = await loadRegistrationConfig();
       document.body.classList.remove("config-pending");
+      if (config.registrationClosed) {
+        showRegistrationClosed();
+        return;
+      }
+      monitorRegistrationClosure(config.closingDateTime);
       cutoffDateLabel = formatDate(config.cutoffDate);
       birthdateInput.max = new Date().toISOString().slice(0, 10);
       document.querySelector("#cutoff-date-label").textContent = cutoffDateLabel;
       document.querySelector("#minimum-age-label").textContent = `${config.minAgeYears} tahun ${config.minAgeMonths} bulan`;
       document.querySelector("#deadline-label").textContent = formatDate(config.eligibleBirthdate);
-      const timestamp = openingTime(config.openingDateTime);
+      const timestamp = wibTimestamp(config.openingDateTime);
       if (config.openingCountdownEnabled && !config.registrationOpen) {
         showCountdown(timestamp !== null && timestamp > Date.now() ? timestamp : null);
         return;
@@ -747,6 +795,10 @@
         body: formData,
       });
       const result = await response.json();
+      if (response.status === 403 && result.code === "REGISTRATION_CLOSED") {
+        showRegistrationClosed(true);
+        return;
+      }
       if (!response.ok) throw new Error(result.error || "Data belum dapat dikirim. Silakan coba kembali.");
       try {
         sessionStorage.setItem("psb_waitinglist_result", JSON.stringify(result));
