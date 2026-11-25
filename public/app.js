@@ -71,9 +71,6 @@
     registrationLink.innerHTML = 'Pendaftaran umum <span aria-hidden="true">↗</span>';
     document.querySelector("#hero-kicker").textContent = "JALUR KHUSUS ASATIDZ & KARYAWAN";
     document.querySelector("#hero-lede").textContent = "Formulir khusus Jalur Asatidz dan Karyawan (Askar) Tunas Ilmu. Lengkapi data pendaftaran Ananda dan keterangan keluarga yang menjadi bagian dari Tunas Ilmu.";
-    document.querySelector("#askar-entry-link").hidden = true;
-    document.querySelector("#countdown-askar-link").hidden = true;
-    document.querySelector("#closed-askar-link").hidden = true;
     document.querySelector("#form-aside-title").innerHTML = 'Jalur <em>Askar.</em>';
     document.querySelector("#form-aside-copy").textContent = "Pendaftaran khusus keluarga Asatidz dan Karyawan Tunas Ilmu. Formulir dan ketentuan pendaftaran lainnya tetap mengikuti SPSB 2027.";
     document.querySelector("#form-route-kicker").textContent = "JALUR KHUSUS ASATIDZ & KARYAWAN · SPSB 2027";

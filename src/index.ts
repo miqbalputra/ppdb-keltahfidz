@@ -387,7 +387,10 @@ export const app = new Elysia({ name: "spsb-waitinglist" })
     return { error: "Terjadi kesalahan. Silakan coba kembali." };
   })
   .get("/", () => Bun.file(join(PUBLIC_DIR, "index.html")))
-  .get("/askar", () => Bun.file(join(PUBLIC_DIR, "index.html")))
+  .get("/askar", ({ set }) => {
+    set.headers["X-Robots-Tag"] = "noindex";
+    return Bun.file(join(PUBLIC_DIR, "index.html"));
+  })
   .get("/admin", () => Bun.file(join(PUBLIC_DIR, "admin.html")))
   .get("/success", () => Bun.file(join(PUBLIC_DIR, "success.html")))
   .get("/app.css", () => Bun.file(join(PUBLIC_DIR, "app.css")))

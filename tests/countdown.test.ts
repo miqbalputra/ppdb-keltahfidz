@@ -245,7 +245,6 @@ describe("browser opening countdown", () => {
     await browser.settle();
     expect(browser.configRequests).toEqual(["/api/config?jalur=askar"]);
     expect(browser.node("#countdown-route-note").hidden).toBe(false);
-    expect(browser.node("#countdown-askar-link").hidden).toBe(true);
     browser.openOnServer();
     browser.setTime("2026-12-31T17:01:00Z");
     await browser.tick();
@@ -258,7 +257,6 @@ describe("browser opening countdown", () => {
     await browser.settle();
     expect(browser.node("#registration-closed").hidden).toBe(false);
     expect(browser.node("#opening-countdown").hidden).toBe(true);
-    expect(browser.node("#closed-askar-link").hidden).toBe(true);
     expect(browser.classes.has("registration-closed-mode")).toBe(true);
   });
 

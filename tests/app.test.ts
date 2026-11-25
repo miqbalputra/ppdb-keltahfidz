@@ -39,6 +39,8 @@ describe("Elysia application", () => {
       expect(bodies[index]!.length).toBeGreaterThan(0);
     }
     expect(bodies[2]).toContain("Pengaturan sistem");
+    expect(responses[0]!.headers.get("X-Robots-Tag")).toBeNull();
+    expect(responses[1]!.headers.get("X-Robots-Tag")).toBe("noindex");
   });
 
   test("rejects unknown routes, oversized requests, and invalid region queries safely", async () => {

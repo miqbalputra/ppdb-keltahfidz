@@ -729,7 +729,6 @@ td { color: #514f49; border-top-color: #efefed; }
 .countdown-unit strong { color: #fff; font-size: clamp(48px, 7vw, 76px); font-weight: 800; font-variant-numeric: tabular-nums; letter-spacing: -.04em; line-height: 1; }
 .countdown-unit span { margin-top: 12px; color: #f4d892; font-size: 12px; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; }
 .countdown-schedule { width: fit-content; max-width: 100%; margin: 23px auto 0; padding: 11px 18px; color: #244831; background: #fff; border: 1px solid #ccddc9; border-radius: 999px; font-size: 14px; font-weight: 700; line-height: 1.55; }
-.countdown-askar-link { width: fit-content; margin: 16px auto 0; }
 .opening-contact { margin-top: 40px; }
 .opening-contact p { margin: 0 0 13px; color: #536454; font-size: 14px; }
 .countdown-contact { width: min(100%, 405px); min-height: 70px; margin-inline: auto; padding: 11px 16px; display: grid; grid-template-columns: 36px minmax(0, 1fr) 18px; align-items: center; gap: 12px; color: #fff; background: #294e35; border: 1px solid #294e35; border-radius: 12px; box-shadow: 0 10px 24px rgba(32,65,44,.13); text-align: left; text-decoration: none; transition: background-color .2s, transform .2s; }
@@ -789,7 +788,6 @@ body:has(.brochure-dialog[open]) { overflow: hidden; }
 @media (prefers-reduced-motion: reduce) { .countdown-contact { transition: none; } .countdown-contact:hover { transform: none; } }
 
 /* Jalur khusus Asatidz dan Karyawan Tunas Ilmu */
-.askar-entry-link { display: flex; width: fit-content; margin-top: 6px; color: #6f5b32; border-bottom-color: rgba(124, 99, 47, .4); }
 .askar-route .form-heading { border-bottom-color: #d9e5d7; }
 .askar-route #form-route-kicker { color: #78602f; }
 .askar-form-section { margin-top: 25px; padding: 2px 18px 18px; background: #f5f8f3; border: 1px solid #dbe6d7; border-radius: 8px; }
@@ -804,7 +802,6 @@ body:has(.brochure-dialog[open]) { overflow: hidden; }
 .askar-division-hint { grid-column: 1 / -1; }
 .countdown-route-note { max-width: 620px; margin: 16px auto 0; color: #6f5b32; font-size: 14px; font-weight: 700; line-height: 1.6; }
 @media (max-width: 580px) {
-  .askar-entry-link { max-width: 310px; line-height: 1.55; }
   .askar-form-section { padding-inline: 13px; }
   .askar-radio-row { flex-direction: column; }
   .askar-radio-row .radio-option { flex-basis: auto; }
