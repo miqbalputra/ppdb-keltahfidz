@@ -801,10 +801,25 @@ body:has(.brochure-dialog[open]) { overflow: hidden; }
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr));
   margin-top: 16px;
 }
-.askar-division-field { background: #fff; container-type: inline-size; }
-.askar-division-field input { padding-inline: 12px; }
-/* The examples span about 16em, with 28px reserved for padding and borders. */
-.askar-division-field input::placeholder { font-size: clamp(.75rem, calc((100cqi - 28px) / 16.25), 1rem); }
+.askar-division-field { background: #fff; }
+.askar-division-control { display: grid; grid-template-columns: minmax(0, 1fr); }
+.askar-division-control input, .askar-division-example { grid-area: 1 / 1; }
+.askar-division-control input { height: 100%; }
+/* A text input's native placeholder cannot wrap. */
+.askar-division-control input::placeholder { opacity: 0; }
+.askar-division-example {
+  align-self: center;
+  margin: 4px 15px;
+  color: #777670;
+  font-size: 1rem;
+  font-weight: 400;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+  text-wrap: balance;
+  pointer-events: none;
+  visibility: hidden;
+}
+.askar-division-control input:placeholder-shown + .askar-division-example { visibility: visible; }
 .askar-division-hint { grid-column: 1 / -1; }
 .countdown-route-note { max-width: 620px; margin: 16px auto 0; color: #6f5b32; font-size: 14px; font-weight: 700; line-height: 1.6; }
 @media (max-width: 580px) {
