@@ -797,16 +797,20 @@ body:has(.brochure-dialog[open]) { overflow: hidden; }
 .askar-radio-row { flex-wrap: wrap; }
 .askar-radio-row .radio-option { flex: 1 1 145px; }
 .askar-radio-row .radio-option span { border-radius: 4px; }
-.askar-division-grid { grid-template-columns: 1fr 1fr; margin-top: 16px; }
-.askar-division-field { background: #fff; }
+.askar-division-grid {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr));
+  margin-top: 16px;
+}
+.askar-division-field { background: #fff; container-type: inline-size; }
+.askar-division-field input { padding-inline: 12px; }
+/* The examples span about 16em, with 28px reserved for padding and borders. */
+.askar-division-field input::placeholder { font-size: clamp(.75rem, calc((100cqi - 28px) / 16.25), 1rem); }
 .askar-division-hint { grid-column: 1 / -1; }
 .countdown-route-note { max-width: 620px; margin: 16px auto 0; color: #6f5b32; font-size: 14px; font-weight: 700; line-height: 1.6; }
 @media (max-width: 580px) {
   .askar-form-section { padding-inline: 13px; }
   .askar-radio-row { flex-direction: column; }
   .askar-radio-row .radio-option { flex-basis: auto; }
-  .askar-division-grid { grid-template-columns: 1fr; }
-  .askar-division-hint { grid-column: auto; }
 }
 
 /* Brochure management */
